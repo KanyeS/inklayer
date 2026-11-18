@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { Badge } from "@inklayer/ui/components/badge";
 import { useMe } from "@/App";
+import { IssueTrackersSection } from "@/components/Issues";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@inklayer/ui/components/breadcrumb";
 import { Button } from "@inklayer/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
@@ -41,7 +42,12 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
         <TabsContent value="pages"><Pages project={project.data} /></TabsContent>
-        {isAdmin && <TabsContent value="settings"><Settings project={project.data} onSaved={project.reload} /></TabsContent>}
+        {isAdmin && (
+          <TabsContent value="settings">
+            <Settings project={project.data} onSaved={project.reload} />
+            {me.features.issueTrackers && <IssueTrackersSection projectId={project.data.id} />}
+          </TabsContent>
+        )}
       </Tabs>
     </Page>
   );

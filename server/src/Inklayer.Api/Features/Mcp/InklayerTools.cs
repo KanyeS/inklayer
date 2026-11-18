@@ -3,6 +3,7 @@ using Inklayer.Api.Access;
 using Inklayer.Api.Activity;
 using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Docs;
+using Inklayer.Api.Features.Issues;
 using Inklayer.Api.Features.Live;
 using Inklayer.Api.Features.Notifications;
 using Inklayer.Api.Features.Me;
@@ -124,21 +125,21 @@ internal static class InklayerTools
     [McpServerTool(Name = "set_comment_status", Idempotent = true, OpenWorld = false), Description("Resolve a comment, or reopen it.")]
     public static async Task<string> SetCommentStatus(
         [Description("Comment id")] Guid commentId, [Description("true to resolve, false to reopen")] bool resolved,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct)
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, IssueService issues, TimeProvider clock, CancellationToken ct)
     {
         var version = await VersionOfCommentAsync(db, commentId, ct);
         var request = new UpdateAnnotationRequest(version, null, null, resolved ? AnnotationStatus.Resolved : AnnotationStatus.Open, null, null, null);
-        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, notifications, clock, ct))));
+        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, notifications, issues, clock, ct))));
     }
 
     [McpServerTool(Name = "edit_comment", OpenWorld = false), Description("Change a comment's text. Only its author, or a project Admin, can.")]
     public static async Task<string> EditComment(
         [Description("Comment id")] Guid commentId, [Description("The new text")] string body,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct)
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, IssueService issues, TimeProvider clock, CancellationToken ct)
     {
         var version = await VersionOfCommentAsync(db, commentId, ct);
         var request = new UpdateAnnotationRequest(version, body, null, null, null, null, null);
-        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, notifications, clock, ct))));
+        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, notifications, issues, clock, ct))));
     }
 
     [McpServerTool(Name = "delete_reply", Destructive = true, OpenWorld = false), Description("Delete a reply. Only its author, or a project Admin, can.")]
@@ -148,6 +149,21 @@ internal static class InklayerTools
         ToolResults.Ok(await AnnotationEndpoints.DeleteReplyAsync(replyId, null, access, currentUser, db, indexer, clock, ct));
         return "Deleted.";
     }
+
+    /* ------------------------------------------------------------------ issue trackers */
+
+    [McpServerTool(Name = "list_issue_trackers", ReadOnly = true), Description("The issue trackers (GitHub, Jira, Linear) connected to a project, to create issues in.")]
+    public static async Task<string> ListIssueTrackers([Description("Project id")] Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct) =>
+        ToolResults.ToJson(ToolResults.Value<List<TrackerChoiceResponse>>(await IssueEndpoints.ChoicesAsync(projectId, access, db, ct)));
+
+    [McpServerTool(Name = "create_issue_from_comment", OpenWorld = true),
+     Description("Create an issue in a connected tracker from a comment, with its replies, page and page details. Closing the issue later resolves the comment.")]
+    public static async Task<string> CreateIssueFromComment(
+        [Description("Comment id")] Guid commentId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct,
+        [Description("Issue title; defaults to the comment's first line")] string? title = null) =>
+        ToolResults.ToJson(ToolResults.Value<IssueResponse>(
+            await IssueEndpoints.CreateIssueAsync(commentId, new CreateIssueRequest(trackerId, title), access, currentUser, db, issues, ct)));
 
     /* ------------------------------------------------------------------ docs: reading */
 
@@ -268,6 +284,9 @@ internal static class InklayerTools
 
     /* ------------------------------------------------------------------ helpers */
 
+    /// <summary>Tools that work on issue trackers: hidden and refused while they're turned off.</summary>
+    public static readonly HashSet<string> IssueTools = new(StringComparer.Ordinal) { "list_issue_trackers", "create_issue_from_comment" };
+
     /// <summary>Tools that work on docs: hidden and refused while docs are turned off.</summary>
     public static readonly HashSet<string> DocTools = new(StringComparer.Ordinal)
     {
@@ -289,6 +308,7 @@ internal static class InklayerTools
         Replies = a.Replies?.Select(r => new { r.Id, Author = r.Author.DisplayName, AuthorFullName = r.Author.FullName, r.Body, r.CreatedAt, r.CanDelete }),
         DocLinks = a.DocLinks, MentionedIn = a.MentionedIn,
         a.HasScreenshot,
+        Issues = a.Issues?.Select(i => new { Tracker = Domain.Issues.TrackerKinds.Name(i.Kind), i.Key, i.Url, i.State }),
         Context = a.Context is { } c ? new
         {
             c.Browser, c.Os, Viewport = $"{c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x", c.Selector, c.ElementHtml,

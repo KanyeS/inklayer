@@ -92,7 +92,7 @@ internal static partial class AnnotationEndpoints
 
     internal static async Task<IResult> UpdateAsync(
         Guid annotationId, UpdateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer,
-        NotificationService notifications, TimeProvider clock, CancellationToken ct)
+        NotificationService notifications, Issues.IssueService issues, TimeProvider clock, CancellationToken ct)
     {
         var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -177,6 +177,7 @@ internal static partial class AnnotationEndpoints
         if (resolvedNow)
         {
             await notifications.ResolvedAsync(annotation, userId, ct);
+            await issues.CommentResolvedAsync(annotation, ct);
         }
 
         return TypedResults.Ok((await EnrichAsync(db, [ToResponse(annotation, authors, check.Role, userId)], _ => check.Role, userId, ct))[0]);
@@ -243,7 +244,8 @@ internal static partial class AnnotationEndpoints
             links.GetValueOrDefault(annotation.Id, []), mentions.GetValueOrDefault(annotation.Id, []),
             (await RepliesAsync(db, [annotation.Id], _ => check.Role, currentUser.Id!.Value, ct)).GetValueOrDefault(annotation.Id, []),
             check.Role.Grants(Permission.Comment), contexts.GetValueOrDefault(annotation.Id), screenshots.Contains(annotation.Id),
-            await MentionedPeople.ForAsync(db, [annotation.Body, .. await db.AnnotationReplies.Where(r => r.AnnotationId == annotation.Id && r.DeletedAt == null).Select(r => r.Body).ToListAsync(ct)], ct)));
+            await MentionedPeople.ForAsync(db, [annotation.Body, .. await db.AnnotationReplies.Where(r => r.AnnotationId == annotation.Id && r.DeletedAt == null).Select(r => r.Body).ToListAsync(ct)], ct),
+            (await Issues.IssueService.ForAsync(db, [annotation.Id], ct)).GetValueOrDefault(annotation.Id, [])));
     }
 
     /* ---------------------------------------------------------------- replies */
@@ -410,10 +412,12 @@ internal static partial class AnnotationEndpoints
             return kv.Value.Select(x => x with { Author = WithRole(x.Author, orgId) }).ToList();
         });
         var (contexts, screenshots) = await ContextEndpoints.ForAsync(db, [.. responses.Select(r => r.Id)], ct);
+        var issues = await Issues.IssueService.ForAsync(db, [.. responses.Select(r => r.Id)], ct);
         var mentioned = await MentionedPeople.ForAsync(db, responses.Select(r => r.Body).Concat(replies.Values.SelectMany(l => l.Select(x => x.Body))), ct);
         responses = [.. responses.Select(r => r with
         {
             Author = WithRole(r.Author, r.OrganizationId), Context = contexts.GetValueOrDefault(r.Id), HasScreenshot = screenshots.Contains(r.Id),
+            Issues = issues.GetValueOrDefault(r.Id, []),
             People = [.. mentioned.Where(p => Domain.Notifications.Mentions.Extract(r.Body).Contains(p.Id)
                 || replies.GetValueOrDefault(r.Id, []).Any(x => Domain.Notifications.Mentions.Extract(x.Body).Contains(p.Id)))],
         })];

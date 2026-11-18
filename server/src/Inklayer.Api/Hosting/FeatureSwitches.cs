@@ -187,6 +187,7 @@ internal static class FeatureSwitchExtensions
                 : path.StartsWithSegments(Features.Presence.PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors]
                 : path.StartsWithSegments("/api/presence/ticket", StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors, Feature.Docs]
                 : IsCommentPart(path, "context") || IsCommentPart(path, "screenshot") ? [Feature.BugContext]
+                : IsCommentPart(path, "issues") || IsProjectPart(path, "issue-trackers") ? [Feature.IssueTrackers]
                 : path.StartsWithSegments(McpResource.Path, StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/connect/register", StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/.well-known/oauth-protected-resource", StringComparison.OrdinalIgnoreCase) ? [Feature.Mcp]
@@ -224,6 +225,14 @@ internal static class FeatureSwitchExtensions
         var parts = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 4 && parts[0].Equals("api", StringComparison.OrdinalIgnoreCase)
             && parts[1].Equals("annotations", StringComparison.OrdinalIgnoreCase) && parts[3].Equals(part, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>/api/projects/{id}/{part} and below.</summary>
+    private static bool IsProjectPart(PathString path, string part)
+    {
+        var parts = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 4 && parts[0].Equals("api", StringComparison.OrdinalIgnoreCase)
+            && parts[1].Equals("projects", StringComparison.OrdinalIgnoreCase) && parts[3].Equals(part, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>/api/orgs/{id}/docs and below.</summary>

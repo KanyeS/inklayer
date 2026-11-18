@@ -51,6 +51,23 @@ export interface LiveAnnotation {
   hasScreenshot?: boolean;
   /** People @mentioned in the comment or its replies, for showing <@id> as names. */
   people?: PersonLookup[];
+  /** Issues created from this comment in GitHub, Jira or Linear. */
+  issues?: LinkedIssue[];
+}
+
+export interface LinkedIssue {
+  id: string;
+  kind: "github" | "jira" | "linear";
+  key: string;
+  url: string;
+  state: "open" | "closed";
+}
+
+/** An issue tracker connected to a project, to create issues in. */
+export interface TrackerChoice {
+  id: string;
+  kind: LinkedIssue["kind"];
+  name: string;
 }
 
 export interface LiveReply {
@@ -200,7 +217,9 @@ export type LiveRequest =
   | { type: "live.capture"; annotationId: string; area: Rect; viewportWidth: number }
   | { type: "live.screenshot"; annotationId: string }
   | { type: "live.reply"; annotationId: string; body: string }
-  | { type: "live.replyDelete"; id: string; version: number };
+  | { type: "live.replyDelete"; id: string; version: number }
+  | { type: "live.trackers"; projectId: string }
+  | { type: "live.issue"; annotationId: string; connectionId: string };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -273,6 +292,12 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
       return postJson<LiveReply>(`/api/annotations/${encodeURIComponent(request.annotationId)}/replies`, { body: request.body });
     case "live.replyDelete":
       return api<null>(`/api/replies/${encodeURIComponent(request.id)}?version=${request.version}`, { method: "DELETE" });
+    case "live.trackers":
+      // Only the user's own projects, so a page can't make the extension probe others.
+      if (!(await getProjects()).some((p) => p.id === request.projectId)) throw new Error("Unknown project.");
+      return api<TrackerChoice[]>(`/api/projects/${encodeURIComponent(request.projectId)}/issue-trackers/choices`);
+    case "live.issue":
+      return postJson<LinkedIssue>(`/api/annotations/${encodeURIComponent(request.annotationId)}/issues`, { connectionId: request.connectionId });
     case "live.people": {
       // Only organisations the user has projects in.
       if (!(await getProjects()).some((p) => p.organizationId === request.orgId)) throw new Error("Unknown organisation.");

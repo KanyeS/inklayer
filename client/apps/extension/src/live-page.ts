@@ -1,7 +1,7 @@
 import {
   Overlay, commentParts, commentToOpen, decodeMentions, encodeMentions, resolveElement, resolveRange, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
-import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext, PersonLookup } from "./lib/live";
+import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext, PersonLookup, TrackerChoice } from "./lib/live";
 import { browserOf, elementHtml, osOf, screenshotArea, type Rect } from "./lib/pageDetails";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
@@ -174,6 +174,8 @@ class LiveSession {
   #hideTimer = 0;
   /** Reply boxes, kept across re-renders so typing isn't lost. Keyed by place ("bubble:" or "panel:") and comment id. */
   readonly #replyInputs = new Map<string, HTMLTextAreaElement>();
+  /** Each project's connected issue trackers, loaded the first time a comment there is shown. */
+  readonly #trackers = new Map<string, TrackerChoice[] | "loading">();
   #showResolved = false;
   #busy = false;
   #error = "";
@@ -502,6 +504,43 @@ class LiveSession {
     this.#shadow.append(box);
   }
 
+  /** Issues made from the comment, and "Create issue" when the project has trackers connected. */
+  #issuesOf(a: PageAnnotation): Node {
+    if (!this.#init.features.issueTrackers) return document.createTextNode("");
+    const names = { github: "GitHub", jira: "Jira", linear: "Linear" } as const;
+    const row = h("div", { className: "issues", onclick: (e: Event) => e.stopPropagation() });
+    for (const issue of a.issues ?? []) {
+      if (!/^https:\/\//.test(issue.url)) continue;
+      row.append(h("a", { className: `issue ${issue.state}`, href: issue.url, target: "_blank", rel: "noopener noreferrer",
+        title: `${names[issue.kind]} ${issue.key} (${issue.state})`, textContent: `${issue.state === "open" ? "●" : "✓"} ${names[issue.kind]} ${issue.key}` }));
+    }
+    const trackers = this.#canCommentIn(a.projectId) ? this.#trackersIn(a.projectId) : [];
+    if (trackers.length === 1) {
+      const t = trackers[0]!;
+      row.append(h("button", { className: "link", textContent: "Create issue", title: `Create an issue in ${names[t.kind]}: ${t.name}`, disabled: this.#busy,
+        onclick: () => void this.#mutate(() => call({ type: "live.issue", annotationId: a.id, connectionId: t.id })) }));
+    } else if (trackers.length > 1) {
+      const pick = h("select", { className: "issue-pick", title: "Create an issue from this comment", disabled: this.#busy },
+        h("option", { value: "", textContent: "Create issue in…" }), ...trackers.map((t) => h("option", { value: t.id, textContent: `${names[t.kind]}: ${t.name}` })));
+      pick.addEventListener("change", () => {
+        if (pick.value) void this.#mutate(() => call({ type: "live.issue", annotationId: a.id, connectionId: pick.value }));
+      });
+      row.append(pick);
+    }
+    return row.childElementCount ? row : document.createTextNode("");
+  }
+
+  #trackersIn(projectId: string): TrackerChoice[] {
+    const known = this.#trackers.get(projectId);
+    if (known === undefined) {
+      this.#trackers.set(projectId, "loading");
+      void call<TrackerChoice[]>({ type: "live.trackers", projectId })
+        .then((choices) => { this.#trackers.set(projectId, choices); if (choices.length) this.#render(); })
+        .catch(() => this.#trackers.set(projectId, []));
+    }
+    return Array.isArray(known) ? known : [];
+  }
+
   /** Browser, window size, the element, console errors and failed requests, folded away. */
   #detailsOf(a: PageAnnotation): Node {
     const c = a.context;
@@ -704,7 +743,7 @@ class LiveSession {
         h("span", { className: "grow" }), pin),
     ];
     if (a.body) nodes.push(this.#bodyOf(a));
-    nodes.push(this.#screenshotOf(a), this.#detailsOf(a));
+    nodes.push(this.#screenshotOf(a), this.#detailsOf(a), this.#issuesOf(a));
     if (a.replies?.length) nodes.push(this.#repliesOf(a));
     if (this.#canCommentIn(a.projectId)) {
       nodes.push(this.#replyBox(a, "bubble"));
@@ -885,7 +924,7 @@ class LiveSession {
     }
 
     if (a.body) item.append(this.#bodyOf(a));
-    if (a.id === this.#selected) item.append(this.#screenshotOf(a), this.#detailsOf(a));
+    if (a.id === this.#selected) item.append(this.#screenshotOf(a), this.#detailsOf(a), this.#issuesOf(a));
     if (this.#init.features.docs && a.mentionedIn?.length) {
       const mentions = h("p", { className: "muted mentions" }, "Mentioned in ");
       a.mentionedIn.forEach((d, i) => {
@@ -1325,6 +1364,12 @@ const STYLES = `
   .doclink { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
   .doclink.missing { color: var(--muted-foreground); text-decoration-style: dashed; }
   .mentions { margin: 0; font-size: 12px; }
+  .issues { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+  .issues a.issue { border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: inherit; text-decoration: none; }
+  .issues a.issue:hover { background: var(--muted); }
+  .issues a.issue.open { color: #1a7f37; }
+  .issues a.issue.closed { color: #8250df; }
+  .issues select.issue-pick { font: inherit; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: inherit; }
   .mentions a { color: var(--primary); }
   .suggest-wrap { position: relative; }
   .suggest { position: absolute; left: 0; right: 0; top: 100%; z-index: 1; margin: 4px 0 0; padding: 4px; list-style: none;

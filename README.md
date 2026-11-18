@@ -182,6 +182,21 @@ Organisation Admins can add as many integrations as they like under the organisa
 
 Messages wait in an outbox and are retried with growing gaps, up to 8 tries. The last error shows on the integration. Webhook addresses and secrets are stored encrypted.
 
+### Issue trackers
+Project Admins connect trackers under the project's **Settings** tab, as many as they like:
+
+| Tracker | What it needs |
+|---|---|
+| **GitHub** | The repository owner and name, and a fine-grained personal access token with **Issues: read and write** on it. GitHub Enterprise works too: give its API address. |
+| **Jira Cloud** | The site (`https://<you>.atlassian.net`), project key, issue type (Bug by default), and an Atlassian API token with its account email. |
+| **Linear** | The team id and a personal API key. |
+
+How it works:
+- **Connecting:** Inklayer checks the credentials before saving them. Tokens are stored encrypted, and only their last four characters are shown again.
+- **Creating issues:** Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The issue gets the comment, its replies, the page address, a link back to the comment, and the page details (browser, window size, console errors, failed requests). The issue then shows on the comment.
+- **Closing:** resolving a comment closes its issues, unless the connection is set to leave them open.
+- **Keeping in step:** trackers can't reach a server behind the VPN, so Inklayer asks them every 5 minutes instead. An issue closed in the tracker resolves its comment, with a reply saying so, and notifies the comment's author and the person who created the issue. An issue reopened there reopens the comment.
+
 ### Turning features on and off
 Instance administrators can turn these features off for everyone under **Admin → Features**:
 - **Docs:** the knowledge base, the graph, live doc editing, and `[[links]]` between comments and docs.
@@ -213,7 +228,7 @@ For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the env
 ### Using Inklayer from Claude (MCP)
 Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs in as you and can do what your role allows:
 - **Read:** comments and replies on a page, pages with comments, docs (search, read, links and backlinks), tags, history and activity.
-- **Write:** reply to, resolve and edit comments, and create, edit, rename, move and delete docs. Doc edits appear live to anyone editing the doc in the browser.
+- **Write:** reply to, resolve and edit comments, create issues from comments in a connected tracker, and create, edit, rename, move and delete docs. Doc edits appear live to anyone editing the doc in the browser.
 
 To connect:
 - **Claude Code:** run `claude mcp add --transport http inklayer https://<your server>/api/mcp`, then `/mcp` to sign in.

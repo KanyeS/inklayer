@@ -147,6 +147,28 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
     }
 
     [Fact]
+    public async Task Turning_issue_trackers_off_refuses_them()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var org = await Scenario.CreateOrganizationAsync(admin);
+        var project = await Scenario.CreateProjectAsync(admin, org.Id);
+        try
+        {
+            await SaveAsync(admin, new { issueTrackers = false });
+            using var refused = await admin.GetAsync(new Uri($"/api/projects/{project.Id}/issue-trackers", UriKind.Relative));
+            Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
+            Assert.Contains("Issue trackers are turned off", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+            await admin.PostJsonAsync($"/api/annotations/{Guid.NewGuid()}/issues", new { connectionId = Guid.NewGuid() }).ExpectAsync(HttpStatusCode.NotFound);
+        }
+        finally
+        {
+            await SaveAsync(admin, new { issueTrackers = true });
+        }
+
+        await admin.GetAsync(new Uri($"/api/projects/{project.Id}/issue-trackers", UriKind.Relative)).ExpectAsync(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Only_instance_administrators_change_features()
     {
         using var admin = await factory.SignInAsAdminAsync();

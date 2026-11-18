@@ -22,29 +22,42 @@ internal static class McpSetup
             })
             .WithHttpTransport(o => o.Stateless = true)
             .WithTools([typeof(InklayerTools)])
-            // While docs are turned off, docs tools are hidden and refused.
+            // Tools of a turned-off feature (docs, issue trackers) are hidden and refused.
             .WithRequestFilters(filters =>
             {
                 filters.AddListToolsFilter(next => async (context, ct) =>
                 {
                     var result = await next(context, ct);
-                    if (!await DocsOnAsync(context.Services!, ct))
-                    {
-                        result.Tools = [.. result.Tools.Where(t => !InklayerTools.DocTools.Contains(t.Name))];
-                    }
-
+                    var off = await OffToolsAsync(context.Services!, ct);
+                    result.Tools = [.. result.Tools.Where(t => !off.ContainsKey(t.Name))];
                     return result;
                 });
                 filters.AddCallToolFilter(next => async (context, ct) =>
-                    InklayerTools.DocTools.Contains(context.Params!.Name) && !await DocsOnAsync(context.Services!, ct)
-                        ? new() { IsError = true, Content = [new TextContentBlock { Text = "Docs are turned off on this server." }] }
+                    (await OffToolsAsync(context.Services!, ct)).TryGetValue(context.Params!.Name, out var feature)
+                        ? new() { IsError = true, Content = [new TextContentBlock { Text = $"{FeatureSwitchExtensions.Name(feature)} are turned off on this server." }] }
                         : await next(context, ct));
             });
         return services;
     }
 
-    private static Task<bool> DocsOnAsync(IServiceProvider services, CancellationToken ct) =>
-        services.GetRequiredService<FeatureSwitches>().IsEnabledAsync(Feature.Docs, ct);
+    /// <summary>The tools whose feature is turned off, with that feature.</summary>
+    private static async Task<Dictionary<string, Feature>> OffToolsAsync(IServiceProvider services, CancellationToken ct)
+    {
+        var states = await services.GetRequiredService<FeatureSwitches>().StatesAsync(ct);
+        var off = new Dictionary<string, Feature>(StringComparer.Ordinal);
+        foreach (var (feature, tools) in new[] { (Feature.Docs, InklayerTools.DocTools), (Feature.IssueTrackers, InklayerTools.IssueTools) })
+        {
+            if (!states[feature].Enabled)
+            {
+                foreach (var tool in tools)
+                {
+                    off[tool] = feature;
+                }
+            }
+        }
+
+        return off;
+    }
 
     public static IEndpointRouteBuilder MapInklayerMcp(this IEndpointRouteBuilder app)
     {

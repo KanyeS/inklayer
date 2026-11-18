@@ -2,6 +2,7 @@ using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Auditing;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Docs;
+using Inklayer.Domain.Issues;
 using Inklayer.Domain.Notifications;
 using Inklayer.Domain.Organizations;
 using Inklayer.Domain.Projects;
@@ -53,6 +54,10 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
     public DbSet<Integration> Integrations => Set<Integration>();
 
     public DbSet<OutboundMessage> OutboundMessages => Set<OutboundMessage>();
+
+    public DbSet<IssueTrackerConnection> IssueTrackerConnections => Set<IssueTrackerConnection>();
+
+    public DbSet<AnnotationIssue> AnnotationIssues => Set<AnnotationIssue>();
 
     public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();
 

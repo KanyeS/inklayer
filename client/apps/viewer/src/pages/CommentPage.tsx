@@ -11,6 +11,7 @@ import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 import { personTitle } from "@/lib/people";
+import { CreateIssueButton, IssueChips, type Issue } from "@/components/Issues";
 
 interface CommentDetail {
   id: string;
@@ -29,6 +30,7 @@ interface CommentDetail {
   context?: PageContext | null;
   hasScreenshot: boolean;
   people?: { id: string; displayName: string; fullName: string }[];
+  issues?: Issue[];
 }
 
 interface PageContext {
@@ -103,6 +105,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
           </a>
         )}
         {me.features.bugContext && c.context && <PageDetails context={c.context} />}
+        {me.features.issueTrackers && <IssueChips issues={c.issues ?? []} />}
         <p className="mt-4 truncate text-sm text-muted-foreground" title={c.pageUrl}>{hostOf(c.pageUrl)}{safePath(c.pageUrl)}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Button nativeButton={false} render={<a href={openOnPageUrl(c.pageUrl, c.id)} target="_blank" rel="noopener noreferrer" />}>
@@ -111,6 +114,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
           <Button variant="outline" onClick={() => void copy()}>
             {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy link"}
           </Button>
+          {me.features.issueTrackers && c.canReply && <CreateIssueButton commentId={c.id} projectId={c.projectId} onCreated={comment.reload} />}
         </div>
         {me.features.docs && <p className="mt-3 text-xs text-muted-foreground">Paste the link into a doc to link this comment there.</p>}
       </article>
