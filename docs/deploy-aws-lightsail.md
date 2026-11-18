@@ -59,7 +59,7 @@ Inklayer never stores passwords; everyone signs in with Google.
 2. **Attach a static IP.** In Networking → Create static IP, attach it to the instance. A static IP is free while attached.
 3. **Open the firewall.** In the instance's Networking tab, under the IPv4 firewall, add **HTTPS (443)**. **SSH (22)** and **HTTP (80)** are open by default. Caddy needs port 80 for Let's Encrypt validation and HTTP→HTTPS redirects.
 4. **Turn on snapshots.** In the instance's Snapshots tab, turn on **automatic snapshots**. They cost a few cents a month and act as a second safety net.
-5. **Point DNS at the server.** At your DNS provider, create an `A` record such as `inklayer.example.com` → the static IP.
+5. **Point DNS at the server.** At your DNS provider, create two `A` records pointing at the static IP: `inklayer.example.com` and `snapshots.inklayer.example.com`. Captured pages are served from the second hostname, isolated from the app.
 
 ## 4. Publish the server image
 

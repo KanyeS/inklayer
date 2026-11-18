@@ -24,8 +24,12 @@ services:
       Inklayer__Auth__ExtensionRedirectUris: ${INKLAYER_EXTENSION_REDIRECT_URIS:-}
       # Plain-HTTP local trial only. Remove when serving through HTTPS.
       Inklayer__Auth__AllowInsecureHttp: ${INKLAYER_ALLOW_INSECURE_HTTP:-false}
+      # Captured pages need their own origin. Locally a second port is enough; in production use a subdomain.
+      Inklayer__Snapshots__Origin: ${INKLAYER_SNAPSHOT_ORIGIN:-http://localhost:8081}
+      Inklayer__Snapshots__AppOrigin: ${INKLAYER_APP_ORIGIN:-http://localhost:8080}
     ports:
       - "${INKLAYER_PORT:-8080}:8080"
+      - "${INKLAYER_SNAPSHOT_PORT:-8081}:8080"
     volumes:
       - inklayer-data:/data
 

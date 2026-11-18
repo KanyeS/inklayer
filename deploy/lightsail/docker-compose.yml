@@ -54,6 +54,9 @@ services:
       Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET in .env}
       Inklayer__Auth__BootstrapAdmins: ${INKLAYER_BOOTSTRAP_ADMINS:?set INKLAYER_BOOTSTRAP_ADMINS in .env}
       Inklayer__Auth__ExtensionRedirectUris: ${INKLAYER_EXTENSION_REDIRECT_URIS:-}
+      # Captured pages are served from their own hostname, isolated from the app (docs/PLAN.md §2.6).
+      Inklayer__Snapshots__Origin: https://snapshots.${INKLAYER_DOMAIN}
+      Inklayer__Snapshots__AppOrigin: https://${INKLAYER_DOMAIN}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     volumes:
       - inklayer-data:/data

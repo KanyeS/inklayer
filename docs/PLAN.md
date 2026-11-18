@@ -64,6 +64,16 @@ The extension captures the page as the user sees it, while logged in, rather tha
   - **Snapshot mode:** annotate the frozen copy, which becomes the source of truth.
   - **Live mode:** annotate the real page, with annotations stored against the URL and re-anchored on each visit.
 
+**As built (Phase 2):**
+- **Own serializer.** The extension uses its own serializer (`client/packages/capture`) instead of `rrweb-snapshot`. rrweb's output is a JSON tree that needs script to rebuild in the viewer, and the snapshot origin runs no page script.
+- **What the serializer outputs:** static HTML containing:
+  - styles read from the CSSOM, including CSS-in-JS and adopted stylesheets;
+  - declarative shadow DOM, including closed shadow roots, reached through `chrome.dom.openOrClosedShadowRoot`;
+  - form state, canvases turned into images, and placeholders where iframes were.
+- **Resources:** the background worker fetches them with the user's cookies, follows CSS into fonts and `@import`s, and hashes each one.
+- **Screenshot:** the visible area only, for now. Full-page screenshots through `chrome.debugger` are deferred to keep the permissions minimal.
+- **Same-origin iframes** aren't captured yet; they become placeholders.
+
 ### 2.2 Anchoring annotations to elements
 Each annotation stores several independent anchors so it survives small DOM changes:
 1. a stable CSS selector, preferring `id`, `data-testid` and ARIA attributes, built with a library like `@medv/finder` (MIT)
@@ -125,6 +135,13 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
 - with `Content-Security-Policy: sandbox; script-src 'none'`;
 - inside an `<iframe sandbox>` in the viewer, with the overlay talking to it through `postMessage`;
 - through signed, short-lived URLs, so access control still applies.
+
+**As built (Phase 2):**
+- **Serving:** `Inklayer:Snapshots:Origin` (e.g. `snapshots.example.com`) serves only `/s/{id}/{token}/` and `/s/{id}/{token}/a/{sha256}`. The app host never serves captured HTML.
+- **Policy:** the CSP is `default-src 'none'`, `script-src 'none'`, `sandbox`, with `frame-ancestors` limited to the app origin.
+- **Sanitizer:** built on AngleSharp (MIT) rather than HtmlSanitizer. Its rules are structural, which keeps CSS intact, and it has an XSS test corpus.
+- **Phase 3 change needed:** the overlay will need its own script inside the frame. That means switching to a per-response `script-src 'nonce-…'` for Inklayer's overlay script only, and `sandbox allow-scripts`, still without `allow-same-origin`.
+- **Not done yet:** a blob store that removes files no snapshot uses any more, and per-organisation storage quotas.
 
 ### 2.7 Performance for hundreds of users
 - A single node handles this comfortably. SQLite runs in WAL mode, so readers never block and writes (small annotation rows) take a few milliseconds. `busy_timeout` queues writers that arrive at the same moment instead of failing them.

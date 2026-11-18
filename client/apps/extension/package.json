@@ -1,0 +1,14 @@
+{
+  "name": "@inklayer/extension",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && vite build --mode content",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "@inklayer/capture": "*"
+  }
+}

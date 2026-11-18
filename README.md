@@ -34,7 +34,7 @@ Requires the .NET 10 SDK.
 ```bash
 cd server
 dotnet test                                  # unit + integration tests
-dotnet run --project src/Inklayer.Api        # http://localhost:5048 (DB at server/.data/)
+dotnet run --project src/Inklayer.Api        # app on http://localhost:5048, captured pages on :5049 (data in server/.data/)
 ```
 
 To sign in locally, create a Google OAuth client (type "Web application") with redirect URI `http://localhost:5048/auth/callback/google`, then:
@@ -57,6 +57,32 @@ Then open <http://localhost:5048/auth/login>.
 | `/api/me` | Current user and their organisations |
 | `/api/orgs/...`, `/api/projects/...` | Organisations, members, invitations, projects, per-project roles, audit log |
 | `/api/admin/users` | Instance administration |
+| `/api/projects/{id}/blobs/...`, `/api/projects/{id}/snapshots`, `/api/snapshots/{id}` | Capture upload, snapshot list/detail/delete |
+| `/s/{snapshotId}/{token}/` (snapshot origin only) | Serves a captured page under a signed, expiring link |
+
+### Browser extension
+
+Requires Node.js 22.
+
+```bash
+cd client
+npm ci
+npm test             # serializer, CSS and resource-resolution tests
+npm run build        # outputs client/apps/extension/dist
+```
+
+To install it:
+1. **Load it.** In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose `client/apps/extension/dist`.
+2. **Connect it.** Open the extension popup, enter your server address, and grant site access. Site access is how it reaches your server and fetches the images and fonts of pages you capture.
+3. **Allow its sign-in address.** The popup shows the extension's sign-in address (`https://<extension-id>.chromiumapp.org/`). Add it to the server's `Inklayer:Auth:ExtensionRedirectUris` (`INKLAYER_EXTENSION_REDIRECT_URIS` in Docker).
+4. **Capture.** Sign in with Google, pick a project, and click **Capture this page**.
+
+**What a capture contains:**
+- **Static HTML:** the page as you see it, including typed form values, CSS-in-JS styles, shadow DOM and canvases. Password fields are never captured, and a CSS selector in Settings can mask personal data.
+- **Assets:** images, fonts and stylesheets, deduplicated by content hash.
+- **A screenshot** of the visible area.
+
+The server sanitizes the HTML, then serves it only from the separate snapshot origin under signed, expiring links, with scripts and external loads blocked.
 
 ### How sign-in and access work
 - **Google only.** Inklayer stores no passwords.

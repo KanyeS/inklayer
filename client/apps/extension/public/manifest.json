@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Inklayer",
+  "version": "0.1.0",
+  "description": "Capture web pages to your team's Inklayer server for review and annotation.",
+  "minimum_chrome_version": "120",
+  "action": {
+    "default_title": "Inklayer",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "identity"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"]
+}
