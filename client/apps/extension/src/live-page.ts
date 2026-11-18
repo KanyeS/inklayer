@@ -3,6 +3,7 @@ import {
 } from "@inklayer/overlay";
 import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext, PersonLookup, TrackerChoice } from "./lib/live";
 import { browserOf, elementHtml, osOf, screenshotArea, type Rect } from "./lib/pageDetails";
+import { clampPosition, DEFAULT_POSITION, parsePosition, type PanelPosition } from "./lib/panelPosition";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { BubbleLayer } from "./bubbles";
@@ -168,6 +169,12 @@ class LiveSession {
   readonly #pinned = new Set<string>();
   /** Every comment's bubble open, not just on hover (the user's choice, remembered). */
   #bubblesOpen = false;
+  /** Where the panel was dragged to; the same on every site. */
+  #position: PanelPosition = DEFAULT_POSITION;
+  /** Pinned (the default): the panel stays where it is. Unpin it to drag it somewhere else. */
+  #panelPinned = true;
+  /** Set when a drag of the collapsed button ends, so it doesn't also open the panel. */
+  #dragged = false;
   /** What happened to the last "Share this page", shown under the header. */
   #shareNote = "";
   #inBubble = false;
@@ -212,12 +219,85 @@ class LiveSession {
     });
     followColorScheme(this.#bubbles.host);
     this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { ignoreEventsFrom: [this.#host, this.#bubbles.host] });
-    void chrome.storage.local.get(["bubblesOpen", "attachContext"]).then((stored) => {
+    void chrome.storage.local.get(["bubblesOpen", "attachContext", "panelPosition", "panelPinned"]).then((stored) => {
+      this.#panelPinned = stored.panelPinned !== false;
       this.#bubblesOpen = stored.bubblesOpen === true;
       this.#attachContext = stored.attachContext !== false;
-      this.#renderBubbles();
+      this.#position = parsePosition(stored.panelPosition) ?? DEFAULT_POSITION;
+      this.#placePanel();
+      this.#render();
     }).catch(() => undefined);
     document.documentElement.append(this.#host);
+    // Moved elsewhere (or another tab moved it): follow. Window resized: stay inside it.
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local") return;
+      if (changes.panelPinned) {
+        this.#panelPinned = changes.panelPinned.newValue !== false;
+        this.#render();
+      }
+      if (changes.panelPosition) {
+        this.#position = parsePosition(changes.panelPosition.newValue) ?? DEFAULT_POSITION;
+        this.#placePanel();
+      }
+    });
+    window.addEventListener("resize", () => this.#placePanel());
+  }
+
+  /** Puts the panel at its position, kept inside the window. */
+  #placePanel(): void {
+    const box = this.#host.getBoundingClientRect();
+    const placed = clampPosition(this.#position, { width: box.width, height: box.height }, { width: innerWidth, height: innerHeight });
+    this.#host.style.right = `${placed.right}px`;
+    this.#host.style.bottom = `${placed.bottom}px`;
+  }
+
+  /** Drags the panel (by its header) or the collapsed button; the new place is remembered for every site. */
+  #startDrag(e: PointerEvent): void {
+    if (e.button !== 0 || this.#panelPinned) return;
+    const handle = e.currentTarget as HTMLElement;
+    // Buttons, menus and fields in the header keep working; the launcher itself is a button, so it's allowed.
+    const control = (e.target as Element).closest("button, select, input, textarea, a, label");
+    if (control && control !== handle) return;
+    const box = this.#host.getBoundingClientRect();
+    const start = { x: e.clientX, y: e.clientY, right: innerWidth - box.right, bottom: innerHeight - box.bottom };
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - start.x;
+      const dy = ev.clientY - start.y;
+      if (!moved && Math.hypot(dx, dy) < 4) return; // a click, not a drag
+      moved = true;
+      handle.classList.add("dragging");
+      this.#position = clampPosition({ right: start.right - dx, bottom: start.bottom - dy }, { width: box.width, height: box.height }, { width: innerWidth, height: innerHeight });
+      this.#host.style.right = `${this.#position.right}px`;
+      this.#host.style.bottom = `${this.#position.bottom}px`;
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      handle.classList.remove("dragging");
+      if (!moved) return;
+      this.#dragged = true;
+      window.setTimeout(() => (this.#dragged = false), 0);
+      void chrome.storage.local.set({ panelPosition: this.#position }).catch(() => undefined);
+    };
+    handle.setPointerCapture(e.pointerId);
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  }
+
+  #setPinned(pinned: boolean): void {
+    this.#panelPinned = pinned;
+    void chrome.storage.local.set({ panelPinned: pinned }).catch(() => undefined);
+    this.#render();
+  }
+
+  /** Back to the bottom-right corner (double-click the header while unpinned). */
+  #resetPosition(): void {
+    this.#position = DEFAULT_POSITION;
+    this.#placePanel();
+    void chrome.storage.local.set({ panelPosition: DEFAULT_POSITION }).catch(() => undefined);
   }
 
   /** Opens the panel on one comment, e.g. from "Open on the page" in the web viewer. */
@@ -820,8 +900,15 @@ class LiveSession {
   #draw(): void {
     if (!this.#open) {
       const open = this.#annotations.filter((a) => a.status === "Open").length;
-      this.#root.replaceChildren(h("button", { className: "launcher", title: "Inklayer comments on this page", onclick: () => { this.#open = true; this.#render(); } },
-        "Inklayer", h("span", { className: open ? "count" : "count zero", textContent: String(open) })));
+      const launcher = h("button", { className: this.#panelPinned ? "launcher" : "launcher movable",
+        title: this.#panelPinned ? "Inklayer comments on this page" : "Inklayer comments on this page (drag to move)", onclick: () => {
+        if (this.#dragged) return;
+        this.#open = true;
+        this.#render();
+      } }, "Inklayer", h("span", { className: open ? "count" : "count zero", textContent: String(open) }));
+      launcher.addEventListener("pointerdown", (e) => this.#startDrag(e));
+      this.#root.replaceChildren(launcher);
+      this.#placePanel();
       return;
     }
 
@@ -831,19 +918,31 @@ class LiveSession {
       h("div", { className: "tabs" }, tab("comments", "Comments"), tab("activity", "Activity")),
       h("button", { className: this.#bubblesOpen ? "icon svg on" : "icon svg", ariaPressed: String(this.#bubblesOpen),
         title: this.#bubblesOpen ? "Comments are open next to their marks. Click to show them only on hover." : "Open every comment next to its mark (otherwise they show on hover)",
-        onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }, pinIcon()),
+        onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }, commentsIcon()),
       this.#init.features.sharing && this.#target ? h("button", { className: "icon svg", disabled: this.#busy,
         title: `Share this page: copy a read-only link to its open comments in ${this.#target.name}, for people without an account (works for 30 days)`,
         onclick: () => void this.#sharePage() }, linkIcon()) : "",
       h("button", { className: "icon svg", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page",
         onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } },
         this.#marksVisible ? eyeIcon() : eyeOffIcon()),
+      h("button", { className: this.#panelPinned ? "icon svg on" : "icon svg", ariaPressed: String(this.#panelPinned),
+        title: this.#panelPinned ? "Pinned in place. Click to unpin, then drag the header to move the panel." : "Unpinned: drag the header to move the panel (double-click it to put it back in the corner). Click to pin it.",
+        onclick: () => this.#setPinned(!this.#panelPinned) }, this.#panelPinned ? pinIcon() : pinOffIcon()),
       h("button", { className: "icon", title: "Minimise", textContent: "–", onclick: () => { this.#open = false; this.#render(); } }));
+    if (!this.#panelPinned) {
+      header.classList.add("movable");
+      header.title = "Drag to move · double-click to put back in the corner";
+      header.addEventListener("pointerdown", (e) => this.#startDrag(e));
+      header.addEventListener("dblclick", (e) => {
+        if (!(e.target as Element).closest("button, select, input, textarea, a, label")) this.#resetPosition();
+      });
+    }
 
     const parts: Node[] = [header];
     if (this.#shareNote) parts.push(h("p", { className: "hint", textContent: this.#shareNote }));
     if (this.#view === "activity") {
       this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#activityParts()));
+      this.#placePanel();
       return;
     }
 
@@ -909,6 +1008,7 @@ class LiveSession {
     }
 
     this.#root.replaceChildren(h("div", { className: "panel" }, ...parts));
+    this.#placePanel();
   }
 
   #item(a: PageAnnotation): HTMLLIElement {
@@ -1202,6 +1302,17 @@ function pinIcon(): SVGSVGElement {
   return icon(["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"]);
 }
 
+/** A crossed-out pin: the panel can be dragged. */
+function pinOffIcon(): SVGSVGElement {
+  return icon(["M12 17v5", "M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89", "m2 2 20 20",
+    "M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11"]);
+}
+
+/** Two speech bubbles: open every comment next to its mark. */
+function commentsIcon(): SVGSVGElement {
+  return icon(["M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z", "M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"]);
+}
+
 /** A chain link: share this page. */
 function linkIcon(): SVGSVGElement {
   return icon(["M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71", "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"]);
@@ -1324,6 +1435,9 @@ const STYLES = `
   .panel { width: 330px; max-height: min(70vh, 640px); overflow: auto; background: var(--popover); color: var(--popover-foreground); border-radius: 22px; padding: 12px;
     box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.3), 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); display: flex; flex-direction: column; gap: 10px; }
   .header { display: flex; align-items: center; gap: 4px; }
+  .header.movable { cursor: grab; touch-action: none; user-select: none; }
+  .launcher.movable { cursor: grab; touch-action: none; }
+  .header.dragging, .launcher.dragging { cursor: grabbing; }
   .tabs { display: flex; gap: 2px; margin-right: auto; padding: 3px; border-radius: 999px; background: var(--muted); }
   .tab { border: none; background: none; padding: 3px 12px; color: var(--muted-foreground); font-weight: 500; }
   .tab:hover { background: none; color: var(--foreground); }
