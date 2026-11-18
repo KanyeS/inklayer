@@ -11,7 +11,13 @@ public sealed record MemberDto(Guid UserId, string Email, string Role);
 
 public sealed record InvitationDto(Guid Id, string Email, string Role);
 
-public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string MyRole);
+public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string MyRole, List<string>? LiveSites = null, bool LiveMatchQuery = false, bool LiveMatchHash = false);
+
+public sealed record LiveSiteDto(Guid ProjectId, string ProjectName, Guid OrganizationId, string Origin, bool MatchQuery, bool MatchHash, string MyRole);
+
+public sealed record LivePageDto(string PageUrl, List<AnnotationDto> Annotations);
+
+public sealed record LivePageSummaryDto(string PageUrl, int OpenCount, int ResolvedCount);
 
 public sealed record ProjectMemberDto(Guid UserId, string Email, string OrganizationRole, string? ProjectRole, string EffectiveRole);
 
@@ -35,7 +41,7 @@ public sealed record SnapshotSummaryDto(Guid Id, string Url, string Title, bool 
 public sealed record AuthorDto(Guid Id, string DisplayName);
 
 public sealed record AnnotationDto(
-    Guid Id, Guid SnapshotId, string Kind, string Status, string Body, string Color,
+    Guid Id, Guid? SnapshotId, string? PageUrl, string Kind, string Status, string Body, string Color,
     System.Text.Json.JsonElement Anchor, System.Text.Json.JsonElement Geometry, int Version, AuthorDto Author, bool CanEdit, bool CanDelete);
 
 public sealed record RevisionDto(int Version, string Action, AuthorDto Actor, System.Text.Json.JsonElement State);

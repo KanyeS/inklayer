@@ -12,6 +12,7 @@ internal sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
     {
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Name).HasMaxLength(200);
+        builder.PrimitiveCollection(p => p.LiveSites); // stored as a JSON array
         builder.HasIndex(p => p.OrganizationId);
         builder.HasOne<Organization>().WithMany().HasForeignKey(p => p.OrganizationId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(p => p.Members).WithOne().HasForeignKey(m => m.ProjectId).OnDelete(DeleteBehavior.Cascade);

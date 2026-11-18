@@ -58,6 +58,10 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("TEXT");
 
@@ -67,7 +71,7 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ResolvedByUserId")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid>("SnapshotId")
+                    b.Property<Guid?>("SnapshotId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -87,11 +91,14 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProjectId");
-
                     b.HasIndex("SnapshotId", "CreatedAt");
 
-                    b.ToTable("Annotations");
+                    b.HasIndex("ProjectId", "PageUrl", "CreatedAt");
+
+                    b.ToTable("Annotations", t =>
+                        {
+                            t.HasCheckConstraint("CK_Annotations_SnapshotOrPage", "(SnapshotId IS NULL) <> (PageUrl IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationRevision", b =>
@@ -290,6 +297,16 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsArchived")
                         .HasColumnType("INTEGER");
+
+                    b.Property<bool>("LiveMatchHash")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("LiveMatchQuery")
+                        .HasColumnType("INTEGER");
+
+                    b.PrimitiveCollection<string>("LiveSites")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -710,8 +727,7 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasOne("Inklayer.Domain.Snapshots.Snapshot", null)
                         .WithMany()
                         .HasForeignKey("SnapshotId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationRevision", b =>

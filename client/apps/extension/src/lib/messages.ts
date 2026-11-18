@@ -14,6 +14,8 @@ export interface StateResponse {
   signedIn: boolean;
   me: Me | null;
   lastProjectId: string | null;
+  /** Sites where the extension shows live comments. */
+  liveSites: string[];
   redirectUri: string;
   status: CaptureStatus;
 }

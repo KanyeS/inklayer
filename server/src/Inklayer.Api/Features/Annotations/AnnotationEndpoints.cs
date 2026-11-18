@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Inklayer.Api.Features.Annotations;
 
 /// <summary>
-/// Annotations on snapshots. Who can do what:
+/// Annotations on snapshots; live-page annotations are created and listed in <c>LiveEndpoints</c>, and edited here. Who can do what:
 /// <list type="bullet">
 /// <item>Commenters and above can create annotations, and resolve or reopen any annotation.</item>
 /// <item>Authors can edit and delete their own; project Admins can edit and delete anyone's.</item>
@@ -72,10 +72,22 @@ internal static partial class AnnotationEndpoints
             return check.Denied!;
         }
 
+        var target = new AnnotationTarget(snapshot.ProjectId, snapshot.OrganizationId, snapshotId, PageUrl: null);
+        return await CreateCoreAsync(target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, clock, ct);
+    }
+
+    /// <summary>Where a new annotation goes: a snapshot, or a live page (its normalised URL).</summary>
+    internal readonly record struct AnnotationTarget(Guid ProjectId, Guid OrganizationId, Guid? SnapshotId, string? PageUrl);
+
+    /// <summary>Validates and saves a new annotation. The caller has already checked <see cref="Permission.Comment"/>.</summary>
+    internal static async Task<IResult> CreateCoreAsync(
+        AnnotationTarget target, AnnotationKind kind, string? body, string? requestedColor, JsonElement anchorJson, JsonElement geometryJson, int viewportWidth,
+        Role role, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
+    {
         var errors = new Dictionary<string, string[]>();
-        var anchor = ValidateJson(request.Anchor, "anchor", MaxAnchorBytes, errors);
-        var geometry = ValidateJson(request.Geometry, "geometry", MaxGeometryBytes, errors);
-        var color = request.Color ?? "#f59e0b";
+        var anchor = ValidateJson(anchorJson, "anchor", MaxAnchorBytes, errors);
+        var geometry = ValidateJson(geometryJson, "geometry", MaxGeometryBytes, errors);
+        var color = requestedColor ?? "#f59e0b";
         if (!ColorPattern().IsMatch(color))
         {
             errors["color"] = ["Must be a hex colour like #f59e0b."];
@@ -90,16 +102,17 @@ internal static partial class AnnotationEndpoints
         var userId = currentUser.Id!.Value;
         var annotation = new Annotation
         {
-            SnapshotId = snapshotId,
-            ProjectId = snapshot.ProjectId,
-            OrganizationId = snapshot.OrganizationId,
+            SnapshotId = target.SnapshotId,
+            PageUrl = target.PageUrl,
+            ProjectId = target.ProjectId,
+            OrganizationId = target.OrganizationId,
             AuthorUserId = userId,
-            Kind = request.Kind!.Value,
-            Body = request.Body?.Trim() ?? "",
+            Kind = kind,
+            Body = body?.Trim() ?? "",
             Color = color.ToLowerInvariant(),
             Anchor = anchor!,
             Geometry = geometry!,
-            ViewportWidth = request.ViewportWidth,
+            ViewportWidth = viewportWidth,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -108,7 +121,7 @@ internal static partial class AnnotationEndpoints
         await db.SaveChangesAsync(ct);
 
         var authors = await AuthorsAsync(db, [userId], ct);
-        return TypedResults.Created($"/api/annotations/{annotation.Id}", ToResponse(annotation, authors, check.Role, userId));
+        return TypedResults.Created($"/api/annotations/{annotation.Id}", ToResponse(annotation, authors, role, userId));
     }
 
     private static async Task<IResult> UpdateAsync(Guid annotationId, UpdateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
@@ -279,15 +292,15 @@ internal static partial class AnnotationEndpoints
         }, StateJson),
     };
 
-    private static async Task<Dictionary<Guid, AuthorSummary>> AuthorsAsync(InklayerDbContext db, IEnumerable<Guid> ids, CancellationToken ct)
+    internal static async Task<Dictionary<Guid, AuthorSummary>> AuthorsAsync(InklayerDbContext db, IEnumerable<Guid> ids, CancellationToken ct)
     {
         var distinct = ids.Distinct().ToList();
         return await db.Users.AsNoTracking().Where(u => distinct.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => new AuthorSummary(u.Id, u.DisplayName, u.AvatarUrl), ct);
     }
 
-    private static AnnotationResponse ToResponse(Annotation a, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) => new(
-        a.Id, a.SnapshotId, a.Kind, a.Status, a.Body, a.Color, Parse(a.Anchor), Parse(a.Geometry), a.ViewportWidth, a.Version,
+    internal static AnnotationResponse ToResponse(Annotation a, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) => new(
+        a.Id, a.SnapshotId, a.PageUrl, a.Kind, a.Status, a.Body, a.Color, Parse(a.Anchor), Parse(a.Geometry), a.ViewportWidth, a.Version,
         authors.GetValueOrDefault(a.AuthorUserId) ?? new AuthorSummary(a.AuthorUserId, "", null),
         a.CreatedAt, a.UpdatedAt, a.ResolvedAt, a.ResolvedByUserId,
         CanEdit(a, role, userId), CanEdit(a, role, userId));

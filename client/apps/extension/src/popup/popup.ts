@@ -149,7 +149,10 @@ async function renderCapture(state: StateResponse): Promise<void> {
     if (changes.captureStatus?.newValue) showStatus(changes.captureStatus.newValue as CaptureStatus);
   });
 
-  render(h("label", {}, "Organisation", orgSelect), h("label", {}, "Project", projectSelect), captureButton, status, footer(state));
+  const live = state.liveSites.length > 0
+    ? h("p", { className: "muted" }, "Live comments show on: ", ...state.liveSites.flatMap((origin, i) => [i ? ", " : "", h("code", { textContent: new URL(origin).host })]))
+    : h("p", { className: "muted", textContent: "No live sites yet. A project Admin can add them in the project's settings in Inklayer." });
+  render(h("label", {}, "Organisation", orgSelect), h("label", {}, "Project", projectSelect), captureButton, status, live, footer(state));
   await loadProjects();
 }
 

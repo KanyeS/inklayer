@@ -14,8 +14,18 @@ interface Resolved {
   quality: AnchorQuality;
 }
 
+export interface OverlayOptions {
+  /**
+   * Stop links from navigating (default true). Right for captured pages, which are a record rather than a website;
+   * live pages keep working links.
+   */
+  blockLinks?: boolean;
+  /** Elements whose events the tools ignore, such as the extension's own panel on a live page. */
+  ignoreEventsFrom?: Element[];
+}
+
 /**
- * Draws annotations on top of a captured page and implements the drawing tools. Everything lives in a closed shadow
+ * Draws annotations on top of a page (a captured snapshot, or a live page through the extension) and implements the drawing tools. Everything lives in a closed shadow
  * root on one host element, so the page's CSS can't restyle the overlay and the overlay can't disturb the page.
  * Annotation positions are recalculated from their anchors whenever the layout changes.
  */
@@ -29,6 +39,8 @@ export class Overlay {
   readonly #surface: HTMLDivElement;
   readonly #resolved = new Map<string, Resolved>();
   readonly #cleanup: (() => void)[] = [];
+  readonly #blockLinks: boolean;
+  readonly #ignored: Element[];
 
   #annotations: OverlayAnnotation[] = [];
   #tool: Tool = "select";
@@ -38,9 +50,11 @@ export class Overlay {
   #preview: { tool: Tool; points: [number, number, number][] } | null = null;
   #frame = 0;
 
-  constructor(doc: Document, send: (message: OverlayMessage) => void) {
+  constructor(doc: Document, send: (message: OverlayMessage) => void, options: OverlayOptions = {}) {
     this.#doc = doc;
     this.#send = send;
+    this.#blockLinks = options.blockLinks ?? true;
+    this.#ignored = options.ignoreEventsFrom ?? [];
 
     this.#host = doc.createElement("inklayer-overlay");
     this.#host.setAttribute("style", "all:initial;position:absolute;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;");
@@ -90,6 +104,29 @@ export class Overlay {
   destroy(): void {
     for (const fn of this.#cleanup) fn();
     this.#host.remove();
+  }
+
+  /** Finds every annotation's element again. For live pages, after the page has changed its DOM. */
+  reanchor(): void {
+    this.#resolved.clear();
+    this.#resolveAll();
+    this.render();
+  }
+
+  /** Puts the overlay back if the page removed it (some apps replace html's children). Returns true if it had to. */
+  ensureAttached(): boolean {
+    if (this.#host.isConnected) return false;
+    this.#doc.documentElement.append(this.#host);
+    return true;
+  }
+
+  #isIgnored(event: Event): boolean {
+    return this.#ignored.length > 0 && event.composedPath().some((node) => this.#ignored.includes(node as Element));
+  }
+
+  /** Shows or hides every mark without forgetting them. */
+  setVisible(visible: boolean): void {
+    this.#host.style.display = visible ? "" : "none";
   }
 
   /* ---------------------------------------------------------------- anchoring */
@@ -263,12 +300,16 @@ export class Overlay {
     };
 
     // Captured pages are a record, not a website: links never navigate away.
-    on(this.#doc, "click", (e) => {
-      const target = e.target as Element | null;
-      if (target?.closest?.("a[href], area[href]")) e.preventDefault();
-    });
+    if (this.#blockLinks) {
+      on(this.#doc, "click", (e) => {
+        const target = e.target as Element | null;
+        if (target?.closest?.("a[href], area[href]")) e.preventDefault();
+      });
+    }
 
     on(win, "resize", this.render, false);
+    // Marks on position:fixed or sticky elements move when the page scrolls.
+    on(win, "scroll", this.render, false);
     const observer = new ResizeObserver(this.render);
     observer.observe(this.#doc.documentElement);
     this.#cleanup.push(() => observer.disconnect());
@@ -276,14 +317,14 @@ export class Overlay {
 
     // Pin and element tools: hover outline and click on page elements.
     on(this.#doc, "pointermove", (e) => {
-      if (this.#tool !== "pin" && this.#tool !== "element") return;
+      if ((this.#tool !== "pin" && this.#tool !== "element") || this.#isIgnored(e)) return;
       const el = this.#elementAt(e.clientX, e.clientY);
       if (!el) return;
       const box = documentBox(el);
       Object.assign(this.#hover.style, { display: "block", left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
     });
     on(this.#doc, "click", (e) => {
-      if (this.#tool !== "pin" && this.#tool !== "element") return;
+      if ((this.#tool !== "pin" && this.#tool !== "element") || this.#isIgnored(e)) return;
       e.preventDefault();
       e.stopPropagation();
       const el = this.#elementAt(e.clientX, e.clientY);
@@ -295,8 +336,8 @@ export class Overlay {
     });
 
     // Highlight tool: select text normally, and the selection becomes a highlight.
-    on(this.#doc, "mouseup", () => {
-      if (this.#tool !== "highlight") return;
+    on(this.#doc, "mouseup", (e) => {
+      if (this.#tool !== "highlight" || this.#isIgnored(e)) return;
       const selection = win.getSelection();
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
       const range = selection.getRangeAt(0);
@@ -379,7 +420,7 @@ export class Overlay {
     let scope: Document | ShadowRoot = this.#doc;
     let el: Element | null = null;
     for (let depth = 0; depth < 32; depth++) {
-      const hit: Element | undefined = scope.elementsFromPoint(clientX, clientY).find((candidate) => candidate !== this.#host);
+      const hit: Element | undefined = scope.elementsFromPoint(clientX, clientY).find((candidate) => candidate !== this.#host && !this.#ignored.includes(candidate));
       if (!hit || hit === el) break;
       el = hit;
       if (!hit.shadowRoot) break;

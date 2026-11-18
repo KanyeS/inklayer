@@ -65,6 +65,7 @@ Then open <http://localhost:5048/auth/login>.
 | `/api/orgs/...`, `/api/projects/...` | Organisations, members, invitations, projects, per-project roles, audit log |
 | `/api/admin/users` | Instance administration |
 | `/api/projects/{id}/blobs/...`, `/api/projects/{id}/snapshots`, `/api/snapshots/{id}` | Capture upload, snapshot list/detail/delete |
+| `/api/live/sites`, `/api/projects/{id}/live/...` | Live mode: the sites to watch, and comments on live pages |
 | `/s/{snapshotId}/{token}/` (snapshot origin only) | Serves a captured page under a signed, expiring link |
 
 ### Browser extension
@@ -92,6 +93,16 @@ To install it:
 - **A screenshot** of the visible area.
 
 The server sanitizes the HTML, then serves it only from the separate snapshot origin under signed, expiring links, with scripts and external loads blocked.
+
+### Live comments
+
+People with the extension can also see and add comments **directly on a real site**, without capturing it first.
+
+1. **Turn it on for a project.** A project Admin opens the project in Inklayer → **Settings** and lists the sites to review, for example `https://app.example.com` or `http://localhost:3000`.
+2. **Browse.** On those sites, an **Inklayer** button appears in the bottom-right corner. It shows the comments for the page you're on, and the same tools as the viewer.
+3. **Same page or not.** By default `/pricing?ref=email#faq` and `/pricing` are the same page. Tick the query-string or #hash options in Settings for apps that use them to show different screens.
+
+**Privacy:** the extension only runs on sites a project lists, and only sends the server the addresses of pages on those sites. The server stores only the parts of an address that make a different page. Comments on live pages are listed under the project's **Live pages** tab.
 
 ### Annotating
 

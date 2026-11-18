@@ -11,9 +11,23 @@ namespace Inklayer.Api.Features.Projects;
 
 public sealed record CreateProjectRequest([property: Required, StringLength(200, MinimumLength = 1)] string Name);
 
-public sealed record UpdateProjectRequest([property: StringLength(200, MinimumLength = 1)] string? Name, bool? IsArchived);
+/// <summary>
+/// Only the fields that are present change.
+/// <list type="bullet">
+/// <item><see cref="LiveSites"/> replaces the whole list. Entries are site addresses like <c>https://app.example.com</c>.</item>
+/// <item>Loosening <see cref="LiveMatchQuery"/> or <see cref="LiveMatchHash"/> merges existing live pages that now count as the same page.</item>
+/// </list>
+/// </summary>
+public sealed record UpdateProjectRequest(
+    [property: StringLength(200, MinimumLength = 1)] string? Name,
+    bool? IsArchived,
+    List<string>? LiveSites,
+    bool? LiveMatchQuery,
+    bool? LiveMatchHash);
 
-public sealed record ProjectResponse(Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role MyRole);
+public sealed record ProjectResponse(
+    Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role MyRole,
+    IReadOnlyList<string> LiveSites, bool LiveMatchQuery, bool LiveMatchHash);
 
 public sealed record ProjectMemberResponse(Guid UserId, string Email, string DisplayName, Role OrganizationRole, Role? ProjectRole, Role EffectiveRole);
 
@@ -92,12 +106,66 @@ internal static class ProjectEndpoints
             return check.Denied!;
         }
 
+        List<string>? sites = null;
+        if (request.LiveSites is not null)
+        {
+            sites = [];
+            foreach (var entry in request.LiveSites)
+            {
+                if (!LivePageUrl.TryNormalizeOrigin(entry, out var origin))
+                {
+                    return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                    {
+                        ["liveSites"] = [$"\"{entry}\" isn't a site address. Use just the scheme and host, like https://app.example.com."],
+                    });
+                }
+
+                if (!sites.Contains(origin, StringComparer.Ordinal))
+                {
+                    sites.Add(origin);
+                }
+            }
+
+            if (sites.Count > LivePageUrl.MaxSites)
+            {
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["liveSites"] = [$"A project can have at most {LivePageUrl.MaxSites} live sites."] });
+            }
+        }
+
         var project = await db.Projects.SingleAsync(p => p.Id == projectId, ct);
         project.Name = request.Name?.Trim() ?? project.Name;
         project.IsArchived = request.IsArchived ?? project.IsArchived;
+        project.LiveSites = sites ?? project.LiveSites;
+
+        var matchQuery = request.LiveMatchQuery ?? project.LiveMatchQuery;
+        var matchHash = request.LiveMatchHash ?? project.LiveMatchHash;
+        if (matchQuery != project.LiveMatchQuery || matchHash != project.LiveMatchHash)
+        {
+            project.LiveMatchQuery = matchQuery;
+            project.LiveMatchHash = matchHash;
+            await RekeyLivePagesAsync(db, projectId, matchQuery, matchHash, ct);
+        }
+
         audit.Record(AuditActions.ProjectUpdated, project.OrganizationId, "project", projectId, request);
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(ToResponse(project, check.Role));
+    }
+
+    /// <summary>
+    /// Applies new matching rules to existing live annotations. Only the original page key is stored, so loosening a rule
+    /// (e.g. ignoring the query) merges pages, while tightening it leaves existing keys as they are.
+    /// </summary>
+    private static async Task RekeyLivePagesAsync(InklayerDbContext db, Guid projectId, bool matchQuery, bool matchHash, CancellationToken ct)
+    {
+        var live = await db.Annotations.Where(a => a.ProjectId == projectId && a.PageUrl != null).ToListAsync(ct);
+        foreach (var annotation in live)
+        {
+            var key = LivePageUrl.Normalize(annotation.PageUrl, matchQuery, matchHash);
+            if (key is not null && key != annotation.PageUrl)
+            {
+                db.Entry(annotation).Property(a => a.PageUrl).CurrentValue = key;
+            }
+        }
     }
 
     private static async Task<IResult> ListMembersAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)
@@ -179,5 +247,6 @@ internal static class ProjectEndpoints
         return TypedResults.NoContent();
     }
 
-    private static ProjectResponse ToResponse(Project p, Role myRole) => new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole);
+    private static ProjectResponse ToResponse(Project p, Role myRole) =>
+        new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole, p.LiveSites, p.LiveMatchQuery, p.LiveMatchHash);
 }

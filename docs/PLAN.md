@@ -64,6 +64,14 @@ The extension captures the page as the user sees it, while logged in, rather tha
   - **Snapshot mode:** annotate the frozen copy, which becomes the source of truth.
   - **Live mode:** annotate the real page, with annotations stored against the URL and re-anchored on each visit.
 
+**As built (live mode):**
+- **Opt-in per project.** A project lists its live sites (origins). The extension fetches `/api/live/sites` and registers its live content script with `scripting.registerContentScripts` for those hosts only, so it never runs on, or reports, other pages.
+- **Storage.** A live annotation has `PageUrl` instead of `SnapshotId` (a check constraint keeps exactly one). `PageUrl` is the normalised key: origin and path, plus the query and/or hash only if the project matches on them. Raw URLs are never stored, so tokens in ignored parts don't reach the database. Loosening a rule re-keys existing annotations, merging pages.
+- **No auto-snapshot.** Live comments are re-anchored on each visit; nothing records what the page looked like. Capture a snapshot for a frozen record.
+- **On the page.** The shared overlay (links not blocked) plus a small panel, both in closed shadow roots. The content script never holds a token: it messages the background worker, which checks each request against the sender's real origin and the project's live sites.
+- **Following the page.** URL changes (single-page apps) reload the comments; DOM mutations re-anchor, debounced; the overlay re-attaches if the page removes it.
+- **Tested** in headless Firefox through a WebDriver harness with a stubbed background: pin, box and highlight tools, layout shifts, replaced elements, panel clicks not becoming pins, resolve, working links, SPA navigation and re-attaching. The background's site registration and sign-in path aren't covered by that harness.
+
 **As built (Phase 2):**
 - **Own serializer.** The extension uses its own serializer (`client/packages/capture`) instead of `rrweb-snapshot`. rrweb's output is a JSON tree that needs script to rebuild in the viewer, and the snapshot origin runs no page script.
 - **What the serializer outputs:** static HTML containing:

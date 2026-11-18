@@ -3,6 +3,7 @@ using Inklayer.Api.Auth;
 using Inklayer.Api.Endpoints;
 using Inklayer.Api.Features.Admin;
 using Inklayer.Api.Features.Annotations;
+using Inklayer.Api.Features.Live;
 using Inklayer.Api.Features.Me;
 using Inklayer.Api.Features.Organizations;
 using Inklayer.Api.Features.Projects;
@@ -45,6 +46,7 @@ try
     app.MapAdminEndpoints();
     app.MapSnapshotEndpoints();
     app.MapAnnotationEndpoints();
+    app.MapLiveEndpoints();
     app.MapViewerFallback();
 
     await app.RunAsync();

@@ -77,6 +77,17 @@ export interface Project {
   name: string;
   isArchived: boolean;
   myRole: Role;
+  /** Sites (origins) whose real pages show this project's live comments through the extension. */
+  liveSites: string[];
+  liveMatchQuery: boolean;
+  liveMatchHash: boolean;
+}
+
+export interface LivePageSummary {
+  pageUrl: string;
+  openCount: number;
+  resolvedCount: number;
+  lastActivityAt: string;
 }
 
 export interface SnapshotSummary {
@@ -102,7 +113,9 @@ export interface Snapshot extends SnapshotSummary {
 
 export interface Annotation {
   id: string;
-  snapshotId: string;
+  /** Set for snapshot annotations; live-page annotations have pageUrl instead. */
+  snapshotId: string | null;
+  pageUrl: string | null;
   kind: import("@inklayer/overlay").AnnotationKind;
   status: "Open" | "Resolved";
   body: string;
