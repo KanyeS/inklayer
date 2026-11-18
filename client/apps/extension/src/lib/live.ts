@@ -4,6 +4,7 @@ import { api, apiBytes, postJson, putJson, type Features } from "./api";
 import type { Rect } from "./pageDetails";
 import type { Person } from "./people";
 import { getSettings } from "./settings";
+import { inbox, markRead } from "./notifications";
 
 /**
  * Live mode, background side. Anyone who can comment in a project can annotate any site; Viewers only see comments.
@@ -220,7 +221,9 @@ export type LiveRequest =
   | { type: "live.replyDelete"; id: string; version: number }
   | { type: "live.trackers"; projectId: string }
   | { type: "live.issue"; annotationId: string; connectionId: string }
-  | { type: "live.share"; projectId: string; url: string };
+  | { type: "live.share"; projectId: string; url: string }
+  | { type: "live.inbox" }
+  | { type: "live.inboxRead"; ids?: string[] };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -299,6 +302,11 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
       return api<TrackerChoice[]>(`/api/projects/${encodeURIComponent(request.projectId)}/issue-trackers/choices`);
     case "live.issue":
       return postJson<LinkedIssue>(`/api/annotations/${encodeURIComponent(request.annotationId)}/issues`, { connectionId: request.connectionId });
+    case "live.inbox":
+      return inbox(20);
+    case "live.inboxRead":
+      await markRead(request.ids ?? null);
+      return null;
     case "live.share":
       // A read-only link to this page's open comments in one project. The page address is the sender's own (checked above).
       return postJson<{ url: string }>("/api/shares", { kind: "page", projectId: request.projectId, pageUrl: request.url, expiresInDays: 30 });

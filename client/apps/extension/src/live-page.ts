@@ -2,6 +2,7 @@ import {
   Overlay, commentParts, commentToOpen, decodeMentions, encodeMentions, resolveElement, resolveRange, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
 import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext, PersonLookup, TrackerChoice } from "./lib/live";
+import type { Inbox, InboxItem } from "./lib/notifications";
 import { browserOf, elementHtml, osOf, screenshotArea, type Rect } from "./lib/pageDetails";
 import { clampPosition, DEFAULT_POSITION, parsePosition, type PanelPosition } from "./lib/panelPosition";
 import type { Response } from "./lib/messages";
@@ -10,7 +11,7 @@ import { BubbleLayer } from "./bubbles";
 import { personTitle } from "./lib/people";
 import { PresenceClient } from "./presence-page";
 
-type View = "comments" | "activity";
+type View = "comments" | "activity" | "inbox";
 
 /** The activity log as shown in the panel: loaded only when the Activity tab is opened. */
 interface ActivityState {
@@ -41,6 +42,13 @@ const DOC_VERBS: Record<string, string> = {
   moved: "moved a doc",
   deleted: "deleted a doc",
 };
+const INBOX_TEXT: Record<string, string> = {
+  mention: "mentioned you",
+  reply: "replied",
+  resolved: "resolved your comment",
+  issue_closed: "An issue for your comment was closed",
+};
+
 const KIND_LABELS: Record<ActivityItem["kind"], string> = { comments: "Comments", docs: "Docs", signins: "Sign-ins", errors: "Errors" };
 
 /** A comment on this page, and the project it belongs to. */
@@ -171,6 +179,10 @@ class LiveSession {
   #bubblesOpen = false;
   /** Where the panel was dragged to; the same on every site. */
   #position: PanelPosition = DEFAULT_POSITION;
+  /** Unread notifications, kept up to date by the background's once-a-minute check (via storage). */
+  #unread = 0;
+  /** The inbox, loaded when it's opened. */
+  #inbox: { data: Inbox | null; loading: boolean; error: string } | null = null;
   /** Pinned (the default): the panel stays where it is. Unpin it to drag it somewhere else. */
   #panelPinned = true;
   /** Set when a drag of the collapsed button ends, so it doesn't also open the panel. */
@@ -219,7 +231,8 @@ class LiveSession {
     });
     followColorScheme(this.#bubbles.host);
     this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { ignoreEventsFrom: [this.#host, this.#bubbles.host] });
-    void chrome.storage.local.get(["bubblesOpen", "attachContext", "panelPosition", "panelPinned"]).then((stored) => {
+    void chrome.storage.local.get(["bubblesOpen", "attachContext", "panelPosition", "panelPinned", "unreadCount"]).then((stored) => {
+      this.#unread = typeof stored.unreadCount === "number" ? stored.unreadCount : 0;
       this.#panelPinned = stored.panelPinned !== false;
       this.#bubblesOpen = stored.bubblesOpen === true;
       this.#attachContext = stored.attachContext !== false;
@@ -231,6 +244,11 @@ class LiveSession {
     // Moved elsewhere (or another tab moved it): follow. Window resized: stay inside it.
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
+      if (changes.unreadCount) {
+        this.#unread = typeof changes.unreadCount.newValue === "number" ? changes.unreadCount.newValue : 0;
+        if (this.#view === "inbox" && this.#inbox && !this.#inbox.loading) void this.#loadInbox();
+        else this.#render();
+      }
       if (changes.panelPinned) {
         this.#panelPinned = changes.panelPinned.newValue !== false;
         this.#render();
@@ -251,40 +269,61 @@ class LiveSession {
     this.#host.style.bottom = `${placed.bottom}px`;
   }
 
-  /** Drags the panel (by its header) or the collapsed button; the new place is remembered for every site. */
+  /**
+   * Drags the panel by its header (tabs and icons included) or the collapsed button; the new place is remembered for every
+   * site. A press that doesn't move is still a click. While pinned, a drag only explains how to move it.
+   */
   #startDrag(e: PointerEvent): void {
-    if (e.button !== 0 || this.#panelPinned) return;
+    if (e.button !== 0 || (e.target as Element).closest("select, input, textarea")) return;
     const handle = e.currentTarget as HTMLElement;
-    // Buttons, menus and fields in the header keep working; the launcher itself is a button, so it's allowed.
-    const control = (e.target as Element).closest("button, select, input, textarea, a, label");
-    if (control && control !== handle) return;
     const box = this.#host.getBoundingClientRect();
     const start = { x: e.clientX, y: e.clientY, right: innerWidth - box.right, bottom: innerHeight - box.bottom };
     let moved = false;
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - start.x;
       const dy = ev.clientY - start.y;
-      if (!moved && Math.hypot(dx, dy) < 4) return; // a click, not a drag
-      moved = true;
-      handle.classList.add("dragging");
+      if (!moved) {
+        if (Math.hypot(dx, dy) < 5) return; // still a click
+        moved = true;
+        if (this.#panelPinned) {
+          end();
+          // The collapsed button can't show a note; the open panel can.
+          if (!handle.classList.contains("launcher")) this.#flashNote("Pinned in place. Click the pin icon to unpin, then drag the header to move the panel.");
+          return;
+        }
+        // Captured only once it's a drag, so plain clicks still reach the button pressed.
+        handle.setPointerCapture(ev.pointerId);
+        handle.classList.add("dragging");
+      }
       this.#position = clampPosition({ right: start.right - dx, bottom: start.bottom - dy }, { width: box.width, height: box.height }, { width: innerWidth, height: innerHeight });
       this.#host.style.right = `${this.#position.right}px`;
       this.#host.style.bottom = `${this.#position.bottom}px`;
     };
     const end = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", end);
-      handle.removeEventListener("pointercancel", end);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", end, true);
+      window.removeEventListener("pointercancel", end, true);
       handle.classList.remove("dragging");
-      if (!moved) return;
+      if (!moved || this.#panelPinned) return;
+      // The release after a drag isn't a click on whatever is under it.
       this.#dragged = true;
       window.setTimeout(() => (this.#dragged = false), 0);
       void chrome.storage.local.set({ panelPosition: this.#position }).catch(() => undefined);
     };
-    handle.setPointerCapture(e.pointerId);
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", end);
-    handle.addEventListener("pointercancel", end);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", end, true);
+    window.addEventListener("pointercancel", end, true);
+  }
+
+  /** A short message under the header (sharing results, how to move the panel). */
+  #flashNote(text: string): void {
+    this.#shareNote = text;
+    this.#render();
+    window.setTimeout(() => {
+      if (this.#shareNote !== text) return;
+      this.#shareNote = "";
+      this.#render();
+    }, 8000);
   }
 
   #setPinned(pinned: boolean): void {
@@ -645,6 +684,7 @@ class LiveSession {
 
   #setView(view: View): void {
     this.#view = view;
+    if (view === "inbox") void this.#loadInbox();
     if (view === "activity" && !this.#activity) {
       this.#activity = { items: [], kinds: ["comments"], nextBefore: null, thisSite: true, kind: null, loading: false, error: "" };
       void this.#loadActivity(false);
@@ -752,17 +792,75 @@ class LiveSession {
     if (item.annotationId && this.#annotations.some((a) => a.id === item.annotationId)) {
       li.classList.add("here");
       li.title = "Show this comment on the page";
-      li.onclick = () => {
-        // Resolved comments are hidden by default; show them if that's the one being opened.
-        if (this.#annotations.find((a) => a.id === item.annotationId)?.status === "Resolved" && !this.#showResolved) {
-          this.#showResolved = true;
-          this.#syncOverlay();
-        }
-        this.#selected = item.annotationId;
-        this.#overlay.handle({ type: "select", id: item.annotationId, scroll: true });
-        this.#setView("comments");
-      };
+      li.onclick = () => this.#showOnPage(item.annotationId!);
     }
+    return li;
+  }
+
+  /** Selects a comment on this page and switches to the comments list. */
+  #showOnPage(id: string): void {
+    // Resolved comments are hidden by default; show them if that's the one being opened.
+    if (this.#annotations.find((a) => a.id === id)?.status === "Resolved" && !this.#showResolved) {
+      this.#showResolved = true;
+      this.#syncOverlay();
+    }
+    this.#selected = id;
+    this.#overlay.handle({ type: "select", id, scroll: true });
+    this.#setView("comments");
+  }
+
+  /* ------------------------------------------------------------------ inbox */
+
+  async #loadInbox(): Promise<void> {
+    this.#inbox = { data: this.#inbox?.data ?? null, loading: true, error: "" };
+    this.#render();
+    try {
+      this.#inbox = { data: await call<Inbox>({ type: "live.inbox" }), loading: false, error: "" };
+    } catch (e) {
+      this.#inbox = { data: this.#inbox.data, loading: false, error: (e as Error).message };
+    }
+    this.#render();
+  }
+
+  /** Mentions, replies and resolved comments for you, newest first. A comment on this page opens here; anything else in a new tab. */
+  #inboxParts(): Node[] {
+    const state = this.#inbox;
+    const box = state?.data;
+    const parts: Node[] = [];
+    const head = h("div", { className: "row inbox-head" }, h("strong", { textContent: this.#unread ? `${this.#unread} unread` : "All read" }));
+    if (this.#unread > 0) {
+      head.append(h("button", { className: "link", textContent: "Mark all read", disabled: this.#busy,
+        onclick: () => void call({ type: "live.inboxRead" }).then(() => this.#loadInbox()).catch((e: unknown) => { this.#error = (e as Error).message; this.#render(); }) }));
+    }
+    parts.push(head);
+    if (state?.error) parts.push(h("p", { className: "error", textContent: state.error }));
+    const list = h("ol", { className: "list inbox" });
+    for (const item of box?.items ?? []) list.append(this.#inboxItem(item, box!.serverUrl));
+    if (box && box.items.length === 0) list.append(h("li", { className: "empty", textContent: "Nothing yet. You'll hear here when someone mentions you, replies in your threads or resolves your comments." }));
+    parts.push(list);
+    if (state?.loading && !box) parts.push(h("p", { className: "hint", textContent: "Loading…" }));
+    return parts;
+  }
+
+  #inboxItem(item: InboxItem, serverUrl: string): HTMLLIElement {
+    const verb = INBOX_TEXT[item.kind] ?? item.kind;
+    const who = item.kind === "issue_closed" ? null : item.actor?.displayName ?? "Someone";
+    const here = item.annotationId !== null && this.#annotations.some((a) => a.id === item.annotationId);
+    const li = h("li", { className: item.read ? "item read" : "item unread", title: here ? "Show this comment on the page" : "Open in Inklayer" },
+      h("div", { className: "meta" },
+        item.read ? "" : h("span", { className: "unread-dot", ariaLabel: "unread" }),
+        who ? h("strong", { textContent: who, title: item.actor?.fullName ?? "" }) : "",
+        h("span", { textContent: who ? ` ${verb}` : verb }),
+        h("span", { className: "muted grow-left", textContent: timeAgo(item.createdAt), title: new Date(item.createdAt).toLocaleString() })),
+      h("p", { className: "body clamp", textContent: item.preview }));
+    if (item.where) li.append(h("div", { className: "muted where", textContent: here ? "On this page" : item.where }));
+    li.onclick = () => {
+      if (!item.read) void call({ type: "live.inboxRead", ids: [item.id] }).catch(() => undefined);
+      if (here) return this.#showOnPage(item.annotationId!);
+      const url = item.annotationId ? `${serverUrl}/comments/${item.annotationId}`
+        : item.docId ? `${serverUrl}/orgs/${item.organizationId}/docs/${item.docId}` : serverUrl;
+      window.open(url, "_blank", "noopener");
+    };
     return li;
   }
 
@@ -887,8 +985,7 @@ class LiveSession {
     } catch (e) {
       this.#shareNote = `Couldn't share: ${(e as Error).message}`;
     }
-    this.#render();
-    window.setTimeout(() => { this.#shareNote = ""; this.#render(); }, 12000);
+    this.#flashNote(this.#shareNote);
   }
 
   #setBubblesOpen(open: boolean): void {
@@ -905,7 +1002,8 @@ class LiveSession {
         if (this.#dragged) return;
         this.#open = true;
         this.#render();
-      } }, "Inklayer", h("span", { className: open ? "count" : "count zero", textContent: String(open) }));
+      } }, "Inklayer", h("span", { className: open ? "count" : "count zero", textContent: String(open), title: `${open} open comment${open === 1 ? "" : "s"} on this page` }),
+      this.#unread > 0 ? h("span", { className: "bell-count", title: `${this.#unread} unread notification${this.#unread === 1 ? "" : "s"}` }, bellIcon(), String(Math.min(this.#unread, 99))) : "");
       launcher.addEventListener("pointerdown", (e) => this.#startDrag(e));
       this.#root.replaceChildren(launcher);
       this.#placePanel();
@@ -914,25 +1012,36 @@ class LiveSession {
 
     const tab = (view: View, label: string) =>
       h("button", { className: this.#view === view ? "tab active" : "tab", textContent: label, onclick: () => this.#setView(view) });
-    const header = h("div", { className: "header" },
-      h("div", { className: "tabs" }, tab("comments", "Comments"), tab("activity", "Activity")),
-      h("button", { className: this.#bubblesOpen ? "icon svg on" : "icon svg", ariaPressed: String(this.#bubblesOpen),
-        title: this.#bubblesOpen ? "Comments are open next to their marks. Click to show them only on hover." : "Open every comment next to its mark (otherwise they show on hover)",
-        onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }, commentsIcon()),
+    const actions = h("div", { className: "actions" },
       this.#init.features.sharing && this.#target ? h("button", { className: "icon svg", disabled: this.#busy,
         title: `Share this page: copy a read-only link to its open comments in ${this.#target.name}, for people without an account (works for 30 days)`,
         onclick: () => void this.#sharePage() }, linkIcon()) : "",
+      h("button", { className: this.#bubblesOpen ? "icon svg on" : "icon svg", ariaPressed: String(this.#bubblesOpen),
+        title: this.#bubblesOpen ? "Comments are open next to their marks. Click to show them only on hover." : "Open every comment next to its mark (otherwise they show on hover)",
+        onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }, commentsIcon()),
       h("button", { className: "icon svg", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page",
         onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } },
         this.#marksVisible ? eyeIcon() : eyeOffIcon()),
+      h("button", { className: this.#view === "inbox" ? "icon svg bell on" : "icon svg bell", ariaPressed: String(this.#view === "inbox"),
+        title: this.#unread ? `Notifications: ${this.#unread} unread` : "Notifications",
+        onclick: () => this.#setView(this.#view === "inbox" ? "comments" : "inbox") },
+        bellIcon(), this.#unread > 0 ? h("span", { className: "badge", textContent: this.#unread > 99 ? "99+" : String(this.#unread) }) : ""),
       h("button", { className: this.#panelPinned ? "icon svg on" : "icon svg", ariaPressed: String(this.#panelPinned),
         title: this.#panelPinned ? "Pinned in place. Click to unpin, then drag the header to move the panel." : "Unpinned: drag the header to move the panel (double-click it to put it back in the corner). Click to pin it.",
         onclick: () => this.#setPinned(!this.#panelPinned) }, this.#panelPinned ? pinIcon() : pinOffIcon()),
-      h("button", { className: "icon", title: "Minimise", textContent: "–", onclick: () => { this.#open = false; this.#render(); } }));
+      h("button", { className: "icon svg", title: "Minimise", onclick: () => { this.#open = false; this.#render(); } }, minimiseIcon()));
+    const header = h("div", { className: "header" },
+      h("div", { className: "tabs" }, tab("comments", "Comments"), tab("activity", "Activity")), actions);
+    header.addEventListener("pointerdown", (e) => this.#startDrag(e));
+    // A drag that ends over a tab or icon doesn't also press it.
+    header.addEventListener("click", (e) => {
+      if (!this.#dragged) return;
+      e.stopPropagation();
+      e.preventDefault();
+    }, true);
     if (!this.#panelPinned) {
       header.classList.add("movable");
-      header.title = "Drag to move · double-click to put back in the corner";
-      header.addEventListener("pointerdown", (e) => this.#startDrag(e));
+      header.prepend(h("span", { className: "grip", title: "Drag to move · double-click to put back in the corner" }, gripIcon()));
       header.addEventListener("dblclick", (e) => {
         if (!(e.target as Element).closest("button, select, input, textarea, a, label")) this.#resetPosition();
       });
@@ -940,6 +1049,11 @@ class LiveSession {
 
     const parts: Node[] = [header];
     if (this.#shareNote) parts.push(h("p", { className: "hint", textContent: this.#shareNote }));
+    if (this.#view === "inbox") {
+      this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#inboxParts()));
+      this.#placePanel();
+      return;
+    }
     if (this.#view === "activity") {
       this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#activityParts()));
       this.#placePanel();
@@ -1302,6 +1416,21 @@ function pinIcon(): SVGSVGElement {
   return icon(["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"]);
 }
 
+/** Six dots: a handle to drag the panel by. */
+function gripIcon(): SVGSVGElement {
+  return icon(["M9 5h.01", "M9 12h.01", "M9 19h.01", "M15 5h.01", "M15 12h.01", "M15 19h.01"]);
+}
+
+/** A bell: notifications. */
+function bellIcon(): SVGSVGElement {
+  return icon(["M10.268 21a2 2 0 0 0 3.464 0", "M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"]);
+}
+
+/** A dash: minimise the panel. */
+function minimiseIcon(): SVGSVGElement {
+  return icon(["M5 12h14"]);
+}
+
 /** A crossed-out pin: the panel can be dragged. */
 function pinOffIcon(): SVGSVGElement {
   return icon(["M12 17v5", "M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89", "m2 2 20 20",
@@ -1432,14 +1561,28 @@ const STYLES = `
   .launcher:hover { background: color-mix(in oklch, var(--primary) 88%, black); }
   .count { background: var(--primary-foreground); color: var(--primary); border-radius: 999px; min-width: 22px; padding: 0 7px; text-align: center; font-weight: 700; }
   .count.zero { background: color-mix(in oklch, var(--primary-foreground) 25%, transparent); color: var(--primary-foreground); }
-  .panel { width: 330px; max-height: min(70vh, 640px); overflow: auto; background: var(--popover); color: var(--popover-foreground); border-radius: 22px; padding: 12px;
+  .panel { width: 344px; max-width: calc(100vw - 16px); box-sizing: border-box; max-height: min(70vh, 640px); overflow: auto; background: var(--popover); color: var(--popover-foreground); border-radius: 22px; padding: 12px;
     box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.3), 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); display: flex; flex-direction: column; gap: 10px; }
-  .header { display: flex; align-items: center; gap: 4px; }
+  /* The icons wrap under the tabs rather than ever leaving the panel. */
+  .header { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+  .actions { display: flex; align-items: center; gap: 0; margin-left: auto; }
+  .actions .icon.svg { padding: 5px; }
+  .icon.bell { position: relative; }
+  .icon.bell .badge { position: absolute; top: -3px; right: -4px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px; background: var(--primary);
+    color: var(--primary-foreground); font-size: 10px; font-weight: 700; line-height: 15px; text-align: center; }
+  .bell-count { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; }
+  .bell-count svg { width: 14px; height: 14px; }
+  .inbox-head { justify-content: space-between; }
+  .inbox .item.read { opacity: 0.7; }
+  .unread-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--primary); flex: none; }
+  .clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .header.movable { cursor: grab; touch-action: none; user-select: none; }
+  .grip { display: grid; place-items: center; color: var(--muted-foreground); margin-left: -4px; }
+  .grip svg { width: 16px; height: 16px; stroke-width: 3; }
   .launcher.movable { cursor: grab; touch-action: none; }
   .header.dragging, .launcher.dragging { cursor: grabbing; }
-  .tabs { display: flex; gap: 2px; margin-right: auto; padding: 3px; border-radius: 999px; background: var(--muted); }
-  .tab { border: none; background: none; padding: 3px 12px; color: var(--muted-foreground); font-weight: 500; }
+  .tabs { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--muted); }
+  .tab { border: none; background: none; padding: 3px 10px; color: var(--muted-foreground); font-weight: 500; }
   .tab:hover { background: none; color: var(--foreground); }
   .tab.active { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
   :host(.dark) .tab.active { background: var(--input); }

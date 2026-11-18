@@ -3,7 +3,7 @@ import { getSettings } from "./settings";
 
 /**
  * Notifications, background side: the unread count on the toolbar icon, refreshed every minute, and the recent ones for
- * the popup. (A tab where live cursors are on shows LIVE there instead.)
+ * the popup and the in-page panel. (A tab where live cursors are on shows LIVE on the icon instead; the panel's bell still counts.)
  */
 
 export interface InboxItem {
@@ -36,9 +36,9 @@ export function startNotifications(): void {
   void refreshBadge().catch(() => undefined);
 }
 
-export async function inbox(): Promise<Inbox> {
+export async function inbox(limit = 8): Promise<Inbox> {
   const { serverUrl } = await getSettings();
-  const result = await api<Omit<Inbox, "serverUrl">>("/api/notifications?limit=8");
+  const result = await api<Omit<Inbox, "serverUrl">>(`/api/notifications?limit=${limit}`);
   await showCount(result.unread);
   return { ...result, serverUrl: new URL(serverUrl!).origin };
 }
@@ -56,6 +56,8 @@ async function refreshBadge(): Promise<void> {
 }
 
 async function showCount(unread: number): Promise<void> {
+  // For the in-page panel's bell, which follows this rather than asking the server itself.
+  await chrome.storage.local.set({ unreadCount: unread });
   await chrome.action.setBadgeText({ text: unread > 0 ? (unread > 99 ? "99+" : String(unread)) : "" });
   await chrome.action.setBadgeBackgroundColor({ color: "#6d28d9" });
 }
