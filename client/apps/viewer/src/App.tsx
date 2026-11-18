@@ -5,6 +5,7 @@ import { useAsync } from "./lib/useAsync";
 import { Layout, Loading, Page, PageTitle } from "./components/Layout";
 import { AdminPage } from "./pages/AdminPage";
 import { CommentPage } from "./pages/CommentPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { HomePage } from "./pages/HomePage";
 import { OrganizationPage } from "./pages/OrganizationPage";
 import { ProjectPage } from "./pages/ProjectPage";
@@ -34,6 +35,7 @@ export function App() {
   let params: Record<string, string> | null;
   if (path === "/" || path === "") page = <HomePage />;
   else if (path === "/admin") page = <AdminPage />;
+  else if (path === "/settings") page = <SettingsPage />;
   else if ((params = match("/orgs/:orgId", path))) page = <OrganizationPage orgId={params.orgId!} />;
   else if ((params = match("/orgs/:orgId/docs", path) ?? match("/orgs/:orgId/graph", path) ?? match("/orgs/:orgId/docs/:docId", path)) && !me.features.docs) {
     page = <TurnedOff what="Docs are" />;

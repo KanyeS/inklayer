@@ -13,8 +13,11 @@ import type { Anchor, ElementAnchor } from "./types";
 /** Someone else on the page. */
 export interface PresencePeerView {
   id: string;
+  /** The name they chose to be shown as, or their real name. */
   name: string;
   color: string;
+  /** Their real name, from sign-in, shown on hover. */
+  fullName?: string | null;
 }
 
 /** Where someone's pointer is. */
@@ -147,6 +150,7 @@ export class PresenceLayer {
     const label = this.#doc.createElement("span");
     label.className = "name";
     label.textContent = peer.name;
+    label.title = realName(peer);
     cursor.append(label);
     cursor.hidden = true;
     this.#cursors.append(cursor);
@@ -325,7 +329,7 @@ export class PresenceLayer {
       const face = doc.createElement("button");
       face.className = "face";
       face.type = "button";
-      face.title = `${peer.name}: show their cursor`;
+      face.title = `${realName(peer)}: show their cursor`;
       face.style.setProperty("--c", safeColor(peer.color));
       face.textContent = initials(peer.name);
       face.addEventListener("click", () => this.scrollTo(peer.id));
@@ -363,6 +367,11 @@ export function placeCursor(doc: Document, position: CursorPosition, element: El
   }
   const width = Math.max(1, doc.documentElement.scrollWidth);
   return { x: position.dx * width, y: position.dy * width };
+}
+
+/** "Chosen (Real Name)" when someone chose another name, so they can still be recognised. */
+function realName(peer: PresencePeerView): string {
+  return peer.fullName && peer.fullName !== peer.name ? `${peer.name} (${peer.fullName})` : peer.name;
 }
 
 function isCursorPosition(value: unknown): value is CursorPosition {

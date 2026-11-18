@@ -23,13 +23,13 @@ export function Layout({ children, wide }: { children: ReactNode; wide?: boolean
             {me.isSystemAdmin && (
               <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin" />}>Admin</Button>
             )}
-            <span className="flex items-center gap-2 px-2 text-sm text-muted-foreground" title={me.email}>
+            <Link to="/settings" className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground hover:bg-muted" title={`${me.fullName} · ${me.email} · Settings`}>
               <Avatar size="sm">
                 {me.avatarUrl && <AvatarImage src={me.avatarUrl} alt="" referrerPolicy="no-referrer" />}
                 <AvatarFallback>{initials(me.displayName)}</AvatarFallback>
               </Avatar>
               <span className="hidden sm:inline">{me.displayName}</span>
-            </span>
+            </Link>
             <Button variant="outline" size="sm" onClick={signOut}>Sign out</Button>
           </nav>
         </div>

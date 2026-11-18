@@ -17,7 +17,9 @@ public static class ActivityKinds
     public const string Docs = "docs";
 }
 
-public sealed record ActivityActor(Guid Id, string DisplayName, string? Email);
+/// <param name="DisplayName">The name they chose to be shown as, or their real name.</param>
+/// <param name="FullName">Their real name, from their sign-in provider (shown on hover).</param>
+public sealed record ActivityActor(Guid Id, string DisplayName, string? Email, string? FullName = null);
 
 /// <summary>
 /// One line of the activity log.
@@ -215,7 +217,7 @@ internal static class ActivityEndpoints
     {
         var distinct = ids.OfType<Guid>().Distinct().ToList();
         return await db.Users.AsNoTracking().Where(u => distinct.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => new ActivityActor(u.Id, u.DisplayName, showEmails ? u.Email : null), ct);
+            .ToDictionaryAsync(u => u.Id, u => new ActivityActor(u.Id, u.PreferredName ?? u.DisplayName, showEmails ? u.Email : null, u.DisplayName), ct);
     }
 
     private static string? BodyPreview(string state)

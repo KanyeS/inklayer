@@ -73,7 +73,7 @@ export function AdminPage() {
             <TableRow key={u.id} className={u.isDisabled ? "opacity-50" : undefined}>
               <TableCell>
                 <span className="flex items-center gap-2">
-                  {u.displayName}
+                  {u.preferredName ? <>{u.preferredName} <span className="text-muted-foreground">({u.displayName})</span></> : u.displayName}
                   {u.isSystemAdmin && <Badge variant="secondary">Admin</Badge>}
                   {u.isDisabled && <Badge variant="outline">Disabled</Badge>}
                 </span>

@@ -10,6 +10,7 @@ import { ApiError, del, get, post } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
+import { personTitle } from "@/lib/people";
 
 interface CommentDetail {
   id: string;
@@ -19,7 +20,7 @@ interface CommentDetail {
   pageUrl: string;
   body: string;
   status: "Open" | "Resolved";
-  author: { id: string; displayName: string };
+  author: { id: string; displayName: string; fullName?: string | null; role?: string | null };
   createdAt: string;
   docLinks: { text: string; docId: string | null; title: string | null }[];
   mentionedIn: { docId: string; title: string }[];
@@ -30,7 +31,7 @@ interface CommentDetail {
 interface Reply {
   id: string;
   body: string;
-  author: { id: string; displayName: string };
+  author: { id: string; displayName: string; fullName?: string | null; role?: string | null };
   createdAt: string;
   version: number;
   canDelete: boolean;
@@ -76,7 +77,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
       </p>
       <article className="rounded-3xl border p-6">
         <p className="mb-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{c.author.displayName}</span> · <span title={dateTime(c.createdAt)}>{timeAgo(c.createdAt)}</span>
+          <span className="font-medium text-foreground" title={personTitle(c.author)}>{c.author.displayName}</span> · <span title={dateTime(c.createdAt)}>{timeAgo(c.createdAt)}</span>
         </p>
         <p className="text-lg whitespace-pre-wrap">{linked(c.body)}</p>
         <p className="mt-4 truncate text-sm text-muted-foreground" title={c.pageUrl}>{hostOf(c.pageUrl)}{safePath(c.pageUrl)}</p>
@@ -97,7 +98,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
         {c.replies.map((r) => (
           <li key={r.id} className="rounded-2xl border px-4 py-3">
             <p className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{r.author.displayName}</span>
+              <span className="font-medium text-foreground" title={personTitle(r.author)}>{r.author.displayName}</span>
               <span title={dateTime(r.createdAt)}>{timeAgo(r.createdAt)}</span>
               {r.canDelete && (
                 <Button variant="link" size="sm" className="ml-auto h-auto px-0 text-destructive" onClick={async () => { await del(`/api/replies/${r.id}?version=${r.version}`); await comment.reload(); }}>Delete</Button>

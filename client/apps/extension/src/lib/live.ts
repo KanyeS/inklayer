@@ -1,6 +1,7 @@
 import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url";
 import { NotSignedInError } from "./auth";
 import { api, postJson, type Features } from "./api";
+import type { Person } from "./people";
 import { getSettings } from "./settings";
 
 /**
@@ -33,7 +34,7 @@ export interface LiveAnnotation {
   anchor: unknown;
   geometry: unknown;
   version: number;
-  author: { id: string; displayName: string };
+  author: Person;
   createdAt: string;
   canEdit: boolean;
   canDelete: boolean;
@@ -49,7 +50,7 @@ export interface LiveAnnotation {
 export interface LiveReply {
   id: string;
   body: string;
-  author: { id: string; displayName: string };
+  author: Person;
   createdAt: string;
   updatedAt: string;
   version: number;
@@ -76,7 +77,7 @@ export interface ActivityItem {
   kind: "comments" | "docs" | "signins" | "errors";
   action: string;
   occurredAt: string;
-  actor: { id: string; displayName: string; email: string | null } | null;
+  actor: (Person & { email: string | null }) | null;
   projectId: string | null;
   projectName: string | null;
   pageUrl: string | null;

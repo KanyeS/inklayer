@@ -10,6 +10,7 @@ import { ErrorText, Loading } from "@/components/Layout";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
+import { personTitle } from "@/lib/people";
 import { useMe } from "@/App";
 import { DocSession, type AwarenessUser } from "./collab";
 import { headings } from "./docMarkdown";
@@ -192,7 +193,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
       />
       {info.tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{info.tags.map((t) => <Badge key={t} variant="secondary">#{t}</Badge>)}</div>}
       <p className="mt-1 text-xs text-muted-foreground">
-        {info.updatedBy ? `Edited by ${info.updatedBy.displayName} ${timeAgo(info.updatedAt)}` : `Created ${timeAgo(info.createdAt)}`}
+        {info.updatedBy ? <>Edited by <span title={personTitle(info.updatedBy)}>{info.updatedBy.displayName}</span> {timeAgo(info.updatedAt)}</> : `Created ${timeAgo(info.createdAt)}`}
       </p>
       <ErrorText error={error} />
     </div>
@@ -424,7 +425,7 @@ function InfoPanel({ orgId, info, session, onTag }: { orgId: string; info: DocIn
       <PanelSection icon={<MessageSquare className="size-4" />} title="Page comments linking here" count={info.commentBacklinks.length}>
         {info.commentBacklinks.length === 0 ? <Muted>Write [[{info.title}]] in a page comment to link it here.</Muted> : info.commentBacklinks.map((c) => (
           <Link key={c.annotationId} to={`/comments/${c.annotationId}`} className="block rounded-lg border px-3 py-2 hover:bg-muted">
-            <span className="block text-xs text-muted-foreground">{c.author.displayName} · {c.projectName}{c.status === "Resolved" ? " · resolved" : ""}</span>
+            <span className="block text-xs text-muted-foreground"><span title={personTitle(c.author)}>{c.author.displayName}</span> · {c.projectName}{c.status === "Resolved" ? " · resolved" : ""}</span>
             <span className="line-clamp-3">{c.body}</span>
             {c.pageUrl && <span className="mt-1 block truncate text-xs text-muted-foreground">{hostOf(c.pageUrl)}</span>}
           </Link>
@@ -530,7 +531,7 @@ function HistoryDialog({ docId, session, canEdit, open, onOpenChange }: { docId:
                   className={cn("w-full rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted", shown?.id === r.id && "bg-muted")}
                   onClick={() => void show(r)}
                 >
-                  <span className="block font-medium">{r.actor.displayName} {r.action}</span>
+                  <span className="block font-medium"><span title={personTitle(r.actor)}>{r.actor.displayName}</span> {r.action}</span>
                   <span className="block text-xs text-muted-foreground" title={dateTime(r.occurredAt)}>{timeAgo(r.occurredAt)}</span>
                 </button>
               </li>

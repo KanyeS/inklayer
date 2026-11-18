@@ -119,7 +119,7 @@ internal static class ProjectEndpoints
             {
                 m.UserId,
                 m.User!.Email,
-                m.User.DisplayName,
+                DisplayName = m.User.PreferredName ?? m.User.DisplayName,
                 m.Role,
                 Override = db.ProjectMembers.Where(pm => pm.ProjectId == projectId && pm.UserId == m.UserId).Select(pm => (Role?)pm.Role).FirstOrDefault(),
             })

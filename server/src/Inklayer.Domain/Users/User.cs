@@ -11,7 +11,16 @@ public sealed class User
     /// <summary>Lower-cased, verified email address.</summary>
     public required string Email { get; set; }
 
+    /// <summary>The name from the sign-in provider (the person's real name). Updated on every sign-in.</summary>
     public required string DisplayName { get; set; }
+
+    public const int MaxPreferredNameLength = 80;
+
+    /// <summary>The name the person chose to be shown as, if any. Sign-in never changes it.</summary>
+    public string? PreferredName { get; set; }
+
+    /// <summary>The name shown to others: the chosen one, or the real one. (In queries, use <c>PreferredName ?? DisplayName</c>.)</summary>
+    public string Name => PreferredName ?? DisplayName;
 
     public string? AvatarUrl { get; set; }
 

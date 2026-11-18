@@ -5,6 +5,7 @@ import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, L
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { BubbleLayer } from "./bubbles";
+import { personTitle } from "./lib/people";
 import { PresenceClient } from "./presence-page";
 
 type View = "comments" | "activity";
@@ -527,7 +528,7 @@ class LiveSession {
     const who = item.actor?.displayName || item.actor?.email || "";
     const verb = (item.kind === "docs" ? DOC_VERBS[item.action] : ACTIVITY_VERBS[item.action]) ?? item.action;
     const line = h("div", { className: "meta" },
-      who ? h("strong", { textContent: who }) : "", h("span", { className: item.kind === "errors" ? "error" : "", textContent: who ? ` ${verb}` : verb }),
+      who ? h("strong", { textContent: who, title: item.actor ? personTitle(item.actor) : "" }) : "", h("span", { className: item.kind === "errors" ? "error" : "", textContent: who ? ` ${verb}` : verb }),
       h("span", { className: "muted grow-left", textContent: timeAgo(item.occurredAt), title: new Date(item.occurredAt).toLocaleString() }));
     const li = h("li", { className: `item activity-${item.kind}` }, line);
     if (item.detail) li.append(h("p", { className: item.kind === "errors" ? "body error-detail" : "body", textContent: item.detail }));
@@ -612,7 +613,7 @@ class LiveSession {
     const dot = h("span", { className: "dot" });
     dot.style.background = a.color;
     const nodes: Node[] = [
-      h("div", { className: "bubble-head" }, dot, h("strong", { textContent: a.author.displayName || "Someone" }),
+      h("div", { className: "bubble-head" }, dot, h("strong", { textContent: a.author.displayName || "Someone", title: personTitle(a.author) }),
         h("span", { className: "muted", textContent: timeAgo(a.createdAt) }),
         a.status === "Resolved" ? h("span", { className: "muted", textContent: "· resolved" }) : "",
         h("span", { className: "grow" }), pin),
@@ -633,7 +634,7 @@ class LiveSession {
   #repliesOf(a: PageAnnotation): HTMLUListElement {
     const list = h("ul", { className: "replies" });
     for (const r of a.replies ?? []) {
-      const meta = h("div", { className: "meta" }, h("strong", { textContent: r.author.displayName || "Someone" }), h("span", { className: "muted", textContent: ` ${timeAgo(r.createdAt)}` }));
+      const meta = h("div", { className: "meta" }, h("strong", { textContent: r.author.displayName || "Someone", title: personTitle(r.author) }), h("span", { className: "muted", textContent: ` ${timeAgo(r.createdAt)}` }));
       if (r.canDelete) {
         meta.append(" ", h("button", { className: "link danger", textContent: "Delete", disabled: this.#busy, onclick: (e: Event) => {
           e.stopPropagation();
@@ -763,7 +764,7 @@ class LiveSession {
     const resolved = a.status === "Resolved";
     const badge = h("span", { className: "badge", textContent: String(this.#labelOf(a.id)) });
     badge.style.background = a.color;
-    const meta = h("div", { className: "meta" }, badge, h("strong", { textContent: a.author.displayName || "Someone" }), h("span", { className: "muted", textContent: timeAgo(a.createdAt) }));
+    const meta = h("div", { className: "meta" }, badge, h("strong", { textContent: a.author.displayName || "Someone", title: personTitle(a.author) }), h("span", { className: "muted", textContent: timeAgo(a.createdAt) }));
     if (new Set(this.#annotations.map((x) => x.projectId)).size > 1) meta.append(h("span", { className: "muted", textContent: `· ${this.#projects.get(a.projectId)?.name ?? ""}` }));
     if (this.#quality[a.id] === "orphaned") meta.append(h("span", { className: "warn", textContent: "moved", title: "The element this was attached to has changed; shown where it originally was." }));
 

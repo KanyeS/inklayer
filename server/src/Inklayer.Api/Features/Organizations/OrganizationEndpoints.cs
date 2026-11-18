@@ -124,7 +124,7 @@ internal static class OrganizationEndpoints
         var members = await db.OrganizationMembers.AsNoTracking()
             .Where(m => m.OrganizationId == orgId)
             .OrderBy(m => m.User!.DisplayName)
-            .Select(m => new MemberResponse(m.UserId, m.User!.Email, m.User.DisplayName, m.User.AvatarUrl, m.Role, m.JoinedAt))
+            .Select(m => new MemberResponse(m.UserId, m.User!.Email, m.User.PreferredName ?? m.User.DisplayName, m.User.AvatarUrl, m.Role, m.JoinedAt, m.User.DisplayName))
             .ToListAsync(ct);
         return TypedResults.Ok(members);
     }

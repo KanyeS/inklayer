@@ -16,7 +16,9 @@ public sealed record UpdateOrganizationRequest(
 
 public sealed record OrganizationResponse(Guid Id, string Name, Role DefaultRole, IReadOnlyList<string> AllowedDomains, DateTime CreatedAt, Role MyRole);
 
-public sealed record MemberResponse(Guid UserId, string Email, string DisplayName, string? AvatarUrl, Role Role, DateTime JoinedAt);
+/// <param name="DisplayName">The name they chose to be shown as, or their real name.</param>
+/// <param name="FullName">Their real name, from their sign-in provider.</param>
+public sealed record MemberResponse(Guid UserId, string Email, string DisplayName, string? AvatarUrl, Role Role, DateTime JoinedAt, string? FullName = null);
 
 public sealed record SetRoleRequest([property: Required] Role? Role);
 

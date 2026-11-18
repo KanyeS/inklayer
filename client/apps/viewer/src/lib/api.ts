@@ -47,6 +47,9 @@ export interface Me {
   organizations: { id: string; name: string; role: Role }[];
   /** Which major features are on for this server. */
   features: Features;
+  /** Real name, from the sign-in provider. displayName is the chosen name, or this. */
+  fullName: string;
+  preferredName: string | null;
 }
 
 export interface Features {
@@ -70,6 +73,7 @@ export interface Member {
   avatarUrl: string | null;
   role: Role;
   joinedAt: string;
+  fullName?: string | null;
 }
 
 export interface Invitation {
@@ -110,4 +114,5 @@ export interface AdminUser {
   isSystemAdmin: boolean;
   isDisabled: boolean;
   lastSignInAt: string;
+  preferredName?: string | null;
 }

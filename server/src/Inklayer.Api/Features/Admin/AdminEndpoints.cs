@@ -10,7 +10,9 @@ using Inklayer.Api.Hosting;
 
 namespace Inklayer.Api.Features.Admin;
 
-public sealed record AdminUserResponse(Guid Id, string Email, string DisplayName, bool IsSystemAdmin, bool IsDisabled, DateTime CreatedAt, DateTime LastSignInAt);
+/// <param name="DisplayName">The real name from their sign-in provider.</param>
+/// <param name="PreferredName">The name they chose to be shown as, if any.</param>
+public sealed record AdminUserResponse(Guid Id, string Email, string DisplayName, bool IsSystemAdmin, bool IsDisabled, DateTime CreatedAt, DateTime LastSignInAt, string? PreferredName = null);
 
 /// <summary>Instance-wide user management for instance administrators.</summary>
 internal static class AdminEndpoints
@@ -31,7 +33,7 @@ internal static class AdminEndpoints
 
         admin.MapGet("/users", async (InklayerDbContext db, CancellationToken ct) =>
             TypedResults.Ok(await db.Users.AsNoTracking().OrderBy(u => u.Email)
-                .Select(u => new AdminUserResponse(u.Id, u.Email, u.DisplayName, u.IsSystemAdmin, u.IsDisabled, u.CreatedAt, u.LastSignInAt))
+                .Select(u => new AdminUserResponse(u.Id, u.Email, u.DisplayName, u.IsSystemAdmin, u.IsDisabled, u.CreatedAt, u.LastSignInAt, u.PreferredName))
                 .ToListAsync(ct)));
 
         admin.MapPost("/users/{userId:guid}/disable", async (Guid userId, HttpContext context, CurrentUser currentUser, InklayerDbContext db, AuditLog audit, CancellationToken ct) =>

@@ -17,6 +17,7 @@ import { ROLES, atLeast, del, get, patch, post, put, type Invitation, type Membe
 import { dateTime } from "@/lib/format";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
+import { personTitle } from "@/lib/people";
 
 export function OrganizationPage({ orgId }: { orgId: string }) {
   const { me } = useMe();
@@ -134,7 +135,7 @@ function Members({ org }: { org: Organization }) {
             const isMe = m.userId === me.id;
             return (
               <TableRow key={m.userId}>
-                <TableCell>{m.displayName}</TableCell>
+                <TableCell title={personTitle(m)}>{m.displayName}{m.fullName && m.fullName !== m.displayName && <span className="ml-1 text-muted-foreground">({m.fullName})</span>}</TableCell>
                 <TableCell className="text-muted-foreground">{m.email}</TableCell>
                 <TableCell>
                   {canManage ? (

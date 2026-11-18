@@ -1,5 +1,6 @@
 using Inklayer.Api.Access;
 using Inklayer.Api.Hosting;
+using Inklayer.Domain.Users;
 using Inklayer.Api.Auditing;
 using Inklayer.Api.Auth;
 using Inklayer.Domain.Auditing;
@@ -17,6 +18,7 @@ internal static class MeEndpoints
         var me = app.MapGroup("/api/me").WithTags("Me").RequireAuthorization();
 
         me.MapGet("/", MeAsync).WithName("GetMe").WithSummary("The signed-in user and their organisations");
+        me.MapPatch("/", UpdateAsync).WithSummary("Change the name you're shown as (empty: your real name, from your sign-in provider)");
 
         me.MapPost("/sessions/revoke", RevokeAllSessionsAsync)
             .WithSummary("Sign out everywhere: ends every browser session and extension token for this user");
@@ -40,8 +42,31 @@ internal static class MeEndpoints
                 .Select(x => new MyOrganization(x.Id, x.Name, x.Role))
                 .ToListAsync(ct);
 
-        return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.AvatarUrl, user.IsSystemAdmin, organizations,
-            FeaturesResponse.From(await features.StatesAsync(ct))));
+        return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.Name, user.AvatarUrl, user.IsSystemAdmin, organizations,
+            FeaturesResponse.From(await features.StatesAsync(ct)), user.DisplayName, user.PreferredName));
+    }
+
+    private static async Task<IResult> UpdateAsync(UpdateMeRequest request, CurrentUser currentUser, InklayerDbContext db, FeatureSwitches features, CancellationToken ct)
+    {
+        var id = currentUser.Id;
+        var user = id is null ? null : await db.Users.SingleOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null || user.IsDisabled)
+        {
+            return Results.Unauthorized();
+        }
+
+        var name = request.PreferredName?.Trim() ?? "";
+        if (name.Length > User.MaxPreferredNameLength || name.Any(char.IsControl))
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["preferredName"] = [$"Use at most {User.MaxPreferredNameLength} characters, without line breaks."],
+            });
+        }
+
+        user.PreferredName = name.Length == 0 ? null : name;
+        await db.SaveChangesAsync(ct);
+        return await MeAsync(currentUser, db, features, ct);
     }
 
     internal static async Task RevokeUserAccessAsync(Guid userId, InklayerDbContext db, IServiceProvider services, CancellationToken ct)
@@ -77,5 +102,13 @@ internal static class MeEndpoints
 
 internal sealed record MyOrganization(Guid Id, string Name, Role Role);
 
+/// <param name="DisplayName">The name they're shown as: their chosen name, or their real name.</param>
 /// <param name="Features">Which major features are on (docs, live cursors, AI assistants).</param>
-internal sealed record MeResponse(Guid Id, string Email, string DisplayName, string? AvatarUrl, bool IsSystemAdmin, IReadOnlyList<MyOrganization> Organizations, FeaturesResponse Features);
+/// <param name="FullName">Their real name, from their sign-in provider.</param>
+/// <param name="PreferredName">The name they chose, if any.</param>
+internal sealed record MeResponse(
+    Guid Id, string Email, string DisplayName, string? AvatarUrl, bool IsSystemAdmin, IReadOnlyList<MyOrganization> Organizations, FeaturesResponse Features,
+    string FullName, string? PreferredName);
+
+/// <param name="PreferredName">The name to be shown as; empty or null for your real name.</param>
+internal sealed record UpdateMeRequest(string? PreferredName);

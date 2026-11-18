@@ -68,7 +68,7 @@ internal static class PresenceEndpoints
         }
 
         var lifetime = options.Value.TicketLifetime;
-        var ticket = tickets.Issue(user.Id, user.DisplayName, user.SecurityStamp, lifetime);
+        var ticket = tickets.Issue(user.Id, user.Name, user.SecurityStamp, lifetime);
         return Results.Ok(new PresenceTicketResponse(ticket, (int)lifetime.TotalSeconds));
     }
 }

@@ -3,6 +3,8 @@ import { del, get, patch, post } from "@/lib/api";
 export interface DocActor {
   id: string;
   displayName: string;
+  fullName?: string | null;
+  role?: string | null;
 }
 
 export interface DocSummary {

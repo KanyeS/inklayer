@@ -700,6 +700,10 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("LastSignInAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PreferredName")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasMaxLength(64)

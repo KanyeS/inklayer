@@ -143,7 +143,7 @@ internal static class LiveIdentity
     }
 
     /// <summary>A new peer id for this connection, with the person's name and colour.</summary>
-    public static PresencePeer PeerFor(User user) => new(Guid.NewGuid().ToString("N"), user.Id, user.DisplayName, PresenceColors.For(user.Id));
+    public static PresencePeer PeerFor(User user) => new(Guid.NewGuid().ToString("N"), user.Id, user.Name, PresenceColors.For(user.Id), user.DisplayName);
 
     public static TokenBucket AttachBucket(HubCallerContext context, PresenceOptions options, TimeProvider clock)
     {

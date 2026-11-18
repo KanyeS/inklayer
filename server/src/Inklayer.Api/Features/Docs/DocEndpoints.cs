@@ -7,7 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Inklayer.Api.Features.Docs;
 
-public sealed record DocActor(Guid Id, string DisplayName);
+/// <param name="DisplayName">The name they chose to be shown as, or their real name.</param>
+/// <param name="FullName">Their real name, from their sign-in provider (shown on hover).</param>
+public sealed record DocActor(Guid Id, string DisplayName, string? FullName = null);
 
 public sealed record DocSummaryResponse(Guid Id, string Folder, string Title, DateTime UpdatedAt, IReadOnlyList<string> Tags);
 
@@ -577,7 +579,7 @@ internal static class DocEndpoints
             .ToList();
         var commentLinks = outgoing.Select(l => l.TargetAnnotationId).OfType<Guid>().Distinct().ToList();
 
-        var updatedBy = await db.Users.AsNoTracking().Where(u => u.Id == doc.UpdatedByUserId).Select(u => new DocActor(u.Id, u.DisplayName)).SingleOrDefaultAsync(ct);
+        var updatedBy = await db.Users.AsNoTracking().Where(u => u.Id == doc.UpdatedByUserId).Select(u => new DocActor(u.Id, u.PreferredName ?? u.DisplayName, u.DisplayName)).SingleOrDefaultAsync(ct);
         return new DocResponse(doc.Id, doc.OrganizationId, doc.Folder, doc.Title, doc.Version, doc.CreatedAt, doc.UpdatedAt, updatedBy,
             role.Grants(Permission.Comment), tags, backlinks, commentBacklinks, links, commentLinks);
     }
@@ -607,7 +609,7 @@ internal static class DocEndpoints
     internal static async Task<Dictionary<Guid, DocActor>> ActorsAsync(InklayerDbContext db, IEnumerable<Guid> ids, CancellationToken ct)
     {
         var distinct = ids.Distinct().ToList();
-        var found = await db.Users.AsNoTracking().Where(u => distinct.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => new DocActor(u.Id, u.DisplayName), ct);
+        var found = await db.Users.AsNoTracking().Where(u => distinct.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => new DocActor(u.Id, u.PreferredName ?? u.DisplayName, u.DisplayName), ct);
         foreach (var id in distinct.Where(id => !found.ContainsKey(id)))
         {
             found[id] = new DocActor(id, "Unknown");

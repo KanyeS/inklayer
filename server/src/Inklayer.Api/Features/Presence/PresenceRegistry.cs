@@ -5,7 +5,9 @@ using Microsoft.Extensions.Options;
 namespace Inklayer.Api.Features.Presence;
 
 /// <summary>What other people see of a connection. <see cref="Id"/> is a random id per connection, not the SignalR connection id.</summary>
-public sealed record PresencePeer(string Id, Guid UserId, string Name, string Color);
+/// <param name="Name">The name they chose to be shown as, or their real name.</param>
+/// <param name="FullName">Their real name, from their sign-in provider (shown on hover).</param>
+public sealed record PresencePeer(string Id, Guid UserId, string Name, string Color, string? FullName = null);
 
 /// <summary>One open presence connection (one browser). Mutable state is guarded by the registry's lock.</summary>
 internal sealed class PresenceConnection(string connectionId, HubCallerContext context, PresencePeer peer, string securityStamp, IPAddress? address, TokenBucket bucket)

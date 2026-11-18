@@ -378,6 +378,21 @@ internal static partial class AnnotationEndpoints
         InklayerDbContext db, IReadOnlyList<AnnotationResponse> responses, Func<Guid, Role> roleOf, Guid userId, CancellationToken ct)
     {
         var replies = await RepliesAsync(db, [.. responses.Select(r => r.Id)], roleOf, userId, ct);
+
+        // Each author's role in the comment's organisation, for "Real Name · Role" on hover.
+        var orgIds = responses.Select(r => r.OrganizationId).Distinct().ToList();
+        var people = responses.Select(r => r.Author.Id).Concat(replies.Values.SelectMany(l => l.Select(x => x.Author.Id))).Distinct().ToList();
+        var memberRoles = (await db.OrganizationMembers.AsNoTracking()
+                .Where(m => orgIds.Contains(m.OrganizationId) && people.Contains(m.UserId))
+                .Select(m => new { m.OrganizationId, m.UserId, m.Role }).ToListAsync(ct))
+            .ToDictionary(m => (m.OrganizationId, m.UserId), m => m.Role);
+        AuthorSummary WithRole(AuthorSummary a, Guid orgId) => a with { Role = memberRoles.TryGetValue((orgId, a.Id), out var r) ? r : null };
+        replies = replies.ToDictionary(kv => kv.Key, kv =>
+        {
+            var orgId = responses.First(r => r.Id == kv.Key).OrganizationId;
+            return kv.Value.Select(x => x with { Author = WithRole(x.Author, orgId) }).ToList();
+        });
+        responses = [.. responses.Select(r => r with { Author = WithRole(r.Author, r.OrganizationId) })];
         // Links are matched against the comment and its replies together.
         var texts = responses.ToDictionary(r => r.Id, r => string.Join('\n', [r.Body, .. replies.GetValueOrDefault(r.Id, []).Select(x => x.Body)]));
         var (links, mentions) = await DocLinksAsync(db, texts, ct);
@@ -474,7 +489,7 @@ internal static partial class AnnotationEndpoints
     {
         var distinct = ids.Distinct().ToList();
         return await db.Users.AsNoTracking().Where(u => distinct.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => new AuthorSummary(u.Id, u.DisplayName, u.AvatarUrl), ct);
+            .ToDictionaryAsync(u => u.Id, u => new AuthorSummary(u.Id, u.PreferredName ?? u.DisplayName, u.AvatarUrl, u.DisplayName), ct);
     }
 
     internal static AnnotationResponse ToResponse(Annotation a, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) => new(

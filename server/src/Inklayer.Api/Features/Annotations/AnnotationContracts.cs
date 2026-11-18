@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Inklayer.Domain.Annotations;
+using Inklayer.Domain.Authorization;
 
 namespace Inklayer.Api.Features.Annotations;
 
@@ -14,7 +15,10 @@ public sealed record UpdateAnnotationRequest(
     JsonElement? Geometry,
     [property: Range(0, 20000)] int? ViewportWidth);
 
-public sealed record AuthorSummary(Guid Id, string DisplayName, string? AvatarUrl);
+/// <param name="DisplayName">The name they chose to be shown as, or their real name.</param>
+/// <param name="FullName">Their real name, from their sign-in provider (shown on hover).</param>
+/// <param name="Role">Their role in the organisation the comment belongs to, if they're a member.</param>
+public sealed record AuthorSummary(Guid Id, string DisplayName, string? AvatarUrl, string? FullName = null, Role? Role = null);
 
 /// <summary>
 /// A new mark on a page. <see cref="Url"/> is the page as the browser sees it; the server keeps only its normalised form
