@@ -6,6 +6,7 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
+import { NetworkAccessSection } from "@/components/NetworkAccessSection";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
 import { get, post, type AdminUser, type Organization } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
@@ -59,6 +60,7 @@ export function AdminPage() {
         </FieldGroup>
       </form>
       <div className="mt-4"><ErrorText error={error ?? users.error} /></div>
+      <NetworkAccessSection />
       <SectionTitle>Users</SectionTitle>
       <Table>
         <TableHeader>

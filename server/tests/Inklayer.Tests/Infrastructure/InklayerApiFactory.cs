@@ -24,6 +24,9 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
     public const string OidcProviderId = "jumpcloud";
     public const string OidcVerifiedDomain = "sso.test";
 
+    /// <summary>The test server has no client address; a request with this header comes from the address it names.</summary>
+    public const string ClientIpHeader = "X-Test-Client-Ip";
+
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "inklayer-tests", Guid.NewGuid().ToString("N"));
 
     public string DatabasePath => Path.Combine(_dataDirectory, "inklayer.db");
@@ -51,7 +54,11 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("Inklayer:Auth:Oidc:0:ClientId", FakeOidcProvider.ClientId);
         builder.UseSetting("Inklayer:Auth:Oidc:0:ClientSecret", "oidc-secret");
         builder.UseSetting("Inklayer:Auth:Oidc:0:VerifiedDomains", OidcVerifiedDomain);
-        builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestLoginStartupFilter>());
+        builder.ConfigureServices(services =>
+        {
+            services.AddSingleton<IStartupFilter, TestClientIpStartupFilter>();
+            services.AddSingleton<IStartupFilter, TestLoginStartupFilter>();
+        });
 
         // Configure runs before the handler's post-configuration, which builds the backchannel client from this handler.
         builder.ConfigureTestServices(services => services.Configure<OpenIdConnectOptions>(
@@ -104,6 +111,24 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         {
             Directory.Delete(_dataDirectory, recursive: true);
         }
+    }
+
+    /// <summary>Sets the connection's remote address from <see cref="ClientIpHeader"/>, as Kestrel would from the socket.</summary>
+    private sealed class TestClientIpStartupFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                if (System.Net.IPAddress.TryParse(context.Request.Headers[ClientIpHeader].ToString(), out var address))
+                {
+                    context.Connection.RemoteIpAddress = address;
+                }
+
+                return nextMiddleware(context);
+            });
+            next(app);
+        };
     }
 
     /// <summary>Test-only replacement for the providers' callbacks: runs <see cref="SignInService"/> and issues the real session cookie.</summary>

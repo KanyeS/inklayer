@@ -29,6 +29,9 @@ services:
       Inklayer__Auth__Oidc__0__VerifiedDomains: ${OIDC_VERIFIED_DOMAINS:-}
       Inklayer__Auth__BootstrapAdmins: ${INKLAYER_BOOTSTRAP_ADMINS:-}
       Inklayer__Auth__ExtensionRedirectUris: ${INKLAYER_EXTENSION_REDIRECT_URIS:-}
+      # Optional: only answer requests from these networks (e.g. the VPN). Admins can change it later on the Admin page.
+      Inklayer__Network__AllowedNetworks: ${INKLAYER_ALLOWED_NETWORKS:-}
+      Inklayer__Network__RestrictionDisabled: ${INKLAYER_NETWORK_RESTRICTION_DISABLED:-false}
       # Plain-HTTP local trial only. Remove when serving through HTTPS.
       Inklayer__Auth__AllowInsecureHttp: ${INKLAYER_ALLOW_INSECURE_HTTP:-false}
     ports:

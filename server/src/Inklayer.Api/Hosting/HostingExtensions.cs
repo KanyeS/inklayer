@@ -1,4 +1,5 @@
 using Inklayer.Api.Endpoints;
+using Inklayer.Api.Network;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
@@ -35,6 +36,7 @@ internal static class HostingExtensions
     public static WebApplication UseInklayerHosting(this WebApplication app)
     {
         app.UseForwardedHeaders();
+        app.UseInklayerNetworkAccess();
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseSerilogRequestLogging(o =>

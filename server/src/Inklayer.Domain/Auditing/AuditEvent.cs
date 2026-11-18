@@ -45,4 +45,5 @@ public static class AuditActions
     public const string ProjectRoleRemoved = "project.role_removed";
     public const string UserDisabled = "user.disabled";
     public const string UserEnabled = "user.enabled";
+    public const string NetworkAccessChanged = "network.changed";
 }

@@ -3,6 +3,7 @@ using Inklayer.Domain.Auditing;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Organizations;
 using Inklayer.Domain.Projects;
+using Inklayer.Domain.Settings;
 using Inklayer.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -38,6 +39,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
     public DbSet<Annotation> Annotations => Set<Annotation>();
 
     public DbSet<AnnotationRevision> AnnotationRevisions => Set<AnnotationRevision>();
+
+    public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

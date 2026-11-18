@@ -138,6 +138,12 @@ People with the extension can see and add comments **directly on any website**.
   - **The web viewer** uses an HttpOnly session cookie. State-changing requests must send the `X-Inklayer-Csrf` header.
   - **The extension** uses short-lived bearer tokens with rotating refresh tokens.
 - **Revocation:** disabling a user or "sign out everywhere" ends every cookie and token immediately.
+- **Network access (VPN), optional:** instance administrators can limit the whole server, including the viewer, the API, sign-in and the extension, to certain networks such as the company VPN. They manage the list under **Admin → Network access**.
+  - **Format:** addresses or CIDR ranges, IPv4 or IPv6. An empty list allows every network. Requests from elsewhere get a 403 that shows the caller's address.
+  - **Starting list:** set `INKLAYER_ALLOWED_NETWORKS` (e.g. `10.8.0.0/16, 203.0.113.7`) to start with a list. Once an administrator saves a list, it replaces this one.
+  - **Lockout protection:** an administrator can't save a list that leaves out their own address. If everyone is locked out anyway, set `INKLAYER_NETWORK_RESTRICTION_DISABLED=true`, restart, fix the list, then remove it.
+  - **Always allowed:** health checks (`/health/*`) and the server itself (loopback).
+  - **Behind a reverse proxy:** the proxy's network must be in `ForwardedHeaders:KnownNetworks` (the Lightsail compose file sets it), or every request appears to come from the proxy. The Admin page shows "Your address" as the server sees it, so you can check.
 
 Licence check: `dotnet tool restore && dotnet nuget-license -i Inklayer.slnx -t -a ../.github/licenses/allowed-licenses.json -override ../.github/licenses/nuget-overrides.json`
 

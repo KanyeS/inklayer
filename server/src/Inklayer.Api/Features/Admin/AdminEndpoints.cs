@@ -1,6 +1,7 @@
 using Inklayer.Api.Access;
 using Inklayer.Api.Auditing;
 using Inklayer.Api.Features.Me;
+using Inklayer.Api.Network;
 using Inklayer.Domain.Auditing;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,8 @@ internal static class AdminEndpoints
                     ? await next(context)
                     : TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Instance administrators only.");
             });
+
+        admin.MapNetworkEndpoints();
 
         admin.MapGet("/users", async (InklayerDbContext db, CancellationToken ct) =>
             TypedResults.Ok(await db.Users.AsNoTracking().OrderBy(u => u.Email)

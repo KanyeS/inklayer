@@ -367,6 +367,28 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("ProjectMembers");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Settings.InstanceSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("InstanceSettings", (string)null);
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")

@@ -86,6 +86,15 @@ export interface LivePageSummary {
   lastActivityAt: string;
 }
 
+/** The networks (e.g. VPN ranges) the server answers from. Empty: every network. */
+export interface NetworkAccess {
+  allowedNetworks: string[];
+  source: "None" | "Config" | "Admin";
+  restrictionDisabled: boolean;
+  yourAddress: string | null;
+  yourAddressAllowed: boolean;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
