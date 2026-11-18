@@ -7,7 +7,8 @@ import { send, type StateResponse } from "@/lib/messages";
 import type { Inbox, InboxItem } from "@/lib/notifications";
 import { normaliseServerUrl, updateSettings } from "@/lib/settings";
 
-const SITE_ACCESS: chrome.permissions.Permissions = { origins: ["https://*/*", "http://*/*"] };
+/** Every site: to show comments on pages, and (as "<all_urls>", which browsers require for it) to take screenshots. */
+const SITE_ACCESS: chrome.permissions.Permissions = { origins: ["<all_urls>"] };
 
 /** Screens the user moves to by hand; otherwise the screen follows the sign-in state. */
 type Screen = "auto" | "setup" | "settings";
@@ -190,12 +191,29 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
           </p>
         </>
       )}
+      <ScreenshotAccess />
       <Notifications />
       {/* Hidden while an administrator has turned docs off. */}
       {state.me!.features.docs && <OpenDocs serverUrl={state.serverUrl!} organizations={state.me!.organizations} />}
       <ErrorText>{error}</ErrorText>
       {footer}
     </>
+  );
+}
+
+/**
+ * Screenshots with comments need access to all sites in the form browsers ask for ("<all_urls>"). Earlier versions asked
+ * for every http and https site instead, which doesn't count, so people who allowed that are asked once more here.
+ */
+function ScreenshotAccess() {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  useEffect(() => void chrome.permissions.contains(SITE_ACCESS).then(setAllowed), []);
+  if (allowed !== false) return null;
+  return (
+    <div className="flex flex-col items-center gap-1.5 rounded-lg border p-2 text-center text-xs">
+      <p className="text-muted-foreground">Screenshots with comments need one more permission.</p>
+      <Button size="sm" variant="outline" onClick={async () => setAllowed(await chrome.permissions.request(SITE_ACCESS))}>Allow screenshots</Button>
+    </div>
   );
 }
 

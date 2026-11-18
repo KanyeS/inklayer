@@ -146,6 +146,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<int>("ViewportWidth")
                         .HasColumnType("INTEGER");
 
+                    b.Property<double?>("Zoom")
+                        .HasColumnType("REAL");
+
                     b.HasKey("AnnotationId");
 
                     b.ToTable("AnnotationContexts");

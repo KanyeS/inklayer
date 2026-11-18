@@ -8,7 +8,7 @@ public sealed record ContextConsoleDto(string Level, string Message);
 
 public sealed record ContextNetworkDto(string Method, string Url, int Status);
 
-public sealed record ContextDto(string Browser, int ViewportWidth, string Selector, string ElementHtml, List<ContextConsoleDto> Console, List<ContextNetworkDto> Network);
+public sealed record ContextDto(string Browser, int ViewportWidth, string Selector, string ElementHtml, List<ContextConsoleDto> Console, List<ContextNetworkDto> Network, double? Zoom = null);
 
 public sealed record CommentWithContextDto(Guid Id, ContextDto? Context, bool HasScreenshot);
 
@@ -23,7 +23,7 @@ public sealed class BugContextTests(InklayerApiFactory factory)
 
     internal static object Context => new
     {
-        browser = "Chrome 140", os = "macOS", userAgent = "Mozilla/5.0", viewportWidth = 1440, viewportHeight = 900, devicePixelRatio = 2.0,
+        browser = "Chrome 140", os = "macOS", userAgent = "Mozilla/5.0", viewportWidth = 1440, viewportHeight = 900, devicePixelRatio = 2.0, zoom = 1.25,
         selector = "main > button.pay", elementHtml = "<button class=\"pay\">Pay</button>",
         console = new[] { new { level = "error", message = "TypeError: price is undefined", at = DateTime.UtcNow } },
         network = new[] { new { method = "POST", url = "https://api.example.test/checkout?token=secret", status = 500, ms = 120, at = DateTime.UtcNow } },
@@ -67,6 +67,7 @@ public sealed class BugContextTests(InklayerApiFactory factory)
         var comment = Assert.Single(Assert.Single(await page.ReadAsync<List<PageWithContextDto>>()).Annotations);
         Assert.True(comment.HasScreenshot);
         Assert.Equal("main > button.pay", comment.Context!.Selector);
+        Assert.Equal(1.25, comment.Context.Zoom);
         Assert.Equal("TypeError: price is undefined", Assert.Single(comment.Context.Console).Message);
         Assert.Equal("https://api.example.test/checkout", Assert.Single(comment.Context.Network).Url); // no query string, no token
 

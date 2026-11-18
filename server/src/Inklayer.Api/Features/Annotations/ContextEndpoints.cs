@@ -14,12 +14,12 @@ public sealed record NetworkEntry(string Method, string Url, int Status, int? Ms
 
 public sealed record AnnotationContextRequest(
     string? Browser, string? Os, string? UserAgent, int ViewportWidth, int ViewportHeight, double DevicePixelRatio,
-    string? Selector, string? ElementHtml, List<ConsoleEntry>? Console, List<NetworkEntry>? Network);
+    string? Selector, string? ElementHtml, List<ConsoleEntry>? Console, List<NetworkEntry>? Network, double? Zoom = null);
 
 /// <summary>The page as it was when the comment was made.</summary>
 public sealed record AnnotationContextResponse(
     string Browser, string Os, string UserAgent, int ViewportWidth, int ViewportHeight, double DevicePixelRatio,
-    string Selector, string ElementHtml, IReadOnlyList<ConsoleEntry> Console, IReadOnlyList<NetworkEntry> Network, DateTime CapturedAt);
+    string Selector, string ElementHtml, IReadOnlyList<ConsoleEntry> Console, IReadOnlyList<NetworkEntry> Network, DateTime CapturedAt, double? Zoom = null);
 
 /// <summary>
 /// Bug context: a screenshot and page details the extension captures with a comment (unless the commenter opts out), for
@@ -63,6 +63,7 @@ internal static class ContextEndpoints
             ViewportWidth = Math.Clamp(request.ViewportWidth, 0, 20000),
             ViewportHeight = Math.Clamp(request.ViewportHeight, 0, 20000),
             DevicePixelRatio = Math.Clamp(request.DevicePixelRatio, 0, 10),
+            Zoom = request.Zoom is { } zoom && zoom > 0 ? Math.Clamp(zoom, 0.25, 5) : null,
             Selector = Clip(request.Selector, 2000),
             ElementHtml = Clip(request.ElementHtml, AnnotationContext.MaxHtmlLength),
             Console = Fit((request.Console ?? []).TakeLast(MaxEntries).Select(e => e with { Level = Clip(e.Level, 10), Message = Clip(e.Message, MaxMessage) }).ToList()),
@@ -163,7 +164,7 @@ internal static class ContextEndpoints
 
     internal static AnnotationContextResponse ToResponse(AnnotationContext c) => new(
         c.Browser, c.Os, c.UserAgent, c.ViewportWidth, c.ViewportHeight, c.DevicePixelRatio, c.Selector, c.ElementHtml,
-        JsonSerializer.Deserialize<List<ConsoleEntry>>(c.Console, Json) ?? [], JsonSerializer.Deserialize<List<NetworkEntry>>(c.Network, Json) ?? [], c.CapturedAt);
+        JsonSerializer.Deserialize<List<ConsoleEntry>>(c.Console, Json) ?? [], JsonSerializer.Deserialize<List<NetworkEntry>>(c.Network, Json) ?? [], c.CapturedAt, c.Zoom);
 
     /// <summary>Null if the caller wrote this comment (and may still comment in its project); otherwise the error to return.</summary>
     private static async Task<IResult?> AuthorsCommentAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)

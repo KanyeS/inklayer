@@ -39,6 +39,7 @@ interface PageContext {
   viewportWidth: number;
   viewportHeight: number;
   devicePixelRatio: number;
+  zoom?: number | null;
   selector: string;
   elementHtml: string;
   console: { level: string; message: string; at: string | null }[];
@@ -208,7 +209,7 @@ function PageDetails({ context: c }: { context: PageContext }) {
   return (
     <details className="mt-4 rounded-xl border px-4 py-3 text-sm">
       <summary className="cursor-pointer text-muted-foreground">
-        Page details: {c.browser} · {c.os} · {c.viewportWidth}×{c.viewportHeight} @{c.devicePixelRatio}x
+        Page details: {c.browser} · {c.os} · {c.viewportWidth}×{c.viewportHeight} @{c.devicePixelRatio}x{c.zoom && Math.abs(c.zoom - 1) > 0.01 ? ` · ${Math.round(c.zoom * 100)}% zoom` : ""}
         {c.console.length > 0 && ` · ${c.console.length} console message${c.console.length === 1 ? "" : "s"}`}
         {c.network.length > 0 && ` · ${c.network.length} failed request${c.network.length === 1 ? "" : "s"}`}
       </summary>

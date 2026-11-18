@@ -52,6 +52,8 @@ export interface LiveAnnotation {
   hasScreenshot?: boolean;
   /** People @mentioned in the comment or its replies, for showing <@id> as names. */
   people?: PersonLookup[];
+  /** The commenter's window width when they commented (CSS pixels). */
+  viewportWidth?: number;
   /** Issues created from this comment in GitHub, Jira or Linear. */
   issues?: LinkedIssue[];
 }
@@ -216,19 +218,25 @@ export type LiveRequest =
   | { type: "live.people"; orgId: string; q: string }
   | { type: "live.context"; annotationId: string; context: PageContext }
   | { type: "live.capture"; annotationId: string; area: Rect; viewportWidth: number }
+  | { type: "live.captureResult"; annotationId: string }
   | { type: "live.screenshot"; annotationId: string }
   | { type: "live.reply"; annotationId: string; body: string }
   | { type: "live.replyDelete"; id: string; version: number }
   | { type: "live.trackers"; projectId: string }
   | { type: "live.issue"; annotationId: string; connectionId: string }
   | { type: "live.share"; projectId: string; url: string }
+  | { type: "live.matchSize"; width: number; height?: number; left?: number; top?: number }
+  | { type: "live.restoreSize" }
+  | { type: "live.getZoom" }
+  | { type: "live.setZoom"; zoom: number }
+  | { type: "live.sizeSaved" }
   | { type: "live.inbox" }
   | { type: "live.inboxRead"; ids?: string[] };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
 
-export async function handleLive(request: LiveRequest, senderUrl: string | undefined, senderWindowId?: number): Promise<unknown> {
+export async function handleLive(request: LiveRequest, senderUrl: string | undefined, senderWindowId?: number, senderTabId?: number): Promise<unknown> {
   const senderOrigin = senderUrl ? safeOrigin(senderUrl) : null;
   if (!senderOrigin) throw new Error("Unknown page.");
   if ("url" in request && safeOrigin(request.url) !== senderOrigin) throw new Error("Wrong page.");
@@ -273,15 +281,32 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
     }
     case "live.font":
       return panelFont();
-    case "live.context":
-      return putJson<null>(`/api/annotations/${encodeURIComponent(request.annotationId)}/context`, request.context);
+    case "live.context": {
+      // The tab's zoom, which the page itself can't read, so the page can be seen as the commenter saw it.
+      const zoom = senderTabId === undefined ? null : await chrome.tabs.getZoom(senderTabId).catch(() => null);
+      return putJson<null>(`/api/annotations/${encodeURIComponent(request.annotationId)}/context`, { ...request.context, zoom });
+    }
     case "live.capture":
       // Taken now, while the page shows the comment; cropped and uploaded in the background so the panel reappears at once.
       if (senderWindowId === undefined) throw new Error("Unknown window.");
       {
-        const shot = await chrome.tabs.captureVisibleTab(senderWindowId, { format: "png" });
-        void uploadScreenshot(request.annotationId, shot, request.area, request.viewportWidth).catch(() => undefined);
+        let shot: string;
+        try {
+          shot = await chrome.tabs.captureVisibleTab(senderWindowId, { format: "png" });
+        } catch (error) {
+          // Browsers only allow screenshots with access to all sites (or just after the toolbar button is clicked).
+          throw /all_urls|activeTab|permission/i.test(String(error))
+            ? new Error("Inklayer isn't allowed to take screenshots yet. Click the Inklayer toolbar button, then \"Allow screenshots\".")
+            : error;
+        }
+        const upload = uploadScreenshot(request.annotationId, shot, request.area, request.viewportWidth);
+        uploads.set(request.annotationId, upload);
+        void upload.catch(() => undefined).finally(() => setTimeout(() => uploads.delete(request.annotationId), 60_000));
       }
+      return null;
+    case "live.captureResult":
+      // The page waits for this after showing the panel again, to say if the upload failed.
+      await uploads.get(request.annotationId);
       return null;
     case "live.screenshot": {
       // Sent to the page as base64: the panel draws it on a canvas, which the page's content policy can't block.
@@ -302,6 +327,44 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
       return api<TrackerChoice[]>(`/api/projects/${encodeURIComponent(request.projectId)}/issue-trackers/choices`);
     case "live.issue":
       return postJson<LinkedIssue>(`/api/annotations/${encodeURIComponent(request.annotationId)}/issues`, { connectionId: request.connectionId });
+    case "live.matchSize": {
+      // The page's window: remember how it was (once), then resize it. Maximised windows have to become normal to resize.
+      if (senderWindowId === undefined) throw new Error("Unknown window.");
+      await rememberSize(senderWindowId, senderTabId);
+      // Out of maximised first, and wait: some window managers (Linux especially) restore the old size after the change,
+      // which would undo a size given in the same step.
+      if ((await chrome.windows.get(senderWindowId)).state !== "normal") {
+        await chrome.windows.update(senderWindowId, { state: "normal" });
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+      const { width, height, left, top } = request;
+      const updated = await chrome.windows.update(senderWindowId, {
+        width, ...(height ? { height } : {}), ...(left !== undefined ? { left } : {}), ...(top !== undefined ? { top } : {}),
+      });
+      return { width: updated.width ?? width, height: updated.height ?? height ?? 0 };
+    }
+    case "live.restoreSize": {
+      if (senderWindowId === undefined) throw new Error("Unknown window.");
+      const saved = await savedSizes();
+      const was = saved[senderWindowId];
+      if (!was) return false;
+      delete saved[senderWindowId];
+      await chrome.storage.session.set({ [SAVED_SIZES]: saved });
+      if (was.zoomTabId !== undefined && was.zoom) await chrome.tabs.setZoom(was.zoomTabId, was.zoom).catch(() => undefined);
+      if (was.state === "maximized" || was.state === "fullscreen") await chrome.windows.update(senderWindowId, { state: was.state });
+      else await chrome.windows.update(senderWindowId, { state: "normal", left: was.left, top: was.top, width: was.width, height: was.height });
+      return true;
+    }
+    case "live.getZoom":
+      if (senderTabId === undefined) throw new Error("Unknown tab.");
+      return chrome.tabs.getZoom(senderTabId);
+    case "live.setZoom":
+      if (senderTabId === undefined || senderWindowId === undefined) throw new Error("Unknown tab.");
+      await rememberSize(senderWindowId, senderTabId);
+      await chrome.tabs.setZoom(senderTabId, Math.min(5, Math.max(0.25, request.zoom)));
+      return chrome.tabs.getZoom(senderTabId);
+    case "live.sizeSaved":
+      return senderWindowId !== undefined && Boolean((await savedSizes())[senderWindowId]);
     case "live.inbox":
       return inbox(20);
     case "live.inboxRead":
@@ -323,6 +386,29 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
   }
 }
 
+const SAVED_SIZES = "savedWindowSizes";
+
+type SavedSize = {
+  left?: number; top?: number; width?: number; height?: number; state?: `${chrome.windows.WindowState}`;
+  /** The tab whose zoom was changed, and its zoom before. */
+  zoomTabId?: number; zoom?: number;
+};
+
+/** Notes how a window (and the tab's zoom) was before the first change, for "Back to my size". */
+async function rememberSize(windowId: number, tabId: number | undefined): Promise<void> {
+  const saved = await savedSizes();
+  if (saved[windowId]) return;
+  const w = await chrome.windows.get(windowId);
+  const zoom = tabId === undefined ? undefined : await chrome.tabs.getZoom(tabId).catch(() => undefined);
+  saved[windowId] = { left: w.left, top: w.top, width: w.width, height: w.height, state: w.state, zoomTabId: tabId, zoom };
+  await chrome.storage.session.set({ [SAVED_SIZES]: saved });
+}
+
+/** Windows resized to a commenter's size, with how they were before (for "Back to my size"). */
+async function savedSizes(): Promise<Record<number, SavedSize>> {
+  return ((await chrome.storage.session.get(SAVED_SIZES))[SAVED_SIZES] as Record<number, SavedSize> | undefined) ?? {};
+}
+
 /** What the page looked like when a comment was made: see capture-main.ts and pageDetails.ts. */
 export interface PageContext {
   browser: string;
@@ -331,6 +417,8 @@ export interface PageContext {
   viewportWidth: number;
   viewportHeight: number;
   devicePixelRatio: number;
+  /** The tab's zoom (1 = 100%); added by the background, null for older comments. */
+  zoom?: number | null;
   selector: string;
   elementHtml: string;
   console: { level: string; message: string; at: string }[];
@@ -341,6 +429,9 @@ const MAX_SCREENSHOT_WIDTH = 1600;
 const MAX_SCREENSHOT_BYTES = 600 * 1024;
 
 /** Crops the captured window to the commented area, shrinks it if wide, and uploads it as WebP (JPEG if that's smaller or WebP isn't available). */
+/** Screenshot uploads in progress or just finished, by comment. */
+const uploads = new Map<string, Promise<void>>();
+
 async function uploadScreenshot(annotationId: string, dataUrl: string, area: Rect, viewportWidth: number): Promise<void> {
   const full = await createImageBitmap(await (await fetch(dataUrl)).blob());
   const scale = full.width / Math.max(1, viewportWidth); // the captured image's pixels per CSS pixel (pixel ratio and zoom)
@@ -356,7 +447,7 @@ async function uploadScreenshot(annotationId: string, dataUrl: string, area: Rec
   let blob = await canvas.convertToBlob({ type: "image/webp", quality: 0.82 });
   if (blob.type !== "image/webp" || blob.size > MAX_SCREENSHOT_BYTES) blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.72 });
   if (blob.size > MAX_SCREENSHOT_BYTES) blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.5 });
-  if (blob.size > MAX_SCREENSHOT_BYTES) return;
+  if (blob.size > MAX_SCREENSHOT_BYTES) throw new Error("the screenshot was too large to upload.");
   await api<null>(`/api/annotations/${encodeURIComponent(annotationId)}/screenshot?width=${canvas.width}&height=${canvas.height}`, {
     method: "PUT", headers: { "Content-Type": blob.type }, body: blob,
   });

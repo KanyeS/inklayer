@@ -152,6 +152,9 @@ public sealed class AnnotationContext
 
     public double DevicePixelRatio { get; init; }
 
+    /// <summary>The tab's zoom (1 = 100%), if the extension could read it. Null for comments from before it was recorded.</summary>
+    public double? Zoom { get; init; }
+
     /// <summary>The element's CSS selector path.</summary>
     public string Selector { get; init; } = "";
 

@@ -117,7 +117,7 @@ internal sealed class IssueService(
         {
             var c = ContextEndpoints.ToResponse(context);
             body.AppendLine();
-            body.AppendLine($"**Browser:** {c.Browser} on {c.Os}, {c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x");
+            body.AppendLine($"**Browser:** {c.Browser} on {c.Os}, {c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x{(c.Zoom is { } z && Math.Abs(z - 1) > 0.01 ? $", zoomed to {Math.Round(z * 100)}%" : "")}");
             if (c.Selector.Length > 0)
             {
                 body.AppendLine($"**Element:** `{c.Selector}`");

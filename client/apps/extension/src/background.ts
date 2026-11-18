@@ -33,7 +33,7 @@ chrome.runtime.onMessage.addListener((request: Request | LiveRequest | { type: "
       return true;
     }
     if (!isLiveRequest(request)) return false;
-    respond(handleLive(request, sender.url, sender.tab?.windowId), sendResponse);
+    respond(handleLive(request, sender.url, sender.tab?.windowId, sender.tab?.id), sendResponse);
     return true;
   }
 

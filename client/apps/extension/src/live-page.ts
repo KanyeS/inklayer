@@ -5,6 +5,7 @@ import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, L
 import type { Inbox, InboxItem } from "./lib/notifications";
 import { browserOf, elementHtml, osOf, screenshotArea, type Rect } from "./lib/pageDetails";
 import { clampPosition, DEFAULT_POSITION, parsePosition, type PanelPosition } from "./lib/panelPosition";
+import { sizeDiffers, windowSizeFor } from "./lib/viewportMatch";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { BubbleLayer } from "./bubbles";
@@ -189,6 +190,8 @@ class LiveSession {
   #dragged = false;
   /** What happened to the last "Share this page", shown under the header. */
   #shareNote = "";
+  /** This window was resized to a commenter's size; "Back to my size" puts it back. The size shown, if known. */
+  #sizeMatched: { width: number; height: number | null } | "unknown" | null = null;
   /** The last "Share this page" link, shown until closed. */
   #shared: { url: string; existing: boolean; expiresAt: string | null; projectName: string; copied: boolean } | null = null;
   #inBubble = false;
@@ -261,7 +264,19 @@ class LiveSession {
         this.#placePanel();
       }
     });
-    window.addEventListener("resize", () => this.#placePanel());
+    // Resized: stay inside the window, and redraw once it settles, since "Made at …px wide" depends on the width.
+    let resizeTimer = 0;
+    window.addEventListener("resize", () => {
+      this.#placePanel();
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => this.#render(), 200);
+    });
+    // After a reload: was this window resized to someone's size?
+    void call<boolean>({ type: "live.sizeSaved" }).then((saved) => {
+      if (!saved) return;
+      this.#sizeMatched = "unknown";
+      this.#render();
+    }).catch(() => undefined);
   }
 
   /** Puts the panel at its position, kept inside the window. */
@@ -602,10 +617,20 @@ class LiveSession {
     try {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       await call({ type: "live.capture", annotationId, area: screenshotArea(target, { width: innerWidth, height: innerHeight }), viewportWidth: innerWidth });
-    } catch {
-      // No screenshot (e.g. the tab isn't the active one); the comment and its details are saved.
+    } catch (e) {
+      // The comment and its details are saved; say why there's no screenshot.
+      for (const el of hidden) el.style.visibility = "";
+      this.#flashNote(`No screenshot: ${(e as Error).message}`);
+      return;
     } finally {
       for (const el of hidden) el.style.visibility = "";
+    }
+    // Uploaded in the background; once it's there, show it.
+    try {
+      await call({ type: "live.captureResult", annotationId });
+      await this.#load();
+    } catch (e) {
+      this.#flashNote(`The screenshot didn't upload: ${(e as Error).message}`);
     }
   }
 
@@ -672,12 +697,109 @@ class LiveSession {
     return Array.isArray(known) ? known : [];
   }
 
+  /** "Made at 390px wide · you're at 1440px", with a button to see the page at their size. */
+  #sizeOf(a: PageAnnotation): Node {
+    const width = a.viewportWidth ?? 0;
+    const height = a.context?.viewportHeight ?? null;
+    if (!sizeDiffers(width, innerWidth)) return document.createTextNode("");
+    return h("div", { className: "row size", onclick: (e: Event) => e.stopPropagation() },
+      h("span", { className: "muted", textContent: `Made at ${width}px wide · you're at ${innerWidth}px`,
+        title: "Pages often lay out differently at other widths, so the comment may be about a layout you aren't seeing." }),
+      h("button", { className: "link", textContent: "Match their size", disabled: this.#busy, title: height ? `Resize this window so the page is ${width}×${height}` : `Resize this window so the page is ${width}px wide`,
+        onclick: () => void this.#matchSize(a.id, width, height, a.context?.zoom ?? null) }));
+  }
+
+  /**
+   * Resizes the window so the page is <paramref name="width"/> (× <paramref name="height"/>) CSS pixels, centred on the
+   * screen. Window sizes are in screen units and the page in CSS pixels (page zoom, display scaling), so it measures the
+   * result and corrects, a few times at most.
+   */
+  async #matchSize(id: string, width: number, height: number | null, zoom: number | null): Promise<void> {
+    const target = { width, height };
+    const settled = () => new Promise<void>((resolve) => {
+      window.addEventListener("resize", () => window.setTimeout(resolve, 150), { once: true });
+      window.setTimeout(resolve, 700);
+    });
+    const screenBox = screen as Screen & { availLeft?: number; availTop?: number };
+    const centred = (w: number, h: number) => ({
+      left: Math.round((screenBox.availLeft ?? 0) + Math.max(0, (screen.availWidth - w) / 2)),
+      top: Math.round((screenBox.availTop ?? 0) + Math.max(0, (screen.availHeight - h) / 2)),
+    });
+    const resize = async (size: { width: number; height?: number }) => {
+      const resized = new Promise<void>((resolve) => {
+        const done = () => window.setTimeout(resolve, 150); // let the page lay out again
+        window.addEventListener("resize", done, { once: true });
+        window.setTimeout(resolve, 900);
+      });
+      const result = await call<{ width: number; height: number }>({ type: "live.matchSize", ...size, ...centred(size.width, size.height ?? outerHeight) });
+      await resized;
+      return result;
+    };
+
+    try {
+      // Their zoom first (zoom changes the page's width in CSS pixels), then the window.
+      if (zoom) {
+        const done = settled();
+        await call({ type: "live.setZoom", zoom });
+        await done;
+      }
+      // First guess: the target plus the browser's frame.
+      let guess = windowSizeFor(target, { innerWidth, innerHeight, outerWidth, outerHeight });
+      let before = { window: { width: outerWidth, height: outerHeight }, page: { width: innerWidth, height: innerHeight } };
+      for (let pass = 0; pass < 3; pass++) {
+        const got = await resize(guess);
+        const page = { width: innerWidth, height: innerHeight };
+        const offW = width - page.width;
+        const offH = height ? height - page.height : 0;
+        if (Math.abs(offW) <= 2 && Math.abs(offH) <= 2) break;
+        // Screen units per CSS pixel, from how much the page changed when the window did (1 if it didn't change).
+        const per = (a: number, b: number) => (b !== 0 && a !== 0 ? Math.abs(a / b) : 1);
+        const perW = per(got.width - before.window.width, page.width - before.page.width);
+        const perH = per(got.height - before.window.height, page.height - before.page.height);
+        if (page.width === before.page.width && page.height === before.page.height && pass > 0) break; // the browser won't go further
+        before = { window: got, page };
+        guess = { width: Math.round(got.width + offW * perW), ...(height ? { height: Math.round(got.height + offH * perH) } : {}) };
+      }
+
+      // The window can't get there (minimum width, or the screen isn't wide enough): zoom so the page lays out at their
+      // width anyway. Text looks bigger or smaller than they saw it, but the layout is theirs.
+      let note = "";
+      if (Math.abs(innerWidth - width) > 2) {
+        const current = await call<number>({ type: "live.getZoom" });
+        const done = settled();
+        const set = await call<number>({ type: "live.setZoom", zoom: current * innerWidth / width });
+        await done;
+        const pct = (z: number) => `${Math.round(z * 100)}%`;
+        note = Math.abs(innerWidth - width) <= 2
+          ? `Your window can't be ${width}px wide, so the page is zoomed to ${pct(set)} to lay out at their width${zoom ? ` (they were at ${pct(zoom)})` : ""}.`
+          : `This is as close as your browser gets: ${innerWidth}px wide at ${pct(set)} zoom. For phone sizes, DevTools' device mode (Ctrl+Shift+M) goes further.`;
+      }
+
+      this.#sizeMatched = target;
+      if (note) this.#flashNote(note);
+      else this.#render();
+      window.setTimeout(() => this.#overlay.handle({ type: "select", id, scroll: true }), REANCHOR_MAX_WAIT_MS);
+    } catch (e) {
+      this.#flashNote(`Couldn't resize the window: ${(e as Error).message}`);
+    }
+  }
+
+  async #restoreSize(): Promise<void> {
+    try {
+      await call({ type: "live.restoreSize" });
+    } catch (e) {
+      this.#flashNote(`Couldn't restore the window: ${(e as Error).message}`);
+    }
+    this.#sizeMatched = null;
+    this.#render();
+  }
+
   /** Browser, window size, the element, console errors and failed requests, folded away. */
   #detailsOf(a: PageAnnotation): Node {
     const c = a.context;
     if (!this.#init.features.bugContext || !c) return document.createTextNode("");
     const errors = c.console.filter((e) => e.level === "error").length;
-    const summary = [`${c.browser} · ${c.os} · ${c.viewportWidth}×${c.viewportHeight}`, errors ? `${errors} console error${errors === 1 ? "" : "s"}` : "",
+    const summary = [`${c.browser} · ${c.os} · ${c.viewportWidth}×${c.viewportHeight}${c.zoom && Math.abs(c.zoom - 1) > 0.01 ? ` at ${Math.round(c.zoom * 100)}%` : ""}`, errors ? `${errors} console error${errors === 1 ? "" : "s"}` : "",
       c.network.length ? `${c.network.length} failed request${c.network.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
     const details = h("details", { className: "context", onclick: (e: Event) => e.stopPropagation() }, h("summary", { textContent: summary }));
     if (c.selector) details.append(h("p", { className: "muted", textContent: `Element: ${c.selector}` }));
@@ -933,7 +1055,7 @@ class LiveSession {
         h("span", { className: "grow" }), pin),
     ];
     if (a.body) nodes.push(this.#bodyOf(a));
-    nodes.push(this.#screenshotOf(a), this.#detailsOf(a), this.#issuesOf(a));
+    nodes.push(this.#sizeOf(a), this.#screenshotOf(a), this.#detailsOf(a), this.#issuesOf(a));
     if (a.replies?.length) nodes.push(this.#repliesOf(a));
     if (this.#canCommentIn(a.projectId)) {
       nodes.push(this.#replyBox(a, "bubble"));
@@ -1071,6 +1193,12 @@ class LiveSession {
     }
 
     const parts: Node[] = [header];
+    if (this.#sizeMatched) {
+      const m = this.#sizeMatched;
+      parts.push(h("div", { className: "row size-bar" },
+        h("span", { textContent: m === "unknown" ? "This window was resized to a commenter's size." : `Showing the page at their size: ${m.width}${m.height ? `×${m.height}` : "px wide"}.` }),
+        h("button", { className: "link", textContent: "Back to my size", onclick: () => void this.#restoreSize() })));
+    }
     if (this.#shared) parts.push(this.#sharedBox());
     if (this.#shareNote) parts.push(h("p", { className: "hint", textContent: this.#shareNote }));
     if (this.#view === "inbox") {
@@ -1183,7 +1311,7 @@ class LiveSession {
     }
 
     if (a.body) item.append(this.#bodyOf(a));
-    if (a.id === this.#selected) item.append(this.#screenshotOf(a), this.#detailsOf(a), this.#issuesOf(a));
+    if (a.id === this.#selected) item.append(this.#sizeOf(a), this.#screenshotOf(a), this.#detailsOf(a), this.#issuesOf(a));
     if (this.#init.features.docs && a.mentionedIn?.length) {
       const mentions = h("p", { className: "muted mentions" }, "Mentioned in ");
       a.mentionedIn.forEach((d, i) => {
@@ -1589,6 +1717,8 @@ const STYLES = `
     box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.3), 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); display: flex; flex-direction: column; gap: 10px; }
   /* The icons wrap under the tabs rather than ever leaving the panel. */
   .root { position: relative; }
+  .size { flex-wrap: wrap; justify-content: space-between; font-size: 12px; }
+  .size-bar { justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 12px; font-size: 12px; background: color-mix(in oklch, var(--primary) 8%, transparent); }
   .shared { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 14px; background: color-mix(in oklch, var(--primary) 8%, transparent); }
   .shared .row { justify-content: space-between; }
   .shared .close { padding: 0 6px; font-size: 16px; line-height: 1; }

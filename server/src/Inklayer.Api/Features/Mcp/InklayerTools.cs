@@ -311,7 +311,7 @@ internal static class InklayerTools
         Issues = a.Issues?.Select(i => new { Tracker = Domain.Issues.TrackerKinds.Name(i.Kind), i.Key, i.Url, i.State }),
         Context = a.Context is { } c ? new
         {
-            c.Browser, c.Os, Viewport = $"{c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x", c.Selector, c.ElementHtml,
+            c.Browser, c.Os, Viewport = $"{c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x", c.Zoom, c.Selector, c.ElementHtml,
             ConsoleErrors = c.Console, FailedRequests = c.Network,
         } : null,
     };
