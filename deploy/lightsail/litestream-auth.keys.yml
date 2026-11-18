@@ -1,0 +1,11 @@
+# LITESTREAM_AUTH=keys (default): Litestream signs in to S3 with an IAM user's access key from .env.
+# Loaded through COMPOSE_FILE in .env. See docs/deploy-aws-lightsail.md, step 1.
+
+x-keys: &keys
+  environment:
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID in .env, or use LITESTREAM_AUTH=instance}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY in .env, or use LITESTREAM_AUTH=instance}
+
+services:
+  restore: *keys
+  litestream: *keys

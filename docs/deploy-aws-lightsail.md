@@ -32,6 +32,8 @@ Check current prices at <https://aws.amazon.com/lightsail/pricing/>. If memory r
 
 ## 1. Create the S3 backup bucket and credentials
 
+This is the default setup (`LITESTREAM_AUTH=keys`): an S3 bucket, and an access key that can only reach that bucket. To avoid storing a key on the server, see [Keyless backups](#keyless-backups-optional) instead, and skip this step.
+
 1. **Create the bucket.** In the S3 console, create a bucket such as `acme-inklayer-backups`, in the same region you'll use for Lightsail. Keep **Block all public access** on.
 2. **Create a policy.** In IAM → Policies → Create policy → JSON, paste [`deploy/lightsail/iam-policy.json`](../deploy/lightsail/iam-policy.json), replacing `YOUR-INKLAYER-BACKUPS` with your bucket name. Name it `inklayer-litestream`.
 3. **Create a user.** In IAM → Users → Create user, name it `inklayer-litestream` with no console access, and attach only that policy.
@@ -101,7 +103,8 @@ nano .env
 | `ACME_EMAIL` | your email address, for certificate expiry notices |
 | `LITESTREAM_BUCKET` | `acme-inklayer-backups` |
 | `AWS_REGION` | `us-east-1` |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | from step 1 |
+| `LITESTREAM_AUTH` | `keys` (default), or `instance` for [keyless backups](#keyless-backups-optional) |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | from step 1 (leave empty with `LITESTREAM_AUTH=instance`) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from step 2 |
 | `INKLAYER_BOOTSTRAP_ADMINS` | your Google email address. It becomes an instance administrator on first sign-in. |
 | `INKLAYER_EXTENSION_REDIRECT_URIS` | leave empty until the browser extension is installed |
@@ -121,6 +124,23 @@ On first start, the services run in this order:
 2. `restore` finds no backup and exits cleanly.
 3. The server creates a new database.
 4. Litestream starts streaming it to S3.
+
+## Keyless backups (optional)
+
+Lightsail instances can't have IAM roles, so by default Litestream uses an access key. Instead, you can back up to a **Lightsail bucket** and attach the instance to it ("resource access"). The instance then gets short-lived credentials automatically, and no key is stored on the server.
+
+Trade-offs compared with the default:
+- **Cost:** the smallest Lightsail bucket plan is about $1/month, compared with a few cents for S3.
+- **Scope:** an attached instance gets full access to that bucket, while the default IAM policy only allows reading, writing and deleting objects. Use the bucket for Inklayer backups only.
+
+Setup:
+1. **Create the bucket.** Lightsail → Storage → Create bucket, in the **same region** as the instance, on the smallest plan. Leave it private.
+2. **Attach the instance.** In the bucket's Permissions tab, under Resource access, choose **Attach instance** and pick your Inklayer instance.
+3. **Configure `.env`.** Set `LITESTREAM_BUCKET` to the bucket's name, `AWS_REGION` to its region, `LITESTREAM_AUTH=instance`, and leave `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` empty.
+
+Then continue with step 5 as usual. To check that it works, run `docker compose logs --tail=50 litestream` and look for errors. The `litestream` and `restore` containers use host networking in this mode, so they can reach the instance metadata service.
+
+To switch an existing install, set `LITESTREAM_AUTH` and run `docker compose up -d`. A new bucket starts empty, so Litestream writes a fresh full snapshot to it; the old bucket's history isn't copied over.
 
 ## Operations
 

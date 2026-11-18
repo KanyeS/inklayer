@@ -1,5 +1,6 @@
 # Litestream 0.5 (Apache-2.0): continuous SQLite replication to S3.
-# Credentials come from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env.
+# Credentials depend on LITESTREAM_AUTH in .env: an access key (keys), or the Lightsail
+# instance's own credentials (instance). See litestream-auth.*.yml.
 # ${VAR} references are expanded from the environment.
 
 # Full snapshot daily; changes in between are streamed (about 1 s behind).

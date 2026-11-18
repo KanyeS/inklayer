@@ -1,0 +1,16 @@
+# LITESTREAM_AUTH=instance: no access keys. The Lightsail instance is attached to a Lightsail bucket
+# ("resource access"), and Litestream picks up short-lived credentials from the instance metadata service.
+# Loaded through COMPOSE_FILE in .env. See docs/deploy-aws-lightsail.md, "Keyless backups".
+
+x-instance: &instance
+  # Host networking lets Litestream reach the metadata service (169.254.169.254) without changing the
+  # instance's IMDSv2 hop limit. Litestream doesn't listen on any port, so this exposes nothing.
+  network_mode: host
+  environment:
+    # Blank any keys left in .env so the SDK falls through to the instance's credentials.
+    AWS_ACCESS_KEY_ID: ""
+    AWS_SECRET_ACCESS_KEY: ""
+
+services:
+  restore: *instance
+  litestream: *instance

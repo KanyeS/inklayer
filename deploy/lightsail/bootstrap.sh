@@ -45,7 +45,7 @@ dpkg-reconfigure -f noninteractive unattended-upgrades
 
 echo "==> Deployment files in $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
-for f in docker-compose.yml litestream.yml Caddyfile .env.example; do
+for f in docker-compose.yml litestream-auth.keys.yml litestream-auth.instance.yml litestream.yml Caddyfile .env.example; do
   [[ -f "$INSTALL_DIR/$f" ]] || curl -fsSL "$REPO_RAW/deploy/lightsail/$f" -o "$INSTALL_DIR/$f"
 done
 [[ -f "$INSTALL_DIR/.env" ]] || { cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"; chmod 600 "$INSTALL_DIR/.env"; }
@@ -55,6 +55,6 @@ cat <<EOF
 
 Done. Next:
   1. Log out and back in (for docker group membership).
-  2. Edit $INSTALL_DIR/.env  (image, domain, email, S3 bucket + keys).
+  2. Edit $INSTALL_DIR/.env  (image, domain, email, backup bucket, LITESTREAM_AUTH and keys if used).
   3. cd $INSTALL_DIR && docker compose up -d
 EOF
