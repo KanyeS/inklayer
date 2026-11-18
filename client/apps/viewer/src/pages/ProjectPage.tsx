@@ -4,15 +4,14 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { useMe } from "@/App";
 import { IssueTrackersSection } from "@/components/Issues";
 import { ProjectSharesSection } from "@/components/Shares";
+import { PagesTable } from "@/components/PagesTable";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@inklayer/ui/components/breadcrumb";
 import { Button } from "@inklayer/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
 import { Field, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@inklayer/ui/components/tabs";
 import { atLeast, get, patch, type LivePageSummary, type Project } from "@/lib/api";
-import { timeAgo } from "@/lib/format";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 
@@ -76,30 +75,7 @@ function Pages({ project }: { project: Project }) {
           </EmptyHeader>
         </Empty>
       )}
-      {pages.data && pages.data.length > 0 && (
-        <Table className="table-fixed">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Page</TableHead>
-              <TableHead className="w-24">Open</TableHead>
-              <TableHead className="w-24">Resolved</TableHead>
-              <TableHead className="w-36">Last activity</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pages.data.map((p) => (
-              <TableRow key={p.pageUrl}>
-                <TableCell className="truncate">
-                  <a className="text-primary hover:underline dark:text-violet-300" href={p.pageUrl} target="_blank" rel="noopener noreferrer">{p.pageUrl}</a>
-                </TableCell>
-                <TableCell>{p.openCount > 0 ? <Badge>{p.openCount}</Badge> : <span className="text-muted-foreground">0</span>}</TableCell>
-                <TableCell className="text-muted-foreground">{p.resolvedCount}</TableCell>
-                <TableCell className="text-muted-foreground">{timeAgo(p.lastActivityAt)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      {pages.data && pages.data.length > 0 && <PagesTable pages={pages.data} showProject={false} />}
     </div>
   );
 }

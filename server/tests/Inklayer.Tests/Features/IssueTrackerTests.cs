@@ -11,6 +11,8 @@ namespace Inklayer.Tests.Features;
 
 public sealed record TrackerDto(Guid Id, string Kind, string Name, bool CloseIssueOnResolve, string TokenHint, string? LastError);
 
+public sealed record PageSummaryDto(string PageUrl, int OpenCount, int ResolvedCount, Guid ProjectId, string ProjectName, string OrganizationName, int IssueCount, int OpenIssueCount);
+
 public sealed record IssueDto(Guid Id, string Kind, string Key, string Url, string State);
 
 /// <summary>GitHub, Jira Cloud and Linear, each against a fake tracker: connecting, creating issues, and keeping both sides in step.</summary>
@@ -112,6 +114,34 @@ public sealed class IssueTrackerTests(InklayerApiFactory factory)
         var (close, closeBody) = factory.Outbound.To($"{api}/repos/acme/shop/issues/42").Single(r => r.Request.Method == HttpMethod.Patch);
         Assert.Contains("\"state\":\"closed\"", closeBody, StringComparison.Ordinal);
         Assert.Equal("closed", (await CommentJsonAsync(ana, commentId)).GetProperty("issues")[0].GetProperty("state").GetString());
+
+        // The pages list counts the page's issues.
+        using var pages = await ana.GetAsync(new Uri("/api/live/pages", UriKind.Relative));
+        var page = Assert.Single(await pages.ReadAsync<List<PageSummaryDto>>());
+        Assert.Equal(("https://shop.example/checkout", 0, 1, 1, 0), (page.PageUrl, page.OpenCount, page.ResolvedCount, page.IssueCount, page.OpenIssueCount));
+    }
+
+    [Fact]
+    public async Task The_pages_list_covers_every_project_you_can_see_and_no_others()
+    {
+        var (admin, projectId, ana, _, viewer) = await ProjectAsync();
+        using var _a = admin;
+        using var _b = ana;
+        using var _c = viewer;
+        var org = await Scenario.CreateOrganizationAsync(admin);
+        var second = await Scenario.CreateProjectAsync(admin, org.Id);
+        var (outsider, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        using var _d = outsider;
+        await CommentAsync(ana, projectId, "One");
+        await CommentAsync(ana, projectId, "Two");
+        await CommentAsync(outsider, second.Id, "Elsewhere");
+
+        using var mine = await viewer.GetAsync(new Uri("/api/live/pages", UriKind.Relative));
+        var page = Assert.Single(await mine.ReadAsync<List<PageSummaryDto>>());
+        Assert.Equal((projectId, 2, 0), (page.ProjectId, page.OpenCount, page.IssueCount));
+        Assert.False(string.IsNullOrEmpty(page.ProjectName));
+        using var theirs = await outsider.GetAsync(new Uri("/api/live/pages", UriKind.Relative));
+        Assert.Equal([second.Id], (await theirs.ReadAsync<List<PageSummaryDto>>()).Select(p => p.ProjectId));
     }
 
     [Fact]

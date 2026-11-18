@@ -21,6 +21,7 @@ export function Layout({ children, wide }: { children: ReactNode; wide?: boolean
         <div className={cn("mx-auto flex h-14 items-center justify-between gap-4 px-5", !wide && "max-w-6xl")}>
           <Link to="/" className="font-heading text-lg font-bold tracking-tight">Inklayer</Link>
           <nav className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/pages" />}>Pages</Button>
             <NotificationBell />
             {me.isSystemAdmin && (
               <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin" />}>Admin</Button>

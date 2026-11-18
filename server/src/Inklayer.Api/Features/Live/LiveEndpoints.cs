@@ -1,6 +1,7 @@
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Annotations;
 using Inklayer.Domain.Annotations;
+using Inklayer.Domain.Issues;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Projects;
 using Inklayer.Domain.Users;
@@ -15,7 +16,10 @@ public sealed record LiveProjectResponse(Guid Id, string Name, Guid Organization
 /// <summary>One project's annotations on a live page stored under one key (<see cref="PageUrl"/>), e.g. <c>/watch</c> or <c>/watch?v=…</c>.</summary>
 public sealed record LivePageAnnotationsResponse(Guid ProjectId, string PageUrl, IReadOnlyList<AnnotationResponse> Annotations);
 
-public sealed record LivePageSummaryResponse(string PageUrl, int OpenCount, int ResolvedCount, DateTime LastActivityAt);
+/// <summary>A page with comments in one project: how many are open and resolved, and the issues made from them.</summary>
+public sealed record LivePageSummaryResponse(
+    string PageUrl, int OpenCount, int ResolvedCount, DateTime LastActivityAt,
+    Guid ProjectId = default, string? ProjectName = null, string? OrganizationName = null, int IssueCount = 0, int OpenIssueCount = 0);
 
 /// <summary>
 /// Live mode: annotations on real pages, on any site, shown by the browser extension.
@@ -35,6 +39,7 @@ internal static class LiveEndpoints
         var live = app.MapGroup("/api/live").WithTags("Live").RequireAuthorization();
         live.MapGet("/origins", OriginsAsync).WithSummary("Sites (scheme://host[:port]) with live comments the caller can see");
         live.MapGet("/projects", ProjectsAsync).WithSummary("Projects the caller can use on live pages, with their role");
+        live.MapGet("/pages", AllPagesAsync).WithSummary("Every page with comments in every project the caller can view, most recently active first");
         live.MapGet("/annotations", ListAsync).WithSummary("Comments on one live page across the caller's projects: ?url=<the page's address>");
 
         var byProject = app.MapGroup("/api/projects/{projectId:guid}/live").WithTags("Live").RequireAuthorization();
@@ -168,16 +173,51 @@ internal static class LiveEndpoints
             return check.Denied!;
         }
 
+        var name = await db.Projects.Where(p => p.Id == projectId).Select(p => p.Name).SingleAsync(ct);
+        return TypedResults.Ok(await SummariesAsync(db, new() { [projectId] = (name, "") }, ct));
+    }
+
+    internal static async Task<IResult> AllPagesAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    {
+        if (await VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        return TypedResults.Ok(await SummariesAsync(db, visible.ToDictionary(v => v.Project.Id, v => (v.Project.Name, v.OrganizationName)), ct));
+    }
+
+    /// <summary>Pages with comments in <paramref name="projects"/> (id → project and organisation names), most recently active first.</summary>
+    private static async Task<List<LivePageSummaryResponse>> SummariesAsync(
+        InklayerDbContext db, Dictionary<Guid, (string Project, string Organization)> projects, CancellationToken ct)
+    {
+        var ids = projects.Keys.ToList();
         var pages = await db.Annotations.AsNoTracking()
-            .Where(a => a.ProjectId == projectId && a.DeletedAt == null)
-            .GroupBy(a => a.PageUrl)
-            .Select(g => new LivePageSummaryResponse(
-                g.Key,
-                g.Count(a => a.Status == AnnotationStatus.Open),
-                g.Count(a => a.Status == AnnotationStatus.Resolved),
-                g.Max(a => a.UpdatedAt)))
+            .Where(a => ids.Contains(a.ProjectId) && a.DeletedAt == null)
+            .GroupBy(a => new { a.ProjectId, a.PageUrl })
+            .Select(g => new
+            {
+                g.Key.ProjectId, g.Key.PageUrl,
+                Open = g.Count(a => a.Status == AnnotationStatus.Open),
+                Resolved = g.Count(a => a.Status == AnnotationStatus.Resolved),
+                Last = g.Max(a => a.UpdatedAt),
+            })
             .ToListAsync(ct);
-        return TypedResults.Ok(pages.OrderByDescending(p => p.LastActivityAt).ToList());
+        var issues = (await (from i in db.AnnotationIssues.AsNoTracking()
+                             join a in db.Annotations.AsNoTracking() on i.AnnotationId equals a.Id
+                             where ids.Contains(a.ProjectId) && a.DeletedAt == null
+                             group i by new { a.ProjectId, a.PageUrl } into g
+                             select new { g.Key.ProjectId, g.Key.PageUrl, All = g.Count(), Open = g.Count(i => i.State == IssueStates.Open) })
+                .ToListAsync(ct))
+            .ToDictionary(x => (x.ProjectId, x.PageUrl));
+        return [.. pages
+            .Select(p =>
+            {
+                var linked = issues.GetValueOrDefault((p.ProjectId, p.PageUrl));
+                var (project, organization) = projects[p.ProjectId];
+                return new LivePageSummaryResponse(p.PageUrl, p.Open, p.Resolved, p.Last, p.ProjectId, project, organization, linked?.All ?? 0, linked?.Open ?? 0);
+            })
+            .OrderByDescending(p => p.LastActivityAt)];
     }
 
     private static IResult InvalidUrl() => TypedResults.ValidationProblem(

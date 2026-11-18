@@ -101,6 +101,12 @@ export interface LivePageSummary {
   openCount: number;
   resolvedCount: number;
   lastActivityAt: string;
+  projectId: string;
+  projectName: string | null;
+  organizationName: string | null;
+  /** Issues created from the page's comments, and how many are still open in the tracker. */
+  issueCount: number;
+  openIssueCount: number;
 }
 
 /** The networks (e.g. VPN ranges) the server answers from. Empty: every network. */
