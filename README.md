@@ -68,6 +68,7 @@ Then open <http://localhost:5048/auth/login>.
 | `/api/admin/users` | Instance administration |
 | `/api/live/...`, `/api/projects/{id}/live/...` | Sites with comments, your projects, and comments on a page |
 | `/api/annotations/{id}` | Edit, resolve, delete; `/history` for every revision |
+| `/api/activity` | Activity log: comments, plus sign-ins and errors for administrators |
 
 ### Browser extension
 
@@ -97,6 +98,14 @@ People with the extension can see and add comments **directly on any website**.
 - **Same page or not.** By default `/pricing?ref=email#faq` and `/pricing` are the same page. A project Admin can tick the query-string or #hash options in the project's **Settings** for apps that use them to show different screens.
 
 **Privacy:** the extension keeps a list of the sites (domains only) that have comments you can see. It only sends the server a page's full address on those sites, or when you choose **Comment on this page**. The server stores only the parts of an address that make a different page. Each project lists its commented pages under **Pages** in the web app.
+
+**Activity log:** the panel's **Activity** tab (or **Activity log** in the toolbar popup) lists recent activity, newest first. It only loads when you open it.
+
+| You are | You see |
+|---|---|
+| Anyone in a project | Who commented, edited, resolved, reopened or deleted, on which page, in projects you can view. Filter by **This site** or **Everywhere** |
+| Organisation Admin or Owner | Also sign-ins by members of your organisations |
+| Instance administrator | Also refused sign-ins and server errors (method, path and error; never query strings or request bodies). Errors are kept for 30 days |
 
 **Tools** (in the panel on the page; Viewers see comments but get no tools):
 

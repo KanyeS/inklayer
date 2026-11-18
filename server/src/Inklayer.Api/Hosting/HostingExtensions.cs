@@ -10,6 +10,7 @@ internal static class HostingExtensions
     public static IServiceCollection AddInklayerHosting(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddProblemDetails();
+        services.AddExceptionHandler<Activity.ErrorRecorder>();
         services.AddOpenApi();
 
         services.AddHealthChecks()

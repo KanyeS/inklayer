@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Inklayer.Api.Activity;
 using Inklayer.Api.Auth;
 using Inklayer.Api.Endpoints;
 using Inklayer.Api.Features.Admin;
@@ -42,6 +43,7 @@ try
     app.MapAdminEndpoints();
     app.MapAnnotationEndpoints();
     app.MapLiveEndpoints();
+    app.MapActivityEndpoints();
     app.MapViewerFallback();
 
     await app.RunAsync();

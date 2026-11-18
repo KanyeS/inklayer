@@ -52,7 +52,7 @@ async function handle(request: Request): Promise<unknown> {
       await stopLive();
       return null;
     case "openLive":
-      await openLiveInTab(request.tabId);
+      await openLiveInTab(request.tabId, request.view);
       return null;
   }
 }

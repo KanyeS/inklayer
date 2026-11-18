@@ -86,7 +86,8 @@ function renderSignedIn(state: StateResponse): void {
   }
 
   const error = h("p", { className: "error" });
-  const comment = h("button", { className: "primary", textContent: "Comment on this page", onclick: async () => {
+  /** Opens the Inklayer panel on the current page, on its comments or its activity log. */
+  const open = async (view: "comments" | "activity") => {
     // Ask before any other await: Firefox only allows permission requests directly inside the click.
     // If access is already granted, this returns true without prompting.
     if (!(await chrome.permissions.request(SITE_ACCESS))) {
@@ -96,16 +97,17 @@ function renderSignedIn(state: StateResponse): void {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return;
     try {
-      await send({ type: "openLive", tabId: tab.id });
+      await send({ type: "openLive", tabId: tab.id, view });
       window.close();
     } catch {
       error.textContent = "Inklayer can't open on this page (browser pages and extension stores are off limits).";
     }
-  } });
+  };
 
   render(
-    comment,
+    h("button", { className: "primary", textContent: "Comment on this page", onclick: () => void open("comments") }),
     h("p", { className: "muted", textContent: "Comments appear on the page for everyone in your projects who has the extension." }),
+    h("button", { className: "link", textContent: "Activity log", title: "Who commented where; admins also see sign-ins and errors", onclick: () => void open("activity") }),
     error,
     footer(state),
   );

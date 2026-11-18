@@ -5,7 +5,7 @@ export type Request =
   | { type: "state" }
   | { type: "signIn" }
   | { type: "signOut" }
-  | { type: "openLive"; tabId: number };
+  | { type: "openLive"; tabId: number; view?: "comments" | "activity" };
 
 export interface StateResponse {
   serverUrl: string | null;

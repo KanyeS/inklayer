@@ -45,6 +45,26 @@ export interface LivePage {
   annotations: LiveAnnotation[];
 }
 
+export interface ActivityItem {
+  id: string;
+  kind: "comments" | "signins" | "errors";
+  action: string;
+  occurredAt: string;
+  actor: { id: string; displayName: string; email: string | null } | null;
+  projectId: string | null;
+  projectName: string | null;
+  pageUrl: string | null;
+  annotationId: string | null;
+  detail: string | null;
+}
+
+export interface ActivityPage {
+  items: ActivityItem[];
+  /** The kinds this user may see: comments for everyone, signins for admins, errors for instance admins. */
+  kinds: ActivityItem["kind"][];
+  nextBefore: string | null;
+}
+
 export interface LiveInit {
   projects: LiveProject[];
   pages: LivePage[];
@@ -82,9 +102,9 @@ export async function stopLive(): Promise<void> {
 }
 
 /** Opens the live panel in a tab, injecting the script first if the page loaded before it was registered. */
-export async function openLiveInTab(tabId: number): Promise<void> {
+export async function openLiveInTab(tabId: number, view: "comments" | "activity" = "comments"): Promise<void> {
   await chrome.scripting.executeScript({ target: { tabId }, files: ["live.js"] }); // a no-op if it's already there
-  await chrome.tabs.sendMessage(tabId, { type: "inklayer.live.open" });
+  await chrome.tabs.sendMessage(tabId, { type: "inklayer.live.open", view });
 }
 
 async function getOrigins(): Promise<Set<string>> {
@@ -111,7 +131,8 @@ export type LiveRequest =
   | { type: "live.list"; url: string }
   | { type: "live.create"; projectId: string; url: string; kind: string; body: string; color: string; anchor: unknown; geometry: unknown; viewportWidth: number }
   | { type: "live.update"; id: string; version: number; status?: "Open" | "Resolved"; body?: string }
-  | { type: "live.delete"; id: string; version: number };
+  | { type: "live.delete"; id: string; version: number }
+  | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -150,6 +171,15 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
     }
     case "live.delete":
       return api<null>(`/api/annotations/${encodeURIComponent(request.id)}?version=${request.version}`, { method: "DELETE" });
+    case "live.activity": {
+      // "This site" is always the sender's own origin, never a site the page names.
+      const query = new URLSearchParams();
+      if (request.thisSite) query.set("site", senderOrigin);
+      if (request.kind) query.set("kind", request.kind);
+      if (request.before) query.set("before", request.before);
+      query.set("limit", "30");
+      return api<ActivityPage>(`/api/activity?${query}`);
+    }
   }
 }
 

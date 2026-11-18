@@ -33,6 +33,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
+    public DbSet<ErrorEvent> ErrorEvents => Set<ErrorEvent>();
+
     public DbSet<Annotation> Annotations => Set<Annotation>();
 
     public DbSet<AnnotationRevision> AnnotationRevisions => Set<AnnotationRevision>();

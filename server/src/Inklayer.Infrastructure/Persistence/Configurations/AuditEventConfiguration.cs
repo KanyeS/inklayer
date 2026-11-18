@@ -19,3 +19,16 @@ internal sealed class AuditEventConfiguration : IEntityTypeConfiguration<AuditEv
         builder.HasIndex(e => e.OccurredAt);
     }
 }
+
+internal sealed class ErrorEventConfiguration : IEntityTypeConfiguration<ErrorEvent>
+{
+    public void Configure(EntityTypeBuilder<ErrorEvent> builder)
+    {
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Method).HasMaxLength(16);
+        builder.Property(e => e.Path).HasMaxLength(2048);
+        builder.Property(e => e.Message).HasMaxLength(ErrorEvent.MaxMessageLength);
+        builder.Property(e => e.TraceId).HasMaxLength(64);
+        builder.HasIndex(e => e.OccurredAt);
+    }
+}

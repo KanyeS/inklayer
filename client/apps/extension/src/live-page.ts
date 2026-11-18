@@ -1,8 +1,33 @@
 import {
   Overlay, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
-import type { LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
+import type { ActivityItem, ActivityPage, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
 import type { Response } from "./lib/messages";
+
+type View = "comments" | "activity";
+
+/** The activity log as shown in the panel: loaded only when the Activity tab is opened. */
+interface ActivityState {
+  items: ActivityItem[];
+  kinds: ActivityItem["kind"][];
+  nextBefore: string | null;
+  thisSite: boolean;
+  kind: ActivityItem["kind"] | null;
+  loading: boolean;
+  error: string;
+}
+
+const ACTIVITY_VERBS: Record<string, string> = {
+  created: "commented",
+  updated: "edited a comment",
+  resolved: "resolved a comment",
+  reopened: "reopened a comment",
+  deleted: "deleted a comment",
+  signed_in: "signed in",
+  sign_in_refused: "Sign-in refused",
+  error: "Server error",
+};
+const KIND_LABELS: Record<ActivityItem["kind"], string> = { comments: "Comments", signins: "Sign-ins", errors: "Errors" };
 
 /** A comment on this page, and the project it belongs to. */
 type PageAnnotation = LiveAnnotation & { projectId: string };
@@ -83,6 +108,8 @@ class LiveSession {
   #tool: Tool = "select";
   #color = COLORS[0]!;
   #open = false;
+  #view: View = "comments";
+  #activity: ActivityState | null = null;
   #marksVisible = true;
   #showResolved = false;
   #busy = false;
@@ -112,13 +139,14 @@ class LiveSession {
   }
 
   /** Expands the panel, e.g. when the user picks "Comment on this page" in the toolbar. */
-  open(): void {
+  open(view: View = "comments"): void {
     this.#open = true;
-    this.#render();
+    this.#setView(view);
   }
 
-  async start(open: boolean): Promise<void> {
+  async start(open: boolean, view: View = "comments"): Promise<void> {
     this.#open = open;
+    if (open && view === "activity") this.#setView(view);
     this.#syncOverlay();
     this.#render();
 
@@ -267,6 +295,100 @@ class LiveSession {
     });
   }
 
+  /* ------------------------------------------------------------------ activity */
+
+  #setView(view: View): void {
+    this.#view = view;
+    if (view === "activity" && !this.#activity) {
+      this.#activity = { items: [], kinds: ["comments"], nextBefore: null, thisSite: true, kind: null, loading: false, error: "" };
+      void this.#loadActivity(false);
+    }
+    this.#render();
+  }
+
+  /** Loads the first page of the activity log, or the next (older) page when <code>more</code> is true. */
+  async #loadActivity(more: boolean): Promise<void> {
+    const state = this.#activity;
+    if (!state || state.loading) return;
+    state.loading = true;
+    state.error = "";
+    this.#render();
+    try {
+      const page = await call<ActivityPage>({
+        type: "live.activity", thisSite: state.thisSite, ...(state.kind ? { kind: state.kind } : {}), ...(more && state.nextBefore ? { before: state.nextBefore } : {}),
+      });
+      state.items = more ? [...state.items, ...page.items] : page.items;
+      state.kinds = page.kinds;
+      state.nextBefore = page.nextBefore;
+    } catch (e) {
+      state.error = (e as Error).message;
+    }
+    state.loading = false;
+    this.#render();
+  }
+
+  #activityParts(): Node[] {
+    const state = this.#activity!;
+    const scope = h("select", { title: "Which activity to show", onchange: () => {
+      state.thisSite = scope.value === "site";
+      if (state.thisSite) state.kind = null; // site activity is comments only
+      void this.#loadActivity(false);
+    } },
+    h("option", { value: "site", textContent: `This site (${location.host})`, selected: state.thisSite }),
+    h("option", { value: "all", textContent: "Everywhere", selected: !state.thisSite }));
+    const filters = h("div", { className: "row filters" }, scope);
+    if (!state.thisSite && state.kinds.length > 1) {
+      const kind = h("select", { title: "Type of activity", onchange: () => {
+        state.kind = (kind.value || null) as ActivityItem["kind"] | null;
+        void this.#loadActivity(false);
+      } }, h("option", { value: "", textContent: "All types", selected: !state.kind }));
+      for (const k of state.kinds) kind.append(h("option", { value: k, textContent: KIND_LABELS[k], selected: state.kind === k }));
+      filters.append(kind);
+    }
+
+    const parts: Node[] = [filters];
+    if (state.error) parts.push(h("p", { className: "error", textContent: state.error }));
+    const list = h("ol", { className: "list activity" });
+    for (const item of state.items) list.append(this.#activityItem(item));
+    if (state.items.length === 0 && !state.loading) list.append(h("li", { className: "empty", textContent: state.thisSite ? "No activity on this site yet." : "No activity yet." }));
+    parts.push(list);
+    if (state.loading) parts.push(h("p", { className: "hint", textContent: "Loading…" }));
+    else if (state.nextBefore) parts.push(h("button", { className: "link", textContent: "Show older", onclick: () => void this.#loadActivity(true) }));
+    return parts;
+  }
+
+  #activityItem(item: ActivityItem): HTMLLIElement {
+    const who = item.actor?.displayName || item.actor?.email || "";
+    const verb = ACTIVITY_VERBS[item.action] ?? item.action;
+    const line = h("div", { className: "meta" },
+      who ? h("strong", { textContent: who }) : "", h("span", { className: item.kind === "errors" ? "error" : "", textContent: who ? ` ${verb}` : verb }),
+      h("span", { className: "muted grow-left", textContent: timeAgo(item.occurredAt), title: new Date(item.occurredAt).toLocaleString() }));
+    const li = h("li", { className: `item activity-${item.kind}` }, line);
+    if (item.detail) li.append(h("p", { className: item.kind === "errors" ? "body error-detail" : "body", textContent: item.detail }));
+    if (item.pageUrl && /^https?:\/\//.test(item.pageUrl)) {
+      const url = new URL(item.pageUrl);
+      li.append(h("div", { className: "muted where" },
+        h("a", { href: item.pageUrl, target: "_blank", rel: "noopener noreferrer", textContent: url.host + url.pathname, title: item.pageUrl, onclick: (e: Event) => e.stopPropagation() }),
+        item.projectName ? ` · ${item.projectName}` : ""));
+    }
+    // A comment on this page: clicking it shows the comment.
+    if (item.annotationId && this.#annotations.some((a) => a.id === item.annotationId)) {
+      li.classList.add("here");
+      li.title = "Show this comment on the page";
+      li.onclick = () => {
+        // Resolved comments are hidden by default; show them if that's the one being opened.
+        if (this.#annotations.find((a) => a.id === item.annotationId)?.status === "Resolved" && !this.#showResolved) {
+          this.#showResolved = true;
+          this.#syncOverlay();
+        }
+        this.#selected = item.annotationId;
+        this.#overlay.handle({ type: "select", id: item.annotationId, scroll: true });
+        this.#setView("comments");
+      };
+    }
+    return li;
+  }
+
   /* ------------------------------------------------------------------ panel */
 
   /** Redraws the panel, keeping focus and the cursor in a comment box the user is typing in. */
@@ -288,13 +410,19 @@ class LiveSession {
       return;
     }
 
+    const tab = (view: View, label: string) =>
+      h("button", { className: this.#view === view ? "tab active" : "tab", textContent: label, onclick: () => this.#setView(view) });
     const header = h("div", { className: "header" },
-      h("strong", { className: "grow", textContent: "Inklayer" }),
+      h("div", { className: "tabs grow" }, tab("comments", "Comments"), tab("activity", "Activity")),
       h("button", { className: "icon", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page", textContent: this.#marksVisible ? "Hide" : "Show",
         onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } }),
       h("button", { className: "icon", title: "Minimise", textContent: "–", onclick: () => { this.#open = false; this.#render(); } }));
 
     const parts: Node[] = [header];
+    if (this.#view === "activity") {
+      this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#activityParts()));
+      return;
+    }
 
     if (this.#target) {
       const commentable = this.#init.projects.filter((p) => p.canComment);
@@ -414,17 +542,17 @@ class LiveSession {
 let session: LiveSession | null = null;
 let starting: Promise<void> | null = null;
 
-/** Starts the session with comments already loaded, or opens it if it's running. */
-function startSession(load: () => Promise<LiveInit | null>, open: boolean): Promise<void> {
+/** Starts the session with comments already loaded, or opens it (on <code>view</code>) if it's running. */
+function startSession(load: () => Promise<LiveInit | null>, open: boolean, view: View = "comments"): Promise<void> {
   if (session) {
-    if (open) session.open();
+    if (open) session.open(view);
     return Promise.resolve();
   }
   starting ??= (async () => {
     const init = await load();
     if (!init) return;
     session = new LiveSession(init);
-    await session.start(open);
+    await session.start(open, view);
   })().finally(() => {
     starting = null;
   });
@@ -434,10 +562,11 @@ function startSession(load: () => Promise<LiveInit | null>, open: boolean): Prom
 if (!globalThis.__inklayerLive && window.top === window) {
   globalThis.__inklayerLive = true;
 
-  // "Comment on this page" from the toolbar popup.
-  chrome.runtime.onMessage.addListener((message: { type?: string }, sender) => {
+  // "Comment on this page" or "Activity log" from the toolbar popup.
+  chrome.runtime.onMessage.addListener((message: { type?: string; view?: View }, sender) => {
     if (sender.id !== chrome.runtime.id || message?.type !== "inklayer.live.open") return;
-    startSession(() => call<LiveInit>({ type: "live.open", url: location.href }), true).catch((e: unknown) => window.alert(`Inklayer: ${(e as Error).message}`));
+    const view: View = message.view === "activity" ? "activity" : "comments";
+    startSession(() => call<LiveInit>({ type: "live.open", url: location.href }), true, view).catch((e: unknown) => window.alert(`Inklayer: ${(e as Error).message}`));
   });
 
   // Automatically, only if this site has comments (the background checks the origin before asking about this page).
@@ -459,6 +588,17 @@ const STYLES = `
   .panel { width: 320px; max-height: min(70vh, 640px); overflow: auto; background: #fff; color: #111827; border-radius: 12px; padding: 10px;
     box-shadow: 0 10px 30px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(0 0 0 / 0.06); display: flex; flex-direction: column; gap: 8px; }
   .header { display: flex; align-items: center; gap: 6px; }
+  .tabs { display: flex; gap: 2px; }
+  .tab { border: none; background: none; padding: 4px 8px; border-radius: 6px; color: #6b7280; font-weight: 600; }
+  .tab.active { background: #eef2ff; color: #3730a3; }
+  .filters select { flex: 1; min-width: 0; }
+  .activity .item { cursor: default; }
+  .activity .item.here { cursor: pointer; }
+  .grow-left { margin-left: auto; white-space: nowrap; }
+  .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .where a { color: #4f46e5; text-decoration: none; }
+  .where a:hover { text-decoration: underline; }
+  .error-detail { color: #991b1b; font-family: ui-monospace, monospace; font-size: 12px; }
   .grow { flex: 1; }
   .target { display: grid; gap: 2px; color: #6b7280; font-size: 12px; }
   select { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px; background: #fff; color: #111827; max-width: 100%; }

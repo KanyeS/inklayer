@@ -43,7 +43,7 @@ internal static class LiveEndpoints
     }
 
     /// <summary>Every non-archived project the caller can view, with their effective role. Null if the caller is signed out or disabled.</summary>
-    private static async Task<List<(Project Project, Role Role, string OrganizationName)>?> VisibleProjectsAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<List<(Project Project, Role Role, string OrganizationName)>?> VisibleProjectsAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var user = await currentUser.GetAsync(ct);
         if (user is null || user.IsDisabled)
