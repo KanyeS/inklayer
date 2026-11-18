@@ -12,12 +12,6 @@ public sealed class Project
 
     public bool IsArchived { get; set; }
 
-    /// <summary>Whether the query string distinguishes live pages. Off: <c>/pricing?ref=x</c> and <c>/pricing</c> are the same page.</summary>
-    public bool LiveMatchQuery { get; set; }
-
-    /// <summary>Whether the #hash distinguishes live pages, for apps that route with <c>#/path</c>.</summary>
-    public bool LiveMatchHash { get; set; }
-
     public DateTime CreatedAt { get; init; }
 
     public List<ProjectMember> Members { get; init; } = [];

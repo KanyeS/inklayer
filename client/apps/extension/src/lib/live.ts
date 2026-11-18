@@ -130,7 +130,8 @@ export type LiveRequest =
   | { type: "live.check"; url: string }
   | { type: "live.open"; url: string }
   | { type: "live.list"; url: string }
-  | { type: "live.create"; projectId: string; url: string; kind: string; body: string; color: string; anchor: unknown; geometry: unknown; viewportWidth: number }
+  | { type: "live.create"; projectId: string; url: string; kind: string; body: string; color: string; anchor: unknown; geometry: unknown; viewportWidth: number;
+      includeQuery: boolean; includeHash: boolean }
   | { type: "live.update"; id: string; version: number; status?: "Open" | "Resolved"; body?: string }
   | { type: "live.delete"; id: string; version: number }
   | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string }

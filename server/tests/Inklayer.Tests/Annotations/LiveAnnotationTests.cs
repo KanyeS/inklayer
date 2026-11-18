@@ -12,23 +12,19 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     /// <summary>A unique site per test, so tests sharing the database don't see each other's comments.</summary>
     private static string NewSite() => $"https://site-{Guid.NewGuid():N}.example";
 
-    private async Task<(HttpClient Admin, OrgDto Org, ProjectDto Project)> SetUpAsync(bool matchQuery = false, bool matchHash = false)
+    private async Task<(HttpClient Admin, OrgDto Org, ProjectDto Project)> SetUpAsync()
     {
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var project = await Scenario.CreateProjectAsync(admin, org.Id);
-        if (matchQuery || matchHash)
-        {
-            using var updated = await admin.PatchJsonAsync($"/api/projects/{project.Id}", new { liveMatchQuery = matchQuery, liveMatchHash = matchHash });
-            project = await updated.ReadAsync<ProjectDto>();
-        }
-
         return (admin, org, project);
     }
 
-    private static async Task<AnnotationDto> CreateAsync(HttpClient client, Guid projectId, string url, string body = "Button is misaligned")
+    private static async Task<AnnotationDto> CreateAsync(
+        HttpClient client, Guid projectId, string url, string body = "Button is misaligned", bool includeQuery = false, bool includeHash = false)
     {
-        using var response = await client.PostJsonAsync($"/api/projects/{projectId}/live/annotations", new { url, kind = "Pin", body, anchor = Anchor, geometry = Geometry, viewportWidth = 1440 });
+        using var response = await client.PostJsonAsync($"/api/projects/{projectId}/live/annotations",
+            new { url, kind = "Pin", body, anchor = Anchor, geometry = Geometry, viewportWidth = 1440, includeQuery, includeHash });
         return await response.ReadAsync<AnnotationDto>(HttpStatusCode.Created);
     }
 
@@ -102,38 +98,42 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     }
 
     [Fact]
-    public async Task A_page_shows_comments_from_every_project_by_each_projects_rules()
+    public async Task Commenters_choose_the_whole_page_or_the_exact_address()
     {
-        var (admin, org, loose) = await SetUpAsync();
-        using var strictResponse = await admin.PostJsonAsync($"/api/orgs/{org.Id}/projects", new { name = "Strict" });
-        var strict = await strictResponse.ReadAsync<ProjectDto>(HttpStatusCode.Created);
-        await admin.PatchJsonAsync($"/api/projects/{strict.Id}", new { liveMatchQuery = true }).ExpectAsync(HttpStatusCode.OK);
+        var (admin, org, project) = await SetUpAsync();
+        var (commenter, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
         var site = NewSite();
 
-        await CreateAsync(admin, loose.Id, $"{site}/search?q=shoes", "loose");
-        await CreateAsync(admin, strict.Id, $"{site}/search?q=shoes", "strict");
+        var everyVideo = await CreateAsync(commenter, project.Id, $"{site}/watch?v=abc", "player controls");
+        var oneVideo = await CreateAsync(commenter, project.Id, $"{site}/watch?v=abc&t=30#comments", "this video", includeQuery: true);
 
-        var pages = await ListAsync(admin, $"{site}/search?q=hats");
-        Assert.Equal("loose", Assert.Single(Assert.Single(pages).Annotations).Body);
-        pages = await ListAsync(admin, $"{site}/search?q=shoes");
-        Assert.Equal(["loose", "strict"], pages.SelectMany(p => p.Annotations).Select(a => a.Body).Order());
+        Assert.Equal($"{site}/watch", everyVideo.PageUrl);
+        Assert.Equal($"{site}/watch?t=30&v=abc", oneVideo.PageUrl);
+        Assert.Equal(["player controls", "this video"], Bodies(await ListAsync(commenter, $"{site}/watch?t=30&v=abc")));
+        Assert.Equal(["player controls"], Bodies(await ListAsync(commenter, $"{site}/watch?v=other")));
+        Assert.Equal(["player controls"], Bodies(await ListAsync(commenter, $"{site}/watch")));
         admin.Dispose();
     }
 
     [Fact]
-    public async Task Loosening_query_matching_merges_existing_pages()
+    public async Task A_page_shows_comments_from_every_project_grouped_by_address()
     {
-        var (admin, _, project) = await SetUpAsync(matchQuery: true);
+        var (admin, org, first) = await SetUpAsync();
+        var second = await Scenario.CreateProjectAsync(admin, org.Id);
         var site = NewSite();
-        await CreateAsync(admin, project.Id, $"{site}/search?q=shoes", "shoes");
-        await CreateAsync(admin, project.Id, $"{site}/search?q=hats", "hats");
 
-        Assert.Equal("shoes", Assert.Single(Assert.Single(await ListAsync(admin, $"{site}/search?q=shoes")).Annotations).Body);
+        await CreateAsync(admin, first.Id, $"{site}/app#/settings", "first, page");
+        await CreateAsync(admin, first.Id, $"{site}/app#/settings", "first, route", includeHash: true);
+        await CreateAsync(admin, second.Id, $"{site}/app#/settings", "second, route", includeHash: true);
 
-        await admin.PatchJsonAsync($"/api/projects/{project.Id}", new { liveMatchQuery = false }).ExpectAsync(HttpStatusCode.OK);
-        Assert.Equal(["shoes", "hats"], Assert.Single(await ListAsync(admin, $"{site}/search")).Annotations.Select(a => a.Body));
+        var pages = await ListAsync(admin, $"{site}/app?tab=1#/settings");
+        Assert.Equal(3, pages.Count);
+        Assert.Equal(["first, page", "first, route", "second, route"], Bodies(pages));
+        Assert.Equal(["first, page"], Bodies(await ListAsync(admin, $"{site}/app#/profile")));
         admin.Dispose();
     }
+
+    private static List<string> Bodies(List<LivePageDto> pages) => pages.SelectMany(p => p.Annotations).Select(a => a.Body).Order(StringComparer.Ordinal).ToList();
 
     [Fact]
     public async Task Only_web_pages_can_be_annotated()

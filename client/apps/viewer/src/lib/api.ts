@@ -77,9 +77,6 @@ export interface Project {
   name: string;
   isArchived: boolean;
   myRole: Role;
-  /** Live comments: whether the query string / #hash make a different page. */
-  liveMatchQuery: boolean;
-  liveMatchHash: boolean;
 }
 
 export interface LivePageSummary {

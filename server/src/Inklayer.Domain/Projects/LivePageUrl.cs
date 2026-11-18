@@ -1,8 +1,9 @@
 namespace Inklayer.Domain.Projects;
 
 /// <summary>
-/// URL rules for live-page annotations: a page's key is its origin and path. The query string and #hash are added only if
-/// the project says they matter, so parts that don't (and may carry tokens) are never stored.
+/// URL rules for live-page annotations. A comment's key is the page's origin and path, plus the query string and #hash only
+/// if the person commenting chose them (e.g. <c>/watch?v=…</c> for one video rather than every <c>/watch</c> page), so
+/// parts nobody chose (which may carry tokens) are never stored.
 /// </summary>
 public static class LivePageUrl
 {
@@ -42,6 +43,17 @@ public static class LivePageUrl
 
         return key.Length <= MaxLength ? key : null;
     }
+
+    /// <summary>
+    /// Every key a comment on <paramref name="url"/> can be stored under: with and without its query and #hash. Empty if
+    /// <paramref name="url"/> isn't an absolute http(s) URL.
+    /// </summary>
+    public static IReadOnlyList<string> Candidates(string? url) =>
+        new[] { (false, false), (true, false), (false, true), (true, true) }
+            .Select(m => Normalize(url, m.Item1, m.Item2))
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
     /// <summary>The origin of an absolute http(s) URL, e.g. <c>https://app.example.com:8443</c>, or null.</summary>
     public static string? OriginOf(string? url) => url is not null && TryParseWeb(url, out var uri) ? OriginOf(uri) : null;

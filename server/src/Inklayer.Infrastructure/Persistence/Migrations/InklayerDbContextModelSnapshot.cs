@@ -332,12 +332,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("INTEGER");
 
-                    b.Property<bool>("LiveMatchHash")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("LiveMatchQuery")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)

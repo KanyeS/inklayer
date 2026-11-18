@@ -11,18 +11,13 @@ namespace Inklayer.Api.Features.Projects;
 
 public sealed record CreateProjectRequest([property: Required, StringLength(200, MinimumLength = 1)] string Name);
 
-/// <summary>
-/// Only the fields that are present change. Loosening <see cref="LiveMatchQuery"/> or <see cref="LiveMatchHash"/> merges
-/// existing live pages that now count as the same page.
-/// </summary>
+/// <summary>Only the fields that are present change.</summary>
 public sealed record UpdateProjectRequest(
     [property: StringLength(200, MinimumLength = 1)] string? Name,
-    bool? IsArchived,
-    bool? LiveMatchQuery,
-    bool? LiveMatchHash);
+    bool? IsArchived);
 
 public sealed record ProjectResponse(
-    Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role MyRole, bool LiveMatchQuery, bool LiveMatchHash);
+    Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role MyRole);
 
 public sealed record ProjectMemberResponse(Guid UserId, string Email, string DisplayName, Role OrganizationRole, Role? ProjectRole, Role EffectiveRole);
 
@@ -105,35 +100,9 @@ internal static class ProjectEndpoints
         project.Name = request.Name?.Trim() ?? project.Name;
         project.IsArchived = request.IsArchived ?? project.IsArchived;
 
-        var matchQuery = request.LiveMatchQuery ?? project.LiveMatchQuery;
-        var matchHash = request.LiveMatchHash ?? project.LiveMatchHash;
-        if (matchQuery != project.LiveMatchQuery || matchHash != project.LiveMatchHash)
-        {
-            project.LiveMatchQuery = matchQuery;
-            project.LiveMatchHash = matchHash;
-            await RekeyLivePagesAsync(db, projectId, matchQuery, matchHash, ct);
-        }
-
         audit.Record(AuditActions.ProjectUpdated, project.OrganizationId, "project", projectId, request);
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(ToResponse(project, check.Role));
-    }
-
-    /// <summary>
-    /// Applies new matching rules to existing live annotations. Only the original page key is stored, so loosening a rule
-    /// (e.g. ignoring the query) merges pages, while tightening it leaves existing keys as they are.
-    /// </summary>
-    private static async Task RekeyLivePagesAsync(InklayerDbContext db, Guid projectId, bool matchQuery, bool matchHash, CancellationToken ct)
-    {
-        var live = await db.Annotations.Where(a => a.ProjectId == projectId).ToListAsync(ct);
-        foreach (var annotation in live)
-        {
-            var key = LivePageUrl.Normalize(annotation.PageUrl, matchQuery, matchHash);
-            if (key is not null && key != annotation.PageUrl)
-            {
-                db.Entry(annotation).Property(a => a.PageUrl).CurrentValue = key;
-            }
-        }
     }
 
     private static async Task<IResult> ListMembersAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)
@@ -216,5 +185,5 @@ internal static class ProjectEndpoints
     }
 
     private static ProjectResponse ToResponse(Project p, Role myRole) =>
-        new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole, p.LiveMatchQuery, p.LiveMatchHash);
+        new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole);
 }

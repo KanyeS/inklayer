@@ -95,7 +95,7 @@ People with the extension can see and add comments **directly on any website**.
 
 - **See comments.** On a page that has comments in your projects, an **Inklayer** button appears in the bottom-right corner, with the number of open comments.
 - **Add comments.** On any page, click the Inklayer toolbar button and choose **Comment on this page**. Pick the project in the panel; Commenters and above can add comments, Viewers can only see them.
-- **Same page or not.** By default `/pricing?ref=email#faq` and `/pricing` are the same page. A project Admin can tick the query-string or #hash options in the project's **Settings** for apps that use them to show different screens.
+- **Which address.** When a page's address has a query string or #hash, the person commenting chooses where the comment belongs: every version of the page (`youtube.com/watch`) or only that exact address (`youtube.com/watch?v=bm33vG-QHvE`). Only the parts they choose are stored, so tracking parameters and tokens stay out unless someone picks them. Each comment shows the address it belongs to.
 
 **Privacy:** the extension keeps a list of the sites (domains only) that have comments you can see. It only sends the server a page's full address on those sites, or when you choose **Comment on this page**. The server stores only the parts of an address that make a different page. Each project lists its commented pages under **Pages** in the web app.
 

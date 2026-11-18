@@ -18,7 +18,8 @@ public sealed record AuthorSummary(Guid Id, string DisplayName, string? AvatarUr
 
 /// <summary>
 /// A new mark on a page. <see cref="Url"/> is the page as the browser sees it; the server keeps only its normalised form
-/// (see <c>LivePageUrl</c>), so query strings and hashes the project doesn't match on are never stored.
+/// (see <c>LivePageUrl</c>): origin and path, plus the query string if <see cref="IncludeQuery"/> and the #hash if
+/// <see cref="IncludeHash"/>. The commenter chooses: <c>/watch</c> (every such page) or <c>/watch?v=…</c> (just that one).
 /// </summary>
 public sealed record CreateLiveAnnotationRequest(
     [property: Required, StringLength(4096)] string? Url,
@@ -27,7 +28,9 @@ public sealed record CreateLiveAnnotationRequest(
     [property: StringLength(7)] string? Color,
     JsonElement Anchor,
     JsonElement Geometry,
-    [property: Range(0, 20000)] int ViewportWidth);
+    [property: Range(0, 20000)] int ViewportWidth,
+    bool IncludeQuery = false,
+    bool IncludeHash = false);
 
 public sealed record AnnotationResponse(
     Guid Id, Guid ProjectId, string PageUrl, AnnotationKind Kind, AnnotationStatus Status, string Body, string Color,

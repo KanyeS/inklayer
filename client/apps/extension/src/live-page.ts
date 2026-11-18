@@ -59,6 +59,40 @@ const TOOLS: { tool: Tool; label: string; title: string }[] = [
   { tool: "arrow", label: "Arrow", title: "Draw an arrow" },
   { tool: "ink", label: "Draw", title: "Draw freehand" },
 ];
+/** Which parts of the address a new comment belongs to. Origin and path always; the query and #hash if the commenter chooses. */
+interface Scope {
+  query: boolean;
+  hash: boolean;
+}
+
+/** The path as the server keys it: without a trailing slash, except for the root. */
+function pagePath(url: URL): string {
+  return url.pathname.length > 1 ? url.pathname.replace(/\/+$/, "") || "/" : url.pathname;
+}
+
+/** The choices for where a new comment on this page belongs. Only one if the address has no query or #hash. */
+function scopeOptions(): { scope: Scope; label: string; address: string }[] {
+  const url = new URL(location.href);
+  const path = pagePath(url);
+  const query = url.search.length > 1 ? url.search : "";
+  const hash = url.hash.length > 1 ? url.hash : "";
+  const options = [{ scope: { query: false, hash: false }, label: "Any version of this page", address: path }];
+  if (query) options.push({ scope: { query: true, hash: false }, label: "Only this address", address: path + query });
+  if (hash) options.push({ scope: { query: !!query, hash: true }, label: query ? "Only this address and #hash" : "Only this #hash", address: path + query + hash });
+  return options;
+}
+
+/** Where an existing comment belongs, for its list entry, e.g. "/watch (any version)" or "/watch?v=…". */
+function addressOf(pageUrl: string | null): string {
+  if (!pageUrl) return "";
+  try {
+    const url = new URL(pageUrl);
+    return url.search || url.hash ? pagePath(url) + url.search + url.hash : `${pagePath(url)} (any version)`;
+  } catch {
+    return pageUrl;
+  }
+}
+
 const REANCHOR_DELAY_MS = 400;
 const REANCHOR_MAX_WAIT_MS = 1500;
 const REFRESH_EVERY_MS = 60_000;
@@ -108,6 +142,7 @@ class LiveSession {
   #selected: string | null = null;
   #tool: Tool = "select";
   #color = COLORS[0]!;
+  #scope: Scope = { query: false, hash: false };
   #open = false;
   #view: View = "comments";
   #activity: ActivityState | null = null;
@@ -159,6 +194,7 @@ class LiveSession {
       if (location.href !== this.#href) {
         this.#href = location.href;
         this.#draft = null;
+        this.#scope = { query: false, hash: false };
         void this.#load();
       }
     }, 1000);
@@ -273,6 +309,29 @@ class LiveSession {
     this.#render();
   }
 
+  /** The scope to save with, limited to the parts this address actually has. */
+  #chosenScope(): { includeQuery: boolean; includeHash: boolean } {
+    return { includeQuery: this.#scope.query && location.search.length > 1, includeHash: this.#scope.hash && location.hash.length > 1 };
+  }
+
+  /** "Any version of this page" or "Only this address", when the address has a query or #hash. */
+  #scopeChooser(): Node {
+    const options = scopeOptions();
+    if (options.length < 2) return document.createTextNode("");
+    const chosen = this.#chosenScope();
+    const fieldset = h("fieldset", { className: "scope" }, h("legend", { textContent: "Show this comment on" }));
+    for (const option of options) {
+      const input = h("input", {
+        type: "radio", name: "inklayer-scope",
+        checked: option.scope.query === chosen.includeQuery && option.scope.hash === chosen.includeHash,
+        onchange: () => { this.#scope = option.scope; this.#render(); },
+      });
+      fieldset.append(h("label", { title: option.address }, input,
+        h("span", { className: "scope-text" }, h("span", { textContent: option.label }), h("span", { className: "address", textContent: option.address }))));
+    }
+    return fieldset;
+  }
+
   #cancelDraft(): void {
     this.#draft = null;
     this.#draftInput = null;
@@ -288,6 +347,7 @@ class LiveSession {
     await this.#mutate(async () => {
       const created = await call<LiveAnnotation>({
         type: "live.create", projectId: target.id, url: location.href,
+        ...this.#chosenScope(),
         kind: draft.kind, body, color: this.#color, anchor: draft.anchor, geometry: draft.geometry, viewportWidth: draft.viewportWidth,
       });
       this.#draft = null;
@@ -464,7 +524,7 @@ class LiveSession {
         if (e.key === "Escape") this.#cancelDraft();
       };
       parts.push(h("div", { className: "draft" },
-        h("strong", { textContent: "New comment" }), this.#draftInput,
+        h("strong", { textContent: "New comment" }), this.#draftInput, this.#scopeChooser(),
         h("div", { className: "row" },
           h("button", { className: "primary", textContent: this.#busy ? "Saving…" : "Save", disabled: this.#busy, onclick: () => void this.#saveDraft() }),
           h("button", { textContent: "Cancel", onclick: () => this.#cancelDraft() }))));
@@ -501,6 +561,10 @@ class LiveSession {
     } });
     item.dataset.id = a.id;
     item.append(meta);
+    // On an address with a query or #hash, say whether each comment is for every version of the page or just this one.
+    if (location.search.length > 1 || location.hash.length > 1) {
+      item.append(h("span", { className: "address", textContent: addressOf(a.pageUrl), title: a.pageUrl ?? "" }));
+    }
 
     if (this.#editing?.id === a.id) {
       const input = this.#editing.input;
@@ -673,5 +737,13 @@ const STYLES = `
   .badge { color: #fff; border-radius: 11px; min-width: 20px; height: 20px; padding: 0 6px; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }
   .warn { color: #92400e; background: #fef3c7; border-radius: 999px; padding: 0 6px; font-size: 11px; }
   .body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .address { color: var(--muted-foreground); font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .scope { border: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .scope legend { padding: 0; margin-bottom: 4px; color: var(--muted-foreground); font-size: 12px; }
+  .scope label { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 12px; cursor: pointer; }
+  .scope label:hover { background: color-mix(in oklch, var(--background) 60%, transparent); }
+  .scope label:has(input:checked) { background: var(--background); }
+  .scope input { accent-color: var(--primary); margin: 2px 0 0; }
+  .scope-text { display: grid; gap: 1px; min-width: 0; }
   .actions { gap: 2px; }
 `;

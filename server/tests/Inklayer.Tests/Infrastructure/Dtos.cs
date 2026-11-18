@@ -11,7 +11,7 @@ public sealed record MemberDto(Guid UserId, string Email, string Role);
 
 public sealed record InvitationDto(Guid Id, string Email, string Role);
 
-public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string MyRole, bool LiveMatchQuery = false, bool LiveMatchHash = false);
+public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string MyRole);
 
 public sealed record LiveProjectDto(Guid Id, string Name, Guid OrganizationId, string MyRole, bool CanComment);
 

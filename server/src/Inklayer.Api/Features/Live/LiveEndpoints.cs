@@ -11,7 +11,7 @@ namespace Inklayer.Api.Features.Live;
 /// <summary>A project the caller can use on live pages. Viewers see comments; Commenters and above can add them.</summary>
 public sealed record LiveProjectResponse(Guid Id, string Name, Guid OrganizationId, string OrganizationName, Role MyRole, bool CanComment);
 
-/// <summary>One project's annotations on a live page. <see cref="PageUrl"/> is the key they're stored under, by that project's rules.</summary>
+/// <summary>One project's annotations on a live page stored under one key (<see cref="PageUrl"/>), e.g. <c>/watch</c> or <c>/watch?v=…</c>.</summary>
 public sealed record LivePageAnnotationsResponse(Guid ProjectId, string PageUrl, IReadOnlyList<AnnotationResponse> Annotations);
 
 public sealed record LivePageSummaryResponse(string PageUrl, int OpenCount, int ResolvedCount, DateTime LastActivityAt);
@@ -22,7 +22,8 @@ public sealed record LivePageSummaryResponse(string PageUrl, int OpenCount, int 
 /// <item><c>/api/live/origins</c>: the sites (origins only) that have comments the caller can see. The extension checks this
 /// list locally, so it only sends the server a page's full address on sites that have comments, or when the user opens the panel.</item>
 /// <item><c>/api/live/annotations?url=</c>: a page's comments across every project the caller can view.</item>
-/// <item>A page's key is its URL normalised by each project's matching rules (see <see cref="LivePageUrl"/>).</item>
+/// <item>A comment's key is the page URL with or without its query and #hash, as the commenter chose (see <see cref="LivePageUrl"/>).
+/// A page shows the comments stored under any of its keys.</item>
 /// </list>
 /// Editing, resolving, deleting and history use the shared <c>/api/annotations/{id}</c> endpoints.
 /// </summary>
@@ -102,21 +103,18 @@ internal static class LiveEndpoints
             return TypedResults.Unauthorized();
         }
 
-        if (LivePageUrl.Normalize(url, matchQuery: false, matchHash: false) is null)
+        // The page with and without its query and #hash: at most four keys.
+        var keys = LivePageUrl.Candidates(url);
+        if (keys.Count == 0)
         {
             return InvalidUrl();
         }
 
-        // Each project keys the page by its own rules, so there are at most four distinct keys.
-        var keys = visible.ToDictionary(v => v.Project.Id, v => LivePageUrl.Normalize(url, v.Project.LiveMatchQuery, v.Project.LiveMatchHash)!);
-        var ids = keys.Keys.ToList();
-        var distinctKeys = keys.Values.Distinct(StringComparer.Ordinal).ToList();
-        var annotations = (await db.Annotations.AsNoTracking()
-                .Where(a => ids.Contains(a.ProjectId) && distinctKeys.Contains(a.PageUrl) && a.DeletedAt == null)
-                .OrderBy(a => a.CreatedAt)
-                .ToListAsync(ct))
-            .Where(a => a.PageUrl == keys[a.ProjectId])
-            .ToList();
+        var ids = visible.Select(v => v.Project.Id).ToList();
+        var annotations = await db.Annotations.AsNoTracking()
+            .Where(a => ids.Contains(a.ProjectId) && keys.Contains(a.PageUrl) && a.DeletedAt == null)
+            .OrderBy(a => a.CreatedAt)
+            .ToListAsync(ct);
         if (annotations.Count == 0)
         {
             return TypedResults.Ok(Array.Empty<LivePageAnnotationsResponse>());
@@ -126,8 +124,8 @@ internal static class LiveEndpoints
         var userId = currentUser.Id!.Value;
         var roles = visible.ToDictionary(v => v.Project.Id, v => v.Role);
         return TypedResults.Ok(annotations
-            .GroupBy(a => a.ProjectId)
-            .Select(g => new LivePageAnnotationsResponse(g.Key, keys[g.Key], g.Select(a => AnnotationEndpoints.ToResponse(a, authors, roles[g.Key], userId)).ToList()))
+            .GroupBy(a => (a.ProjectId, a.PageUrl))
+            .Select(g => new LivePageAnnotationsResponse(g.Key.ProjectId, g.Key.PageUrl, g.Select(a => AnnotationEndpoints.ToResponse(a, authors, roles[g.Key.ProjectId], userId)).ToList()))
             .ToList());
     }
 
@@ -146,7 +144,7 @@ internal static class LiveEndpoints
             return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "This project is archived.");
         }
 
-        if (LivePageUrl.Normalize(request.Url, project.LiveMatchQuery, project.LiveMatchHash) is not { } key)
+        if (LivePageUrl.Normalize(request.Url, request.IncludeQuery, request.IncludeHash) is not { } key)
         {
             return InvalidUrl();
         }
