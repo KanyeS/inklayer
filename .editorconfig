@@ -17,3 +17,15 @@ csharp_style_namespace_declarations = file_scoped:warning
 
 [*.md]
 trim_trailing_whitespace = false
+
+# Analyzer tuning
+[*.cs]
+# "Permission", "...Collection" are domain names, not type-suffix misuse.
+dotnet_diagnostic.CA1711.severity = none
+# EF Core navigation collections are intentionally List<T>.
+dotnet_diagnostic.CA1002.severity = none
+
+# EF Core migrations are generated code
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

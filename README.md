@@ -37,12 +37,38 @@ dotnet test                                  # unit + integration tests
 dotnet run --project src/Inklayer.Api        # http://localhost:5048 (DB at server/.data/)
 ```
 
+To sign in locally, create a Google OAuth client (type "Web application") with redirect URI `http://localhost:5048/auth/callback/google`, then:
+
+```bash
+cd server/src/Inklayer.Api
+dotnet user-secrets set "Inklayer:Auth:Google:ClientId" "<client id>"
+dotnet user-secrets set "Inklayer:Auth:Google:ClientSecret" "<client secret>"
+dotnet user-secrets set "Inklayer:Auth:BootstrapAdmins" "you@gmail.com"
+```
+
+Then open <http://localhost:5048/auth/login>.
+
 | Endpoint | Purpose |
 |---|---|
-| `/health/live` | Process is up |
-| `/health/ready` | Database reachable |
-| `/openapi/v1.json` | OpenAPI document |
-| `/api/system/version` | Server version |
+| `/health/live`, `/health/ready` | Liveness and readiness |
+| `/openapi/v1.json` | OpenAPI document listing every endpoint |
+| `/auth/login`, `/auth/logout` | Browser sign-in with Google and sign-out |
+| `/connect/authorize`, `/connect/token` | OAuth 2.0 + PKCE for the browser extension |
+| `/api/me` | Current user and their organisations |
+| `/api/orgs/...`, `/api/projects/...` | Organisations, members, invitations, projects, per-project roles, audit log |
+| `/api/admin/users` | Instance administration |
+
+### How sign-in and access work
+- **Google only.** Inklayer stores no passwords.
+- **Who can get in:**
+  - instance administrators listed in `Inklayer:Auth:BootstrapAdmins`;
+  - people with an invitation for their verified Google email;
+  - Google Workspace users whose domain an organisation has allowed. They join automatically with that organisation's default role.
+- **Roles:** Viewer < Commenter < Editor < Admin < Owner. A project can raise or lower a Viewer, Commenter or Editor; Admins and Owners keep their role everywhere.
+- **Clients:**
+  - **The web viewer** uses an HttpOnly session cookie. State-changing requests must send the `X-Inklayer-Csrf` header.
+  - **The extension** uses short-lived bearer tokens with rotating refresh tokens.
+- **Revocation:** disabling a user or "sign out everywhere" ends every cookie and token immediately.
 
 Licence check: `dotnet tool restore && dotnet nuget-license -i Inklayer.slnx -t -a ../.github/licenses/allowed-licenses.json -override ../.github/licenses/nuget-overrides.json`
 

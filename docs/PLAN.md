@@ -112,6 +112,10 @@ The server never sees, stores or resets a password. Google handles sign-in, 2FA,
   - an audit log of sign-ins
   - Data Protection keys kept on a volume that survives container restarts
   - an admin "revoke sessions" action
+- **As built (Phase 1):**
+  - Instance administrators can create organisations, and they act as Owner in every organisation.
+  - Signing and Data Protection keys are stored in `/data/keys`.
+  - Tenant isolation is enforced by an `AccessService` check on every endpoint, which returns 404 to non-members, plus explicit `OrganizationId` filters, rather than an EF global query filter. A global filter needs a single "current org" per request, and requests like `/api/me` span several organisations.
 - **Later, if needed:** add Microsoft Entra ID or a generic OIDC provider using the same handler with no password code. This is just another provider entry in config.
 
 ### 2.6 Securely serving stored pages (critical)

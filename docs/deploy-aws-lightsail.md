@@ -35,11 +35,25 @@ Check current prices at <https://aws.amazon.com/lightsail/pricing/>. If memory r
 1. **Create the bucket.** In the S3 console, create a bucket such as `acme-inklayer-backups`, in the same region you'll use for Lightsail. Keep **Block all public access** on.
 2. **Create a policy.** In IAM → Policies → Create policy → JSON, paste [`deploy/lightsail/iam-policy.json`](../deploy/lightsail/iam-policy.json), replacing `YOUR-INKLAYER-BACKUPS` with your bucket name. Name it `inklayer-litestream`.
 3. **Create a user.** In IAM → Users → Create user, name it `inklayer-litestream` with no console access, and attach only that policy.
-4. **Create an access key.** On that user, go to Security credentials → Create access key and choose "Application running outside AWS". Save both values; you'll need them in step 4.
+4. **Create an access key.** On that user, go to Security credentials → Create access key and choose "Application running outside AWS". Save both values; you'll need them in step 5.
 
 The key can only read and write that one bucket. If the server is ever compromised, nothing else in your AWS account is exposed.
 
-## 2. Create the Lightsail instance
+## 2. Create the Google sign-in client
+
+Inklayer never stores passwords; everyone signs in with Google.
+
+1. **Create or choose a project** in [Google Cloud Console](https://console.cloud.google.com/).
+2. **Set up the consent screen.** Go to APIs & Services → OAuth consent screen (Google Auth Platform → Branding/Audience):
+   - **Audience:** choose **Internal** if everyone uses your Google Workspace domain, or **External** for anyone with a Google account.
+   - **Scopes:** add only `openid`, `email` and `profile`. These are non-sensitive, so no Google verification review is needed.
+   - **Publishing status:** for **External**, set it to **In production**. In "Testing", only the test users you list can sign in.
+3. **Create the client.** Go to APIs & Services → Credentials → **Create credentials → OAuth client ID**:
+   - **Application type:** **Web application**.
+   - **Authorised redirect URI:** `https://inklayer.example.com/auth/callback/google`, using your domain.
+4. **Save the credentials.** Copy the **Client ID** and **Client secret**; they go into `.env` in step 5.
+
+## 3. Create the Lightsail instance
 
 1. **Create the instance.** Lightsail → Create instance → Linux/Unix → **OS only → Ubuntu 24.04 LTS**, and choose the **$5 (512 MB)** plan.
 2. **Attach a static IP.** In Networking → Create static IP, attach it to the instance. A static IP is free while attached.
@@ -47,7 +61,7 @@ The key can only read and write that one bucket. If the server is ever compromis
 4. **Turn on snapshots.** In the instance's Snapshots tab, turn on **automatic snapshots**. They cost a few cents a month and act as a second safety net.
 5. **Point DNS at the server.** At your DNS provider, create an `A` record such as `inklayer.example.com` → the static IP.
 
-## 3. Publish the server image
+## 4. Publish the server image
 
 Images are built by GitHub Actions, not on the instance. 512 MB isn't enough RAM to compile .NET.
 
@@ -60,7 +74,7 @@ The **Release image** workflow pushes `ghcr.io/<owner>/inklayer-server:0.1.0` an
 
 > GitHub creates new container packages as **private**. Either make the package public (GitHub → your profile → Packages → inklayer-server → Package settings → Change visibility), or run `docker login ghcr.io` on the instance with a token that has the `read:packages` scope.
 
-## 4. Install on the instance
+## 5. Install on the instance
 
 SSH in from the Lightsail console's "Connect using SSH", or with your key. Then:
 
@@ -88,6 +102,9 @@ nano .env
 | `LITESTREAM_BUCKET` | `acme-inklayer-backups` |
 | `AWS_REGION` | `us-east-1` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | from step 1 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from step 2 |
+| `INKLAYER_BOOTSTRAP_ADMINS` | your Google email address. It becomes an instance administrator on first sign-in. |
+| `INKLAYER_EXTENSION_REDIRECT_URIS` | leave empty until the browser extension is installed |
 
 Then start the stack:
 
@@ -96,6 +113,8 @@ docker compose up -d
 docker compose ps
 curl -fsS https://inklayer.example.com/health/ready     # → Healthy
 ```
+
+Open `https://inklayer.example.com/auth/login` and sign in with the bootstrap admin account. Then create your organisation and invite people with the API (`POST /api/orgs`, `POST /api/orgs/{id}/invitations`). A web UI for this comes with the viewer.
 
 On first start, the services run in this order:
 1. `volume-init` sets permissions on the data volume.
@@ -122,7 +141,7 @@ docker compose run --rm restore restore -dry-run -o /tmp/check.db /data/inklayer
 Also check the S3 console: objects under `inklayer.db/` should keep updating as people use the app.
 
 ### Restoring
-**The instance was lost or rebuilt.** Create a new instance, then repeat steps 2 and 4 with the same `.env`. On first start, `restore` pulls the latest database from S3 automatically, because the new volume is empty.
+**The instance was lost or rebuilt.** Create a new instance, then repeat steps 3 and 5 with the same `.env`. On first start, `restore` pulls the latest database from S3 automatically, because the new volume is empty.
 
 **Rolling back to a point in time**, for example after a bad change:
 ```bash
@@ -135,6 +154,12 @@ docker compose up -d
 ```
 
 > Never copy `inklayer.db` with `cp` while the server is running; the copy can be inconsistent. Use Litestream, or `sqlite3 inklayer.db "VACUUM INTO 'copy.db'"`.
+
+### Locked out?
+If no instance administrator can sign in, add a working Google email to `INKLAYER_BOOTSTRAP_ADMINS` in `.env` and run `docker compose up -d`. That account becomes an administrator on its next sign-in.
+
+### Keys
+`/data/keys` holds the token-signing keys and the cookie-protection keys. They are created on first start, and they aren't stored in the S3 backup. If they're lost, everyone simply signs in again; no data is lost.
 
 ### Watching memory
 ```bash

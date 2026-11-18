@@ -1,4 +1,10 @@
+using System.Text.Json.Serialization;
+using Inklayer.Api.Auth;
 using Inklayer.Api.Endpoints;
+using Inklayer.Api.Features.Admin;
+using Inklayer.Api.Features.Me;
+using Inklayer.Api.Features.Organizations;
+using Inklayer.Api.Features.Projects;
 using Inklayer.Api.Hosting;
 using Inklayer.Infrastructure;
 using Serilog;
@@ -14,13 +20,23 @@ try
     builder.AddInklayerObservability();
     builder.Services.AddInklayerInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
     builder.Services.AddInklayerHosting(builder.Configuration);
+    builder.Services.AddInklayerAuth(builder.Configuration, builder.Environment);
+    builder.Services.AddValidation();
+    builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
     var app = builder.Build();
 
     app.UseInklayerHosting();
+    app.UseInklayerAuth();
+
     app.MapInklayerHealthChecks();
     app.MapOpenApi("/openapi/{documentName}.json");
     app.MapSystemEndpoints();
+    app.MapInklayerAuthEndpoints();
+    app.MapMeEndpoints();
+    app.MapOrganizationEndpoints();
+    app.MapProjectEndpoints();
+    app.MapAdminEndpoints();
 
     await app.RunAsync();
 }

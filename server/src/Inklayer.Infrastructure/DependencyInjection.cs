@@ -22,11 +22,19 @@ public static class DependencyInjection
                 $"Connection string 'ConnectionStrings:{DatabaseConnectionName}' is not configured (e.g. 'Data Source=/data/inklayer.db').");
         }
 
-        connectionString = ResolveDatabasePath(connectionString, contentRootPath);
+        connectionString = ResolveDatabasePath(connectionString, contentRootPath, out var databaseDirectory);
+
+        var dataRoot = configuration["Inklayer:DataDirectory"] is { Length: > 0 } configuredRoot
+            ? Path.GetFullPath(configuredRoot, contentRootPath)
+            : databaseDirectory ?? Path.Combine(contentRootPath, ".data");
+        var paths = new DataPaths(dataRoot);
+        Directory.CreateDirectory(paths.Keys);
+        services.AddSingleton(paths);
 
         services.AddDbContextPool<InklayerDbContext>(options => options
             .UseSqlite(connectionString)
-            .AddInterceptors(SqlitePragmaInterceptor.Instance));
+            .AddInterceptors(SqlitePragmaInterceptor.Instance)
+            .UseOpenIddict());
 
         services.AddOptions<DatabaseOptions>().Bind(configuration.GetSection(DatabaseOptions.SectionName));
         services.AddHostedService<MigrationHostedService>();
@@ -34,8 +42,9 @@ public static class DependencyInjection
         return services;
     }
 
-    private static string ResolveDatabasePath(string connectionString, string contentRootPath)
+    private static string ResolveDatabasePath(string connectionString, string contentRootPath, out string? databaseDirectory)
     {
+        databaseDirectory = null;
         var builder = new SqliteConnectionStringBuilder(connectionString);
         if (string.IsNullOrEmpty(builder.DataSource) || builder.DataSource == ":memory:" || builder.Mode == SqliteOpenMode.Memory)
         {
@@ -43,7 +52,8 @@ public static class DependencyInjection
         }
 
         builder.DataSource = Path.GetFullPath(builder.DataSource, contentRootPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(builder.DataSource)!);
+        databaseDirectory = Path.GetDirectoryName(builder.DataSource)!;
+        Directory.CreateDirectory(databaseDirectory);
         return builder.ToString();
     }
 }

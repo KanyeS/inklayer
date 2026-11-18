@@ -1,0 +1,203 @@
+using System.Threading.RateLimiting;
+using Inklayer.Api.Access;
+using Inklayer.Api.Auditing;
+using Inklayer.Infrastructure;
+using Inklayer.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.IdentityModel.Tokens;
+using OpenIddict.Server;
+using OpenIddict.Validation.AspNetCore;
+using static OpenIddict.Abstractions.OpenIddictConstants;
+
+namespace Inklayer.Api.Auth;
+
+internal static class AuthenticationSetup
+{
+    public const string AuthRateLimitPolicy = "auth";
+
+    public static IServiceCollection AddInklayerAuth(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    {
+        var authSection = configuration.GetSection(InklayerAuthOptions.SectionName);
+        services.AddOptions<InklayerAuthOptions>().Bind(authSection);
+        var authOptions = authSection.Get<InklayerAuthOptions>() ?? new InklayerAuthOptions();
+        var allowInsecureHttp = authOptions.AllowInsecureHttp || environment.IsDevelopment();
+
+        services.AddHttpContextAccessor();
+        services.AddMemoryCache();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<SessionGuard>();
+        services.AddScoped<CurrentUser>();
+        services.AddScoped<AccessService>();
+        services.AddScoped<AuditLog>();
+        services.AddScoped<SignInService>();
+
+        // Data Protection protects the session cookie and OAuth correlation cookies. Keys are stored on the data volume.
+        services.AddDataProtection().SetApplicationName("inklayer");
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<DataPaths, ILoggerFactory>((o, paths, loggers) =>
+                o.XmlRepository = new FileSystemXmlRepository(new DirectoryInfo(Path.Combine(paths.Keys, "dataprotection")), loggers));
+
+        var authentication = services
+            .AddAuthentication(o =>
+            {
+                o.DefaultScheme = AuthSchemes.Default;
+                o.DefaultChallengeScheme = AuthSchemes.Default;
+            })
+            .AddPolicyScheme(AuthSchemes.Default, displayName: null, o => o.ForwardDefaultSelector = context =>
+                context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme
+                    : AuthSchemes.Cookie)
+            .AddCookie(AuthSchemes.Cookie, o =>
+            {
+                o.Cookie.Name = "inklayer.session";
+                o.Cookie.Path = "/";
+                o.Cookie.HttpOnly = true;
+                o.Cookie.SameSite = SameSiteMode.Lax;
+                o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                o.ExpireTimeSpan = TimeSpan.FromDays(14);
+                o.SlidingExpiration = true;
+                o.LoginPath = "/auth/login";
+                o.ReturnUrlParameter = "returnUrl";
+                o.AccessDeniedPath = "/auth/denied";
+                o.Events = new CookieAuthenticationEvents
+                {
+                    OnValidatePrincipal = SessionGuard.ValidatePrincipalAsync,
+                    // APIs answer with status codes; only browser navigation is redirected to sign-in.
+                    OnRedirectToLogin = ctx => RedirectOrStatus(ctx, StatusCodes.Status401Unauthorized),
+                    OnRedirectToAccessDenied = ctx => RedirectOrStatus(ctx, StatusCodes.Status403Forbidden),
+                };
+            });
+
+        if (authOptions.Google.IsConfigured)
+        {
+            authentication.AddOpenIdConnect(AuthSchemes.Google, "Google", o =>
+            {
+                o.Authority = "https://accounts.google.com";
+                o.ClientId = authOptions.Google.ClientId;
+                o.ClientSecret = authOptions.Google.ClientSecret;
+                o.ResponseType = "code";
+                o.UsePkce = true;
+                o.CallbackPath = "/auth/callback/google";
+                o.SignInScheme = AuthSchemes.Cookie;
+                o.Scope.Clear();
+                o.Scope.Add("openid");
+                o.Scope.Add("email");
+                o.Scope.Add("profile");
+                o.MapInboundClaims = false;
+                o.SaveTokens = false;
+                o.GetClaimsFromUserInfoEndpoint = false;
+                o.Events = new OpenIdConnectEvents
+                {
+                    OnRedirectToIdentityProvider = ctx =>
+                    {
+                        ctx.ProtocolMessage.Prompt = "select_account";
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = OnGoogleTokenValidatedAsync,
+                    OnRemoteFailure = ctx =>
+                    {
+                        ctx.HandleResponse();
+                        ctx.Response.Redirect("/auth/denied?reason=GoogleError");
+                        return Task.CompletedTask;
+                    },
+                };
+            });
+        }
+
+        services.AddAuthorization();
+
+        services.AddOpenIddict()
+            .AddCore(o => o.UseEntityFrameworkCore().UseDbContext<InklayerDbContext>())
+            .AddServer(o =>
+            {
+                o.SetAuthorizationEndpointUris("connect/authorize")
+                    .SetTokenEndpointUris("connect/token");
+                o.AllowAuthorizationCodeFlow().AllowRefreshTokenFlow();
+                o.RequireProofKeyForCodeExchange();
+                o.RegisterScopes(Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
+                o.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
+                o.SetRefreshTokenLifetime(TimeSpan.FromDays(30));
+
+                var aspNetCore = o.UseAspNetCore()
+                    .EnableAuthorizationEndpointPassthrough()
+                    .EnableTokenEndpointPassthrough();
+                if (allowInsecureHttp)
+                {
+                    aspNetCore.DisableTransportSecurityRequirement();
+                }
+            })
+            .AddValidation(o =>
+            {
+                o.UseLocalServer();
+                o.UseAspNetCore();
+                // Look up each token in the database, so revoking it (disable user, "sign out everywhere") takes effect immediately.
+                o.EnableTokenEntryValidation();
+                o.EnableAuthorizationEntryValidation();
+            });
+
+        // Signing and encryption keys are persisted on the data volume (see ServerKeys).
+        services.AddOptions<OpenIddictServerOptions>().Configure<DataPaths>((o, paths) =>
+        {
+            o.SigningCredentials.Add(new SigningCredentials(ServerKeys.LoadOrCreate(paths, "token-signing"), SecurityAlgorithms.RsaSha256));
+            o.EncryptionCredentials.Add(new EncryptingCredentials(
+                ServerKeys.LoadOrCreate(paths, "token-encryption"), SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512));
+        });
+
+        services.AddHostedService<ExtensionClientSeeder>();
+        services.AddHostedService<TokenPruningService>();
+
+        services.AddRateLimiter(o =>
+        {
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.AddPolicy(AuthRateLimitPolicy, context => RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = authOptions.AuthRequestsPerMinute, Window = TimeSpan.FromMinutes(1) }));
+        });
+
+        return services;
+    }
+
+    public static WebApplication UseInklayerAuth(this WebApplication app)
+    {
+        app.UseRateLimiter();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseMiddleware<CsrfMiddleware>();
+        return app;
+    }
+
+    private static async Task OnGoogleTokenValidatedAsync(TokenValidatedContext context)
+    {
+        var identity = GoogleIdentity.FromPrincipal(context.Principal!);
+        var signIn = context.HttpContext.RequestServices.GetRequiredService<SignInService>();
+        var decision = await signIn.SignInAsync(identity, context.HttpContext.RequestAborted);
+
+        if (!decision.IsAllowed)
+        {
+            context.HandleResponse();
+            context.Response.Redirect($"/auth/denied?reason={decision.DenialReason}");
+            return;
+        }
+
+        // Replace Google's claims with Inklayer's own; only Inklayer's user id, email, name and security stamp go into the cookie.
+        context.Principal = PrincipalFactory.CreateCookiePrincipal(decision.User!);
+    }
+
+    private static Task RedirectOrStatus(Microsoft.AspNetCore.Authentication.RedirectContext<CookieAuthenticationOptions> context, int statusCode)
+    {
+        if (context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = statusCode;
+        }
+        else
+        {
+            context.Response.Redirect(context.RedirectUri);
+        }
+
+        return Task.CompletedTask;
+    }
+}
