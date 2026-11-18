@@ -50,8 +50,15 @@ services:
       # Hard heap cap (192 MB) keeps the server within the instance's memory.
       DOTNET_GCHeapHardLimit: "0xC000000"
       ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
-      Inklayer__Auth__Google__ClientId: ${GOOGLE_CLIENT_ID:?set GOOGLE_CLIENT_ID in .env}
-      Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET in .env}
+      Inklayer__Auth__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      Inklayer__Auth__Oidc__0__Id: ${OIDC_ID:-}
+      Inklayer__Auth__Oidc__0__DisplayName: ${OIDC_DISPLAY_NAME:-}
+      Inklayer__Auth__Oidc__0__Authority: ${OIDC_AUTHORITY:-}
+      Inklayer__Auth__Oidc__0__ClientId: ${OIDC_CLIENT_ID:-}
+      Inklayer__Auth__Oidc__0__ClientSecret: ${OIDC_CLIENT_SECRET:-}
+      Inklayer__Auth__Oidc__0__Scopes: ${OIDC_SCOPES:-openid email profile}
+      Inklayer__Auth__Oidc__0__VerifiedDomains: ${OIDC_VERIFIED_DOMAINS:-}
       Inklayer__Auth__BootstrapAdmins: ${INKLAYER_BOOTSTRAP_ADMINS:?set INKLAYER_BOOTSTRAP_ADMINS in .env}
       Inklayer__Auth__ExtensionRedirectUris: ${INKLAYER_EXTENSION_REDIRECT_URIS:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}

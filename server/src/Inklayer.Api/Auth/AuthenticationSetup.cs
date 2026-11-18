@@ -3,6 +3,7 @@ using Inklayer.Api.Access;
 using Inklayer.Api.Auditing;
 using Inklayer.Infrastructure;
 using Inklayer.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
@@ -15,7 +16,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Inklayer.Api.Auth;
 
-internal static class AuthenticationSetup
+internal static partial class AuthenticationSetup
 {
     public const string AuthRateLimitPolicy = "auth";
 
@@ -25,6 +26,7 @@ internal static class AuthenticationSetup
         services.AddOptions<InklayerAuthOptions>().Bind(authSection);
         var authOptions = authSection.Get<InklayerAuthOptions>() ?? new InklayerAuthOptions();
         var allowInsecureHttp = authOptions.AllowInsecureHttp || environment.IsDevelopment();
+        authOptions.Validate(allowInsecureHttp);
 
         services.AddHttpContextAccessor();
         services.AddMemoryCache();
@@ -89,7 +91,7 @@ internal static class AuthenticationSetup
                 o.Scope.Add("profile");
                 o.MapInboundClaims = false;
                 o.SaveTokens = false;
-                o.GetClaimsFromUserInfoEndpoint = false;
+                o.GetClaimsFromUserInfoEndpoint = true;
                 o.Events = new OpenIdConnectEvents
                 {
                     OnRedirectToIdentityProvider = ctx =>
@@ -97,13 +99,43 @@ internal static class AuthenticationSetup
                         ctx.ProtocolMessage.Prompt = "select_account";
                         return Task.CompletedTask;
                     },
-                    OnTokenValidated = OnGoogleTokenValidatedAsync,
-                    OnRemoteFailure = ctx =>
-                    {
-                        ctx.HandleResponse();
-                        ctx.Response.Redirect("/auth/denied?reason=GoogleError");
-                        return Task.CompletedTask;
-                    },
+                    OnTicketReceived = ctx => CompleteSignInAsync(ctx, ExternalIdentity.FromGoogle(ctx.Principal!)),
+                    OnRemoteFailure = OnRemoteFailureAsync,
+                };
+            });
+        }
+
+        foreach (var provider in authOptions.Oidc.Where(o => o.IsConfigured))
+        {
+            authentication.AddOpenIdConnect(AuthSchemes.ForProvider(provider.Id), provider.DisplayNameOrId, o =>
+            {
+                o.Authority = provider.Authority;
+                o.ClientId = provider.ClientId;
+                o.ClientSecret = provider.ClientSecret.Length > 0 ? provider.ClientSecret : null;
+                o.ResponseType = "code";
+                o.UsePkce = true;
+                o.CallbackPath = $"/auth/callback/{provider.Id}";
+                o.SignInScheme = AuthSchemes.Cookie;
+                o.RequireHttpsMetadata = !allowInsecureHttp;
+                o.Scope.Clear();
+                o.Scope.Add("openid");
+                foreach (var scope in provider.Scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(s => s != "openid"))
+                {
+                    o.Scope.Add(scope);
+                }
+
+                o.MapInboundClaims = false;
+                o.SaveTokens = false;
+
+                // Some providers put email and name only in the userinfo response, not in the ID token.
+                o.GetClaimsFromUserInfoEndpoint = true;
+                o.ClaimActions.MapUniqueJsonKey("email_verified", "email_verified");
+                o.ClaimActions.MapUniqueJsonKey("picture", "picture");
+                o.Events = new OpenIdConnectEvents
+                {
+                    // Runs after the ID token and the userinfo response are both in.
+                    OnTicketReceived = ctx => CompleteSignInAsync(ctx, ExternalIdentity.FromOidc(ctx.Principal!, provider)),
+                    OnRemoteFailure = OnRemoteFailureAsync,
                 };
             });
         }
@@ -170,9 +202,9 @@ internal static class AuthenticationSetup
         return app;
     }
 
-    private static async Task OnGoogleTokenValidatedAsync(TokenValidatedContext context)
+    /// <summary>Runs the sign-in rules and replaces the provider's claims with Inklayer's own. Only Inklayer's user id, email, name and security stamp go into the cookie.</summary>
+    private static async Task CompleteSignInAsync(TicketReceivedContext context, ExternalIdentity identity)
     {
-        var identity = GoogleIdentity.FromPrincipal(context.Principal!);
         var signIn = context.HttpContext.RequestServices.GetRequiredService<SignInService>();
         var decision = await signIn.SignInAsync(identity, context.HttpContext.RequestAborted);
 
@@ -183,8 +215,15 @@ internal static class AuthenticationSetup
             return;
         }
 
-        // Replace Google's claims with Inklayer's own; only Inklayer's user id, email, name and security stamp go into the cookie.
         context.Principal = PrincipalFactory.CreateCookiePrincipal(decision.User!);
+    }
+
+    private static Task OnRemoteFailureAsync(RemoteFailureContext context)
+    {
+        LogRemoteFailure(context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(AuthenticationSetup)), context.Scheme.Name, context.Failure);
+        context.HandleResponse();
+        context.Response.Redirect("/auth/denied?reason=ProviderError");
+        return Task.CompletedTask;
     }
 
     private static Task RedirectOrStatus(Microsoft.AspNetCore.Authentication.RedirectContext<CookieAuthenticationOptions> context, int statusCode)
@@ -200,4 +239,7 @@ internal static class AuthenticationSetup
 
         return Task.CompletedTask;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sign-in with {Scheme} failed")]
+    private static partial void LogRemoteFailure(ILogger logger, string scheme, Exception? exception);
 }

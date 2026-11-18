@@ -2,7 +2,7 @@
 
 Open-source, self-hosted web page annotation for UX designers, developers and QA.
 
-Comment on any web page, right on the page, with the browser extension (Chrome or Firefox): pin comments, highlight text or draw, attached to specific elements or freehand. Everyone in the project who has the extension sees them on the page. Every change is kept with a full history and timestamps. Access is controlled by roles, and sign-in uses Google SSO.
+Comment on any web page, right on the page, with the browser extension (Chrome or Firefox): pin comments, highlight text or draw, attached to specific elements or freehand. Everyone in the project who has the extension sees them on the page. Every change is kept with a full history and timestamps. Access is controlled by roles, and sign-in uses Google or your own SSO provider (JumpCloud, Okta, Entra ID or any OpenID Connect provider).
 
 > **Status:** early development. Nothing is usable yet. See [docs/PLAN.md](docs/PLAN.md) for the design and roadmap.
 
@@ -52,13 +52,16 @@ dotnet user-secrets set "Inklayer:Auth:Google:ClientSecret" "<client secret>"
 dotnet user-secrets set "Inklayer:Auth:BootstrapAdmins" "you@gmail.com"
 ```
 
+To use another OpenID Connect provider instead of, or as well as, Google, see [docs/sso-oidc.md](docs/sso-oidc.md).
+
 Then open <http://localhost:5048/auth/login>.
 
 | Endpoint | Purpose |
 |---|---|
 | `/health/live`, `/health/ready` | Liveness and readiness |
 | `/openapi/v1.json` | OpenAPI document listing every endpoint |
-| `/auth/login`, `/auth/logout` | Browser sign-in with Google and sign-out |
+| `/auth/login`, `/auth/logout` | Browser sign-in (`?provider=<id>` picks a provider) and sign-out |
+| `/auth/providers` | The sign-in providers configured on the server |
 | `/connect/authorize`, `/connect/token` | OAuth 2.0 + PKCE for the browser extension |
 | `/api/me` | Current user and their organisations |
 | `/api/orgs/...`, `/api/projects/...` | Organisations, members, invitations, projects, per-project roles, audit log |
@@ -83,7 +86,7 @@ To install it:
    - **Firefox** (128 or later): open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and choose `client/apps/extension/dist-firefox/manifest.json`. Temporary add-ons are removed when Firefox closes; a permanent install needs the add-on signed by addons.mozilla.org.
 2. **Connect it.** Open the extension popup, enter your server address, and grant site access. Site access is how it reaches your server and shows comments on the pages you visit.
 3. **Allow its sign-in address.** The popup shows the extension's sign-in address: `https://<extension-id>.chromiumapp.org/` in Chrome, `https://<hash>.extensions.allizom.org/` in Firefox. Add it to the server's `Inklayer:Auth:ExtensionRedirectUris` (`INKLAYER_EXTENSION_REDIRECT_URIS` in Docker). To use both browsers, list both addresses, separated by a comma.
-4. **Sign in** with Google.
+4. **Sign in.**
 
 ### Commenting
 
@@ -116,11 +119,11 @@ People with the extension can see and add comments **directly on any website**.
 **On the page:** the overlay and panel live in closed shadow roots, so the page's CSS and scripts can't restyle or read them. The page never sees an access token: the extension's background worker makes every API call, checked against the page's real origin.
 
 ### How sign-in and access work
-- **Google only.** Inklayer stores no passwords.
+- **Single sign-on only.** People sign in with Google or an OpenID Connect provider such as JumpCloud ([setup](docs/sso-oidc.md)). Inklayer stores no passwords.
 - **Who can get in:**
   - instance administrators listed in `Inklayer:Auth:BootstrapAdmins`;
-  - people with an invitation for their verified Google email;
-  - Google Workspace users whose domain an organisation has allowed. They join automatically with that organisation's default role.
+  - people with an invitation for their verified email;
+  - Google Workspace users, or users of an SSO provider [verified for their domain](docs/sso-oidc.md#verified-domains), whose domain an organisation has allowed. They join automatically with that organisation's default role.
 - **Roles:** Viewer < Commenter < Editor < Admin < Owner. Viewers only see comments; Commenters and Editors can add them (Editor is kept for compatibility and currently grants the same as Commenter). A project can raise or lower a Viewer, Commenter or Editor; Admins and Owners keep their role everywhere.
 - **Clients:**
   - **The web viewer** uses an HttpOnly session cookie. State-changing requests must send the `X-Inklayer-Csrf` header.

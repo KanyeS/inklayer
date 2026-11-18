@@ -43,7 +43,7 @@ The key can only read and write that one bucket. If the server is ever compromis
 
 ## 2. Create the Google sign-in client
 
-Inklayer never stores passwords; everyone signs in with Google.
+Inklayer never stores passwords; everyone signs in through single sign-on. This step sets up Google. To use JumpCloud, Okta, Entra ID or another OpenID Connect provider instead of (or as well as) Google, follow [sso-oidc.md](sso-oidc.md) and set the `OIDC_*` values in step 5.
 
 1. **Create or choose a project** in [Google Cloud Console](https://console.cloud.google.com/).
 2. **Set up the consent screen.** Go to APIs & Services → OAuth consent screen (Google Auth Platform → Branding/Audience):
@@ -105,8 +105,9 @@ nano .env
 | `AWS_REGION` | `us-east-1` |
 | `LITESTREAM_AUTH` | `keys` (default), or `instance` for [keyless backups](#keyless-backups-optional) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | from step 1 (leave empty with `LITESTREAM_AUTH=instance`) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from step 2 |
-| `INKLAYER_BOOTSTRAP_ADMINS` | your Google email address. It becomes an instance administrator on first sign-in. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from step 2 (leave empty if you only use an OIDC provider) |
+| `OIDC_*` | optional: your OIDC provider, see [sso-oidc.md](sso-oidc.md) |
+| `INKLAYER_BOOTSTRAP_ADMINS` | the email address you sign in with. It becomes an instance administrator on first sign-in. |
 | `INKLAYER_EXTENSION_REDIRECT_URIS` | leave empty until the browser extension is installed |
 
 Then start the stack:
@@ -176,7 +177,7 @@ docker compose up -d
 > Never copy `inklayer.db` with `cp` while the server is running; the copy can be inconsistent. Use Litestream, or `sqlite3 inklayer.db "VACUUM INTO 'copy.db'"`.
 
 ### Locked out?
-If no instance administrator can sign in, add a working Google email to `INKLAYER_BOOTSTRAP_ADMINS` in `.env` and run `docker compose up -d`. That account becomes an administrator on its next sign-in.
+If no instance administrator can sign in, add an email address that can sign in to `INKLAYER_BOOTSTRAP_ADMINS` in `.env` and run `docker compose up -d`. That account becomes an administrator on its next sign-in.
 
 ### Keys
 `/data/keys` holds the token-signing keys and the cookie-protection keys. They are created on first start, and they aren't stored in the S3 backup. If they're lost, everyone simply signs in again; no data is lost.

@@ -15,8 +15,8 @@ export function redirectUri(): string {
 }
 
 /**
- * Signs in with OAuth 2.0 authorization code + PKCE against the Inklayer server. The server sends the user to Google
- * if they don't have a session yet. Must run in the background worker: the popup closes when the sign-in window opens.
+ * Signs in with OAuth 2.0 authorization code + PKCE against the Inklayer server. The server sends the user to their sign-on
+ * provider (Google, or the organisation's SSO) if they don't have a session yet. Must run in the background worker: the popup closes when the sign-in window opens.
  */
 export async function signIn(serverUrl: string): Promise<void> {
   const verifier = randomBase64Url(32);

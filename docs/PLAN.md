@@ -132,6 +132,7 @@ The server never sees, stores or resets a password. Google handles sign-in, 2FA,
 
 - **Sign-in to Google:** `Microsoft.AspNetCore.Authentication.OpenIdConnect`, pointed at Google (`https://accounts.google.com`). Request only the `openid email profile` scopes. These count as non-sensitive, so Google's consent-screen verification is light.
 - **Local user record:** only Google's `sub` (unique user ID), email, name and avatar. No password hash, and no ASP.NET Core Identity password features.
+- **Other SSO providers:** any OpenID Connect provider (JumpCloud, Okta, Entra ID, ...) can be configured as well, through the same handler. Logins are stored as `(provider, sub)` pairs, so one user can sign in with more than one provider. Since most providers don't send `email_verified`, each is configured with the email domains it is the authority for; those domains then behave like Google's `hd` claim. See [sso-oidc.md](sso-oidc.md).
 - **Who gets in:**
   - Admins can restrict sign-in to their Google Workspace domain(s) using the `hd` claim.
   - Anyone else needs an invite, matched on verified email (`email_verified=true`).

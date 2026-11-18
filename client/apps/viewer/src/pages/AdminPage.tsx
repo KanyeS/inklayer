@@ -41,7 +41,7 @@ export function AdminPage() {
       <h2>New organisation</h2>
       <form className="stack narrow" onSubmit={create}>
         <label>Name<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} /></label>
-        <label>Google Workspace domains that join automatically (optional)<input value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="acme.com" /></label>
+        <label>Email domains that join automatically (optional; Google Workspace, or a domain your SSO provider is verified for)<input value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="acme.com" /></label>
         <div><button className="primary" type="submit">Create organisation</button></div>
       </form>
       <ErrorText error={error ?? users.error} />

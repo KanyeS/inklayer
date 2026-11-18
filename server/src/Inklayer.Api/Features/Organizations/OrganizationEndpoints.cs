@@ -17,7 +17,7 @@ internal static class OrganizationEndpoints
 
         orgs.MapPost("/", CreateAsync).WithSummary("Create an organisation (instance administrators only); the creator becomes Owner");
         orgs.MapGet("/{orgId:guid}", GetAsync).WithName("GetOrganization");
-        orgs.MapPatch("/{orgId:guid}", UpdateAsync).WithSummary("Rename, set the default role, or replace the allowed Google Workspace domains");
+        orgs.MapPatch("/{orgId:guid}", UpdateAsync).WithSummary("Rename, set the default role, or replace the allowed email domains");
 
         orgs.MapGet("/{orgId:guid}/members", ListMembersAsync);
         orgs.MapPut("/{orgId:guid}/members/{userId:guid}", SetMemberRoleAsync);
@@ -25,7 +25,7 @@ internal static class OrganizationEndpoints
 
         orgs.MapGet("/{orgId:guid}/invitations", ListInvitationsAsync);
         orgs.MapPost("/{orgId:guid}/invitations", InviteAsync)
-            .WithSummary("Allow an email address to join. They are added when they next sign in with Google using that verified address.");
+            .WithSummary("Allow an email address to join. They are added when they next sign in with that verified address.");
         orgs.MapDelete("/{orgId:guid}/invitations/{invitationId:guid}", RevokeInvitationAsync);
 
         orgs.MapGet("/{orgId:guid}/audit", ListAuditAsync).WithSummary("Audit log, newest first. Page with ?before=<occurredAt>.");

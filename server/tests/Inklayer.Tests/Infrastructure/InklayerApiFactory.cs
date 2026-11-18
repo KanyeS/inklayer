@@ -1,10 +1,12 @@
 using System.Net.Http.Json;
 using Inklayer.Api.Auth;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,10 +21,15 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
     public const string BootstrapAdminEmail = "admin@inklayer.test";
     public const string ExtensionRedirectUri = "https://extension-id.chromiumapp.org/";
     public const string TestLoginPath = "/test/login";
+    public const string OidcProviderId = "jumpcloud";
+    public const string OidcVerifiedDomain = "sso.test";
 
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "inklayer-tests", Guid.NewGuid().ToString("N"));
 
     public string DatabasePath => Path.Combine(_dataDirectory, "inklayer.db");
+
+    /// <summary>The identity provider behind <see cref="OidcProviderId"/>.</summary>
+    public FakeOidcProvider Oidc { get; } = new();
 
     public Task InitializeAsync() => Task.CompletedTask;
 
@@ -34,11 +41,25 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("Inklayer:Auth:ExtensionRedirectUris", ExtensionRedirectUri);
         builder.UseSetting("Inklayer:Auth:AllowInsecureHttp", "true");
         builder.UseSetting("Inklayer:Auth:AuthRequestsPerMinute", "100000");
+
+        // Two providers, so sign-in shows a chooser. Google's metadata is only fetched on a challenge, which tests don't follow.
+        builder.UseSetting("Inklayer:Auth:Google:ClientId", "google-client");
+        builder.UseSetting("Inklayer:Auth:Google:ClientSecret", "google-secret");
+        builder.UseSetting("Inklayer:Auth:Oidc:0:Id", OidcProviderId);
+        builder.UseSetting("Inklayer:Auth:Oidc:0:DisplayName", "JumpCloud");
+        builder.UseSetting("Inklayer:Auth:Oidc:0:Authority", FakeOidcProvider.Issuer);
+        builder.UseSetting("Inklayer:Auth:Oidc:0:ClientId", FakeOidcProvider.ClientId);
+        builder.UseSetting("Inklayer:Auth:Oidc:0:ClientSecret", "oidc-secret");
+        builder.UseSetting("Inklayer:Auth:Oidc:0:VerifiedDomains", OidcVerifiedDomain);
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestLoginStartupFilter>());
+
+        // Configure runs before the handler's post-configuration, which builds the backchannel client from this handler.
+        builder.ConfigureTestServices(services => services.Configure<OpenIdConnectOptions>(
+            AuthSchemes.ForProvider(OidcProviderId), o => o.BackchannelHttpHandler = Oidc));
     }
 
     /// <summary>A client with its own cookie jar, signed in as <paramref name="identity"/> through the real sign-in rules.</summary>
-    public async Task<HttpClient> SignInAsync(GoogleIdentity identity)
+    public async Task<HttpClient> SignInAsync(ExternalIdentity identity)
     {
         var client = CreateBrowserClient();
         var response = await client.PostAsJsonAsync(TestLoginPath, identity);
@@ -51,16 +72,22 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
     }
 
     /// <summary>Runs the sign-in rules without throwing. Returns the denial reason, or null if allowed.</summary>
-    public async Task<string?> TrySignInAsync(GoogleIdentity identity)
+    public async Task<string?> TrySignInAsync(ExternalIdentity identity)
     {
         using var client = CreateBrowserClient();
         var response = await client.PostAsJsonAsync(TestLoginPath, identity);
         return response.IsSuccessStatusCode ? null : await response.Content.ReadAsStringAsync();
     }
 
-    public HttpClient CreateBrowserClient()
+    /// <param name="https">Use https, so Secure cookies (such as the OIDC correlation cookie) are sent back.</param>
+    public HttpClient CreateBrowserClient(bool https = false)
     {
-        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        var client = CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true,
+            BaseAddress = new Uri(https ? "https://localhost" : "http://localhost"),
+        });
         client.DefaultRequestHeaders.Add(CsrfHeader.Name, "1");
         return client;
     }
@@ -71,6 +98,7 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
     async Task IAsyncLifetime.DisposeAsync()
     {
         await base.DisposeAsync();
+        Oidc.Dispose();
         SqliteConnection.ClearAllPools();
         if (Directory.Exists(_dataDirectory))
         {
@@ -78,14 +106,14 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         }
     }
 
-    /// <summary>Test-only replacement for the Google callback: runs <see cref="SignInService"/> and issues the real session cookie.</summary>
+    /// <summary>Test-only replacement for the providers' callbacks: runs <see cref="SignInService"/> and issues the real session cookie.</summary>
     private sealed class TestLoginStartupFilter : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {
             app.Map(TestLoginPath, login => login.Run(async context =>
             {
-                var identity = await context.Request.ReadFromJsonAsync<GoogleIdentity>();
+                var identity = await context.Request.ReadFromJsonAsync<ExternalIdentity>();
                 var decision = await context.RequestServices.GetRequiredService<SignInService>().SignInAsync(identity!, context.RequestAborted);
                 if (!decision.IsAllowed)
                 {

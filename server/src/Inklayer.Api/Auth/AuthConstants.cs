@@ -8,6 +8,9 @@ internal static class AuthSchemes
     public const string Cookie = "inklayer.cookie";
 
     public const string Google = "google";
+
+    /// <summary>The authentication scheme for a sign-in provider id. Generic OIDC providers are prefixed so their ids can't clash with Inklayer's own schemes.</summary>
+    public static string ForProvider(string providerId) => providerId == Google ? Google : "oidc." + providerId;
 }
 
 internal static class InklayerClaims

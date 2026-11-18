@@ -8,7 +8,7 @@ public sealed class Organization
 
     public required string Name { get; set; }
 
-    /// <summary>The role given to people who join automatically through an allowed Google Workspace domain.</summary>
+    /// <summary>The role given to people who join automatically through an allowed domain.</summary>
     public Role DefaultRole { get; set; } = Role.Viewer;
 
     public DateTime CreatedAt { get; init; }
@@ -19,7 +19,8 @@ public sealed class Organization
 }
 
 /// <summary>
-/// A Google Workspace domain (the <c>hd</c> claim) whose users join this organisation automatically on first sign-in.
+/// A domain whose users join this organisation automatically on first sign-in: a Google Workspace domain (the <c>hd</c> claim),
+/// or a domain an OIDC provider is configured as the authority for (its <c>VerifiedDomains</c>).
 /// Each domain belongs to at most one organisation on an instance.
 /// </summary>
 public sealed class OrganizationDomain

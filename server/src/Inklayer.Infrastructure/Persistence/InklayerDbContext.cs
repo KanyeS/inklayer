@@ -17,6 +17,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 {
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<UserLogin> UserLogins => Set<UserLogin>();
+
     public DbSet<Organization> Organizations => Set<Organization>();
 
     public DbSet<OrganizationDomain> OrganizationDomains => Set<OrganizationDomain>();

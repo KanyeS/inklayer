@@ -355,11 +355,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("GoogleSubject")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("IsDisabled")
                         .HasColumnType("INTEGER");
 
@@ -379,10 +374,31 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasIndex("Email")
                         .IsUnique();
 
-                    b.HasIndex("GoogleSubject")
+                    b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Users.UserLogin", b =>
+                {
+                    b.Property<string>("Provider")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Provider", "Subject");
+
+                    b.HasIndex("UserId", "Provider")
                         .IsUnique();
 
-                    b.ToTable("Users");
+                    b.ToTable("UserLogins");
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", b =>
@@ -676,6 +692,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Users.UserLogin", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Users.User", null)
+                        .WithMany("Logins")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization", b =>
                 {
                     b.HasOne("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", "Application")
@@ -710,6 +735,11 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inklayer.Domain.Projects.Project", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Users.User", b =>
+                {
+                    b.Navigation("Logins");
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", b =>

@@ -58,7 +58,7 @@ function renderSetup(state: StateResponse, error?: string): void {
 }
 
 function renderSignIn(state: StateResponse, error?: string): void {
-  const button = h("button", { className: "primary", textContent: "Sign in with Google" });
+  const button = h("button", { className: "primary", textContent: "Sign in" });
   const message = h("p", { className: "error", textContent: error ?? "" });
   button.onclick = async () => {
     button.disabled = true;

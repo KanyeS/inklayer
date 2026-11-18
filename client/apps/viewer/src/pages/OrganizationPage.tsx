@@ -95,7 +95,7 @@ function Members({ org }: { org: Organization }) {
           <input type="email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
           <select value={role} onChange={(e) => setRole(e.target.value as Role)}>{assignable.map((r) => <option key={r}>{r}</option>)}</select>
           <button className="primary" type="submit">Invite</button>
-          <span className="muted small">They join when they next sign in with Google using this address.</span>
+          <span className="muted small">They join when they next sign in with this address.</span>
         </form>
       )}
       <table className="table">
@@ -166,7 +166,7 @@ function Settings({ org, onSaved }: { org: Organization; onSaved: () => Promise<
     <form className="stack narrow" onSubmit={submit}>
       <label>Name<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} /></label>
       <label>
-        Google Workspace domains that join automatically
+        Email domains that join automatically (Google Workspace, or a domain your SSO provider is verified for)
         <input value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="acme.com, acme.co.uk" />
       </label>
       <label>

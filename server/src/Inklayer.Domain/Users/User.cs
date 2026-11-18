@@ -1,15 +1,12 @@
 namespace Inklayer.Domain.Users;
 
 /// <summary>
-/// A person who signed in with Google. Inklayer stores no password or credential; only the Google subject
-/// identifier links the record to a Google account.
+/// A person who signs in through a single sign-on provider (Google, or an OpenID Connect provider such as JumpCloud or Okta).
+/// Inklayer stores no password or credential; <see cref="Logins"/> link the record to provider accounts.
 /// </summary>
 public sealed class User
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
-
-    /// <summary>Google's stable, unique account identifier (the <c>sub</c> claim).</summary>
-    public required string GoogleSubject { get; init; }
 
     /// <summary>Lower-cased, verified email address.</summary>
     public required string Email { get; set; }
@@ -30,7 +27,23 @@ public sealed class User
 
     public DateTime LastSignInAt { get; set; }
 
+    public List<UserLogin> Logins { get; init; } = [];
+
     public void RotateSecurityStamp() => SecurityStamp = NewStamp();
 
     private static string NewStamp() => Guid.NewGuid().ToString("N");
+}
+
+/// <summary>An account at a sign-on provider that signs in as a <see cref="User"/>. A user can have one per provider.</summary>
+public sealed class UserLogin
+{
+    public required Guid UserId { get; init; }
+
+    /// <summary>The configured provider id, e.g. <c>google</c> or <c>jumpcloud</c>.</summary>
+    public required string Provider { get; init; }
+
+    /// <summary>The provider's stable, unique account identifier (the <c>sub</c> claim).</summary>
+    public required string Subject { get; init; }
+
+    public DateTime CreatedAt { get; init; }
 }

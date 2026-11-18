@@ -20,6 +20,13 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       Inklayer__Auth__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
       Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      Inklayer__Auth__Oidc__0__Id: ${OIDC_ID:-}
+      Inklayer__Auth__Oidc__0__DisplayName: ${OIDC_DISPLAY_NAME:-}
+      Inklayer__Auth__Oidc__0__Authority: ${OIDC_AUTHORITY:-}
+      Inklayer__Auth__Oidc__0__ClientId: ${OIDC_CLIENT_ID:-}
+      Inklayer__Auth__Oidc__0__ClientSecret: ${OIDC_CLIENT_SECRET:-}
+      Inklayer__Auth__Oidc__0__Scopes: ${OIDC_SCOPES:-openid email profile}
+      Inklayer__Auth__Oidc__0__VerifiedDomains: ${OIDC_VERIFIED_DOMAINS:-}
       Inklayer__Auth__BootstrapAdmins: ${INKLAYER_BOOTSTRAP_ADMINS:-}
       Inklayer__Auth__ExtensionRedirectUris: ${INKLAYER_EXTENSION_REDIRECT_URIS:-}
       # Plain-HTTP local trial only. Remove when serving through HTTPS.

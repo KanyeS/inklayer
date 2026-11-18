@@ -18,12 +18,33 @@ internal static class AuthEndpoints
     {
         var auth = app.MapGroup("/auth").WithTags("Auth").RequireRateLimiting(AuthenticationSetup.AuthRateLimitPolicy);
 
-        // Browser navigation: starts Google sign-in, then returns to returnUrl (local paths only).
-        auth.MapGet("/login", (string? returnUrl, IOptions<InklayerAuthOptions> options) =>
-            options.Value.Google.IsConfigured
-                ? Results.Challenge(new AuthenticationProperties { RedirectUri = SafeReturnUrl(returnUrl) }, [AuthSchemes.Google])
-                : Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Google sign-in is not configured on this server."))
-            .ExcludeFromDescription();
+        // Browser navigation: starts sign-in with the chosen provider, then returns to returnUrl (local paths only).
+        // Without a provider, the only configured one is used, or a page lets the user choose.
+        auth.MapGet("/login", (string? provider, string? returnUrl, IOptions<InklayerAuthOptions> options) =>
+        {
+            var providers = options.Value.Providers;
+            var safeReturnUrl = SafeReturnUrl(returnUrl);
+            var chosen = provider is { Length: > 0 }
+                ? providers.FirstOrDefault(p => p.Id == provider)
+                : providers.Count == 1 ? providers[0] : null;
+
+            if (chosen is not null)
+            {
+                return Results.Challenge(new AuthenticationProperties { RedirectUri = safeReturnUrl }, [AuthSchemes.ForProvider(chosen.Id)]);
+            }
+
+            if (provider is { Length: > 0 })
+            {
+                return Results.NotFound();
+            }
+
+            return providers.Count == 0
+                ? Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "No sign-in provider is configured on this server.")
+                : Results.Content(ChooserPage(providers, safeReturnUrl), "text/html; charset=utf-8");
+        }).ExcludeFromDescription();
+
+        auth.MapGet("/providers", (IOptions<InklayerAuthOptions> options) => options.Value.Providers)
+            .WithSummary("The sign-in providers configured on this server");
 
         auth.MapPost("/logout", async (HttpContext context) =>
         {
@@ -42,8 +63,8 @@ internal static class AuthEndpoints
     }
 
     /// <summary>
-    /// OAuth authorization endpoint for the browser extension. If there's no session cookie yet, the user is sent to Google
-    /// sign-in and returned here. Consent is implicit because the extension is a first-party client.
+    /// OAuth authorization endpoint for the browser extension. If there's no session cookie yet, the user is sent to sign in
+    /// (choosing a provider if there are several) and returned here. Consent is implicit because the extension is a first-party client.
     /// </summary>
     private static async Task<IResult> AuthorizeAsync(HttpContext context, InklayerDbContext db)
     {
@@ -111,11 +132,11 @@ internal static class AuthEndpoints
     {
         var message = reason switch
         {
-            nameof(SignInDenialReason.NotInvited) => "Your Google account hasn't been invited to this Inklayer server. Ask an administrator to invite your email address.",
-            nameof(SignInDenialReason.EmailNotVerified) => "Your Google account's email address isn't verified.",
+            nameof(SignInDenialReason.NotInvited) => "Your account hasn't been invited to this Inklayer server. Ask an administrator to invite your email address.",
+            nameof(SignInDenialReason.EmailNotVerified) => "Your sign-in provider didn't confirm that your email address is verified.",
             nameof(SignInDenialReason.Disabled) => "Your account has been disabled by an administrator.",
-            nameof(SignInDenialReason.AccountConflict) => "This email address is already linked to a different Google account. Ask an administrator for help.",
-            "GoogleError" => "Google sign-in didn't complete. Please try again.",
+            nameof(SignInDenialReason.AccountConflict) => "This email address already belongs to an Inklayer account that signs in a different way. Sign in the way you did before, or ask an administrator for help.",
+            "ProviderError" => "Sign-in didn't complete. Please try again.",
             _ => "You don't have access to this page.",
         };
 
@@ -125,6 +146,20 @@ internal static class AuthEndpoints
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>body{"{"}font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.5{"}"}</style>
             </head><body><h1>Can't sign you in</h1><p>{WebUtility.HtmlEncode(message)}</p><p><a href="/auth/login">Try a different account</a></p></body></html>
+            """;
+    }
+
+    private static string ChooserPage(IEnumerable<SignInProvider> providers, string returnUrl)
+    {
+        var buttons = string.Concat(providers.Select(p =>
+            $"""<p><a class="button" href="/auth/login?provider={Uri.EscapeDataString(p.Id)}&amp;returnUrl={Uri.EscapeDataString(returnUrl)}">Sign in with {WebUtility.HtmlEncode(p.DisplayName)}</a></p>"""));
+
+        return $"""
+            <!DOCTYPE html>
+            <html lang="en"><head><meta charset="utf-8"><title>Inklayer: sign in</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>body{"{"}font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.5{"}"}.button{"{"}display:inline-block;min-width:16rem;padding:.6rem 1rem;border:1px solid #ccc;border-radius:6px;text-decoration:none;color:inherit{"}"}</style>
+            </head><body><h1>Sign in to Inklayer</h1>{buttons}</body></html>
             """;
     }
 }

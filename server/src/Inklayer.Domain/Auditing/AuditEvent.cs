@@ -29,6 +29,7 @@ public static class AuditActions
 {
     public const string SignInSucceeded = "auth.sign_in";
     public const string SignInDenied = "auth.sign_in_denied";
+    public const string LoginLinked = "auth.login_linked";
     public const string SessionsRevoked = "auth.sessions_revoked";
     public const string OrganizationCreated = "org.created";
     public const string OrganizationUpdated = "org.updated";

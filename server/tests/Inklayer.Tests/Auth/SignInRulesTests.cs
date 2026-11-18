@@ -7,7 +7,7 @@ namespace Inklayer.Tests.Auth;
 public sealed class SignInRulesTests(InklayerApiFactory factory)
 {
     [Fact]
-    public async Task Uninvited_google_account_is_refused()
+    public async Task Uninvited_account_is_refused()
     {
         Assert.Equal("NotInvited", await factory.TrySignInAsync(Identities.Consumer()));
     }
@@ -90,5 +90,89 @@ public sealed class SignInRulesTests(InklayerApiFactory factory)
         var impostor = Identities.Consumer(member.Email, subject: "different-google-account");
 
         Assert.Equal("AccountConflict", await factory.TrySignInAsync(impostor));
+    }
+
+    [Fact]
+    public async Task Sso_users_from_a_verified_domain_join_automatically_with_the_default_role()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var domain = $"acme{Guid.NewGuid():N}.test";
+        var org = await Scenario.CreateOrganizationAsync(admin, domains: [domain], defaultRole: "Editor");
+
+        using var client = await factory.SignInAsync(Identities.Oidc(Identities.UniqueEmail(domain: domain), verifiedDomain: domain));
+
+        var me = await GetMeAsync(client);
+        Assert.Contains(me.Organizations, o => o.Id == org.Id && o.Role == "Editor");
+    }
+
+    [Fact]
+    public async Task Sso_email_outside_the_verified_domains_needs_email_verified()
+    {
+        Assert.Equal("EmailNotVerified", await factory.TrySignInAsync(Identities.Oidc(InklayerApiFactory.BootstrapAdminEmail, emailVerified: false)));
+    }
+
+    [Fact]
+    public async Task Sso_without_a_verified_domain_does_not_join_by_email_domain()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var domain = $"acme{Guid.NewGuid():N}.test";
+        await Scenario.CreateOrganizationAsync(admin, domains: [domain]);
+
+        var identity = Identities.Oidc(Identities.UniqueEmail(domain: domain), emailVerified: true);
+
+        Assert.Equal("NotInvited", await factory.TrySignInAsync(identity));
+    }
+
+    [Fact]
+    public async Task Existing_google_user_is_linked_when_the_sso_provider_is_the_authority_for_their_domain()
+    {
+        var domain = $"acme{Guid.NewGuid():N}.test";
+        using var admin = await factory.SignInAsAdminAsync();
+        var org = await Scenario.CreateOrganizationAsync(admin);
+        var email = Identities.UniqueEmail(domain: domain);
+        await admin.PostJsonAsync($"/api/orgs/{org.Id}/invitations", new { email, role = "Viewer" }).ExpectAsync(HttpStatusCode.Created);
+        var googleSubject = Guid.NewGuid().ToString("N");
+        using var viaGoogle = await factory.SignInAsync(Identities.Consumer(email, subject: googleSubject));
+        var googleMe = await GetMeAsync(viaGoogle);
+
+        using var viaSso = await factory.SignInAsync(Identities.Oidc(email, verifiedDomain: domain));
+
+        Assert.Equal(googleMe.Id, (await GetMeAsync(viaSso)).Id);
+
+        // Both logins keep working.
+        using var googleAgain = await factory.SignInAsync(Identities.Consumer(email, subject: googleSubject));
+        Assert.Equal(googleMe.Id, (await GetMeAsync(googleAgain)).Id);
+    }
+
+    [Fact]
+    public async Task Existing_user_is_not_linked_when_the_sso_provider_only_asserts_the_email()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var org = await Scenario.CreateOrganizationAsync(admin);
+        var (_, member) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+
+        var identity = Identities.Oidc(member.Email, emailVerified: true);
+
+        Assert.Equal("AccountConflict", await factory.TrySignInAsync(identity));
+    }
+
+    [Fact]
+    public async Task A_second_account_at_the_same_provider_is_not_linked_even_from_a_verified_domain()
+    {
+        var domain = $"acme{Guid.NewGuid():N}.test";
+        using var admin = await factory.SignInAsAdminAsync();
+        await Scenario.CreateOrganizationAsync(admin, domains: [domain]);
+        var email = Identities.UniqueEmail(domain: domain);
+        using var first = await factory.SignInAsync(Identities.Oidc(email, verifiedDomain: domain));
+
+        var recreated = Identities.Oidc(email, subject: "recreated-account", verifiedDomain: domain);
+
+        Assert.Equal("AccountConflict", await factory.TrySignInAsync(recreated));
+    }
+
+    private static async Task<MeDto> GetMeAsync(HttpClient client)
+    {
+        using var response = await client.GetAsync(new Uri("/api/me", UriKind.Relative));
+        return await response.ReadAsync<MeDto>();
     }
 }

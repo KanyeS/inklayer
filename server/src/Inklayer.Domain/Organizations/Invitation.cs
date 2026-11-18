@@ -3,7 +3,7 @@ using Inklayer.Domain.Authorization;
 namespace Inklayer.Domain.Organizations;
 
 /// <summary>
-/// Lets one email address into an organisation. When someone signs in with Google and the verified email matches,
+/// Lets one email address into an organisation. When someone signs in and their verified email matches,
 /// the invitation is accepted and they become a member with <see cref="Role"/>.
 /// </summary>
 public sealed class Invitation
