@@ -11,11 +11,11 @@ public sealed record MemberDto(Guid UserId, string Email, string Role);
 
 public sealed record InvitationDto(Guid Id, string Email, string Role);
 
-public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string MyRole, List<string>? LiveSites = null, bool LiveMatchQuery = false, bool LiveMatchHash = false);
+public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string MyRole, bool LiveMatchQuery = false, bool LiveMatchHash = false);
 
-public sealed record LiveSiteDto(Guid ProjectId, string ProjectName, Guid OrganizationId, string Origin, bool MatchQuery, bool MatchHash, string MyRole);
+public sealed record LiveProjectDto(Guid Id, string Name, Guid OrganizationId, string MyRole, bool CanComment);
 
-public sealed record LivePageDto(string PageUrl, List<AnnotationDto> Annotations);
+public sealed record LivePageDto(Guid ProjectId, string PageUrl, List<AnnotationDto> Annotations);
 
 public sealed record LivePageSummaryDto(string PageUrl, int OpenCount, int ResolvedCount);
 

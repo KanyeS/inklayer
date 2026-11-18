@@ -5,29 +5,9 @@ namespace Inklayer.Tests.Domain;
 public sealed class LivePageUrlTests
 {
     [Theory]
-    [InlineData("app.example.com", "https://app.example.com")]
-    [InlineData("https://App.Example.COM/", "https://app.example.com")]
-    [InlineData("http://localhost:3000", "http://localhost:3000")]
-    [InlineData("https://example.com:443", "https://example.com")]
-    [InlineData("https://bücher.example", "https://xn--bcher-kva.example")]
-    public void Site_addresses_become_origins(string input, string expected)
-    {
-        Assert.True(LivePageUrl.TryNormalizeOrigin(input, out var origin));
-        Assert.Equal(expected, origin);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("https://example.com/app")]
-    [InlineData("https://example.com/?x=1")]
-    [InlineData("https://user:pw@example.com")]
-    [InlineData("ftp://example.com")]
-    [InlineData("javascript:alert(1)")]
-    public void Anything_but_a_plain_site_address_is_rejected(string input) =>
-        Assert.False(LivePageUrl.TryNormalizeOrigin(input, out _));
-
-    [Theory]
     [InlineData("https://Example.com/pricing/?utm_source=x#faq", false, false, "https://example.com/pricing")]
+    [InlineData("https://bücher.example/a", false, false, "https://xn--bcher-kva.example/a")]
+    [InlineData("http://localhost:3000/x", false, false, "http://localhost:3000/x")]
     [InlineData("https://example.com/", false, false, "https://example.com/")]
     [InlineData("https://example.com", false, false, "https://example.com/")]
     [InlineData("https://example.com/Pricing", false, false, "https://example.com/Pricing")]

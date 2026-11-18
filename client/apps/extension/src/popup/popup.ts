@@ -149,10 +149,33 @@ async function renderCapture(state: StateResponse): Promise<void> {
     if (changes.captureStatus?.newValue) showStatus(changes.captureStatus.newValue as CaptureStatus);
   });
 
-  const live = state.liveSites.length > 0
-    ? h("p", { className: "muted" }, "Live comments show on: ", ...state.liveSites.flatMap((origin, i) => [i ? ", " : "", h("code", { textContent: new URL(origin).host })]))
-    : h("p", { className: "muted", textContent: "No live sites yet. A project Admin can add them in the project's settings in Inklayer." });
-  render(h("label", {}, "Organisation", orgSelect), h("label", {}, "Project", projectSelect), captureButton, status, live, footer(state));
+  // Live comments: open the Inklayer panel on the page itself.
+  const liveError = h("p", { className: "error" });
+  const commentButton = h("button", { className: "primary", textContent: "Comment on this page", onclick: async () => {
+    if (!(await chrome.permissions.request(SITE_ACCESS))) {
+      liveError.textContent = "Site access is needed to show comments on pages.";
+      return;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    try {
+      await send({ type: "openLive", tabId: tab.id });
+      window.close();
+    } catch {
+      liveError.textContent = "Inklayer can't open on this page (browser pages and extension stores are off limits).";
+    }
+  } });
+
+  captureButton.className = "";
+  render(
+    commentButton,
+    h("p", { className: "muted", textContent: "Comments appear on the page for everyone in the project who has the extension." }),
+    liveError,
+    h("details", { open: state.status.state !== "idle" }, h("summary", { textContent: "Capture a snapshot instead" }),
+      h("p", { className: "muted", textContent: "A frozen copy of the page, to comment on in the Inklayer web app." }),
+      h("label", {}, "Organisation", orgSelect), h("label", {}, "Project", projectSelect), captureButton, status),
+    footer(state),
+  );
   await loadProjects();
 }
 

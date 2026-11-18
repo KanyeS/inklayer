@@ -1,13 +1,17 @@
 import {
   Overlay, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
-import type { LiveAnnotation, LiveInit, LivePage, LiveRequest } from "./lib/live";
+import type { LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
 import type { Response } from "./lib/messages";
 
+/** A comment on this page, and the project it belongs to. */
+type PageAnnotation = LiveAnnotation & { projectId: string };
+
 /**
- * Live mode on a real page. The background registers this script only for sites that one of the user's projects reviews live.
+ * Live mode on a real page. The script loads on every http(s) page but stays invisible unless the site has comments
+ * (the background checks only the origin) or the user chooses "Comment on this page" in the toolbar popup.
  * <ul>
- * <li>Draws the project's comments for this page with the shared overlay, re-anchored to the page's current DOM.</li>
+ * <li>Draws the comments for this page from all of the user's projects with the shared overlay, re-anchored to the page's current DOM.</li>
  * <li>Adds a small panel, in a closed shadow root, for the tools and the comment list.</li>
  * <li>All API calls go through the background worker, which checks them against this page's origin; the page never sees a token.</li>
  * </ul>
@@ -67,8 +71,10 @@ class LiveSession {
   readonly #root: HTMLDivElement;
   readonly #overlay: Overlay;
 
-  #project: LiveInit["projects"][number];
-  #annotations: LiveAnnotation[] = [];
+  readonly #projects: Map<string, LiveProject>;
+  /** Where new comments go: a project the user can comment in, or null if they can only view. */
+  #target: LiveProject | null;
+  #annotations: PageAnnotation[] = [];
   #quality: Record<string, AnchorQuality> = {};
   #draft: Draft | null = null;
   #draftInput: HTMLTextAreaElement | null = null;
@@ -87,7 +93,10 @@ class LiveSession {
 
   constructor(init: LiveInit) {
     this.#init = init;
-    this.#project = init.projects[0]!;
+    this.#projects = new Map(init.projects.map((p) => [p.id, p]));
+    const commentable = init.projects.filter((p) => p.canComment);
+    this.#target = commentable.find((p) => p.id === init.lastProjectId) ?? commentable[0] ?? null;
+    this.#setPages(init.pages);
 
     this.#host = document.createElement("inklayer-live");
     this.#host.setAttribute("style", "all:initial;position:fixed;right:16px;bottom:16px;z-index:2147483647;");
@@ -102,9 +111,16 @@ class LiveSession {
     document.documentElement.append(this.#host);
   }
 
-  async start(): Promise<void> {
+  /** Expands the panel, e.g. when the user picks "Comment on this page" in the toolbar. */
+  open(): void {
+    this.#open = true;
     this.#render();
-    await this.#load();
+  }
+
+  async start(open: boolean): Promise<void> {
+    this.#open = open;
+    this.#syncOverlay();
+    this.#render();
 
     // Single-page apps change the URL without reloading; some also replace parts of html.
     setInterval(() => {
@@ -134,8 +150,7 @@ class LiveSession {
 
   async #load(): Promise<void> {
     try {
-      const page = await call<LivePage>({ type: "live.list", projectId: this.#project.id, url: location.href });
-      this.#annotations = page.annotations;
+      this.#setPages(await call<LivePage[]>({ type: "live.list", url: location.href }));
       this.#error = "";
     } catch (e) {
       this.#error = (e as Error).message;
@@ -157,11 +172,21 @@ class LiveSession {
     await this.#load();
   }
 
+  #setPages(pages: LivePage[]): void {
+    this.#annotations = pages
+      .flatMap((page) => page.annotations.map((a) => ({ ...a, projectId: page.projectId })))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  #canCommentIn(projectId: string): boolean {
+    return this.#projects.get(projectId)?.canComment ?? false;
+  }
+
   #labelOf(id: string): number {
     return this.#annotations.findIndex((a) => a.id === id) + 1;
   }
 
-  #visible(): LiveAnnotation[] {
+  #visible(): PageAnnotation[] {
     return this.#annotations.filter((a) => this.#showResolved || a.status === "Open");
   }
 
@@ -227,10 +252,11 @@ class LiveSession {
   async #saveDraft(): Promise<void> {
     const draft = this.#draft;
     const body = this.#draftInput?.value.trim() ?? "";
-    if (!draft || this.#busy) return;
+    const target = this.#target;
+    if (!draft || !target || this.#busy) return;
     await this.#mutate(async () => {
       const created = await call<LiveAnnotation>({
-        type: "live.create", projectId: this.#project.id, url: location.href,
+        type: "live.create", projectId: target.id, url: location.href,
         kind: draft.kind, body, color: this.#color, anchor: draft.anchor, geometry: draft.geometry, viewportWidth: draft.viewportWidth,
       });
       this.#draft = null;
@@ -262,29 +288,26 @@ class LiveSession {
       return;
     }
 
-    const project = this.#init.projects.length > 1
-      ? (() => {
-        const select = h("select", { title: "Project", onchange: () => {
-          this.#project = this.#init.projects.find((p) => p.id === select.value) ?? this.#project;
-          this.#selected = null;
-          if (this.#draft) this.#cancelDraft();
-          if (!this.#project.canComment) this.#setTool("select");
-          void this.#load();
-        } });
-        for (const p of this.#init.projects) select.append(h("option", { value: p.id, textContent: `${p.organizationName} / ${p.name}`, selected: p.id === this.#project.id }));
-        return select;
-      })()
-      : h("span", { className: "project", textContent: this.#project.name, title: this.#project.organizationName });
-
     const header = h("div", { className: "header" },
-      h("strong", { textContent: "Inklayer" }), project,
+      h("strong", { className: "grow", textContent: "Inklayer" }),
       h("button", { className: "icon", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page", textContent: this.#marksVisible ? "Hide" : "Show",
         onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } }),
       h("button", { className: "icon", title: "Minimise", textContent: "–", onclick: () => { this.#open = false; this.#render(); } }));
 
     const parts: Node[] = [header];
 
-    if (this.#project.canComment) {
+    if (this.#target) {
+      const commentable = this.#init.projects.filter((p) => p.canComment);
+      if (commentable.length > 1) {
+        const select = h("select", { onchange: () => {
+          this.#target = this.#projects.get(select.value) ?? this.#target;
+          this.#render();
+        } });
+        for (const p of commentable) select.append(h("option", { value: p.id, textContent: `${p.organizationName} / ${p.name}`, selected: p.id === this.#target!.id }));
+        parts.push(h("label", { className: "target" }, "New comments go to", select));
+      } else {
+        parts.push(h("p", { className: "hint", textContent: `New comments go to ${this.#target.name}.` }));
+      }
       const tools = h("div", { className: "tools" });
       for (const t of TOOLS) {
         tools.append(h("button", { className: t.tool === this.#tool ? "tool active" : "tool", textContent: t.label, title: t.title, onclick: () => this.#setTool(t.tool) }));
@@ -300,7 +323,7 @@ class LiveSession {
         parts.push(h("p", { className: "hint", textContent: this.#tool === "highlight" ? "Select some text on the page." : this.#tool === "pin" || this.#tool === "element" ? "Click something on the page." : "Drag on the page." }));
       }
     } else {
-      parts.push(h("p", { className: "hint", textContent: `You can view comments here (${this.#project.myRole}).` }));
+      parts.push(h("p", { className: "hint", textContent: this.#init.projects.length ? "You can view comments here, but not add them (Viewer)." : "You're not in any project yet. Ask an administrator to invite you." }));
     }
 
     if (this.#draft) {
@@ -332,11 +355,12 @@ class LiveSession {
     this.#root.replaceChildren(h("div", { className: "panel" }, ...parts));
   }
 
-  #item(a: LiveAnnotation): HTMLLIElement {
+  #item(a: PageAnnotation): HTMLLIElement {
     const resolved = a.status === "Resolved";
     const badge = h("span", { className: "badge", textContent: String(this.#labelOf(a.id)) });
     badge.style.background = a.color;
     const meta = h("div", { className: "meta" }, badge, h("strong", { textContent: a.author.displayName || "Someone" }), h("span", { className: "muted", textContent: timeAgo(a.createdAt) }));
+    if (new Set(this.#annotations.map((x) => x.projectId)).size > 1) meta.append(h("span", { className: "muted", textContent: `· ${this.#projects.get(a.projectId)?.name ?? ""}` }));
     if (this.#quality[a.id] === "orphaned") meta.append(h("span", { className: "warn", textContent: "moved", title: "The element this was attached to has changed; shown where it originally was." }));
 
     const item = h("li", { className: ["item", resolved ? "resolved" : "", a.id === this.#selected ? "selected" : ""].join(" "), onclick: () => {
@@ -354,7 +378,7 @@ class LiveSession {
           e.stopPropagation();
           const body = input.value;
           this.#editing = null;
-          void this.#mutate(() => call({ type: "live.update", projectId: this.#project.id, id: a.id, version: a.version, body }));
+          void this.#mutate(() => call({ type: "live.update", id: a.id, version: a.version, body }));
         } }),
         h("button", { textContent: "Cancel", onclick: (e: Event) => { e.stopPropagation(); this.#editing = null; this.#render(); } })));
       return item;
@@ -363,8 +387,8 @@ class LiveSession {
     if (a.body) item.append(h("p", { className: "body", textContent: a.body }));
     const actions = h("div", { className: "row actions" });
     const act = (label: string, run: () => Promise<unknown>) => h("button", { className: "link", textContent: label, disabled: this.#busy, onclick: (e: Event) => { e.stopPropagation(); void this.#mutate(run); } });
-    if (this.#project.canComment) {
-      actions.append(act(resolved ? "Reopen" : "Resolve", () => call({ type: "live.update", projectId: this.#project.id, id: a.id, version: a.version, status: resolved ? "Open" : "Resolved" })));
+    if (this.#canCommentIn(a.projectId)) {
+      actions.append(act(resolved ? "Reopen" : "Resolve", () => call({ type: "live.update", id: a.id, version: a.version, status: resolved ? "Open" : "Resolved" })));
     }
     if (a.canEdit) {
       actions.append(h("button", { className: "link", textContent: "Edit", onclick: (e: Event) => {
@@ -377,7 +401,7 @@ class LiveSession {
     if (a.canDelete) {
       actions.append(h("button", { className: "link danger", textContent: "Delete", disabled: this.#busy, onclick: (e: Event) => {
         e.stopPropagation();
-        if (window.confirm("Delete this comment?")) void this.#mutate(() => call({ type: "live.delete", projectId: this.#project.id, id: a.id, version: a.version }));
+        if (window.confirm("Delete this comment?")) void this.#mutate(() => call({ type: "live.delete", id: a.id, version: a.version }));
       } }));
     }
     if (actions.childElementCount) item.append(actions);
@@ -385,18 +409,40 @@ class LiveSession {
   }
 }
 
-(async () => {
-  if (globalThis.__inklayerLive || window.top !== window) return;
-  globalThis.__inklayerLive = true;
-  let init: LiveInit | null = null;
-  try {
-    init = await call<LiveInit | null>({ type: "live.init", url: location.href });
-  } catch {
-    return; // signed out or offline: stay invisible
+/* ---------------------------------------------------------------- start-up */
+
+let session: LiveSession | null = null;
+let starting: Promise<void> | null = null;
+
+/** Starts the session with comments already loaded, or opens it if it's running. */
+function startSession(load: () => Promise<LiveInit | null>, open: boolean): Promise<void> {
+  if (session) {
+    if (open) session.open();
+    return Promise.resolve();
   }
-  if (!init || init.projects.length === 0) return;
-  await new LiveSession(init).start();
-})();
+  starting ??= (async () => {
+    const init = await load();
+    if (!init) return;
+    session = new LiveSession(init);
+    await session.start(open);
+  })().finally(() => {
+    starting = null;
+  });
+  return starting;
+}
+
+if (!globalThis.__inklayerLive && window.top === window) {
+  globalThis.__inklayerLive = true;
+
+  // "Comment on this page" from the toolbar popup.
+  chrome.runtime.onMessage.addListener((message: { type?: string }, sender) => {
+    if (sender.id !== chrome.runtime.id || message?.type !== "inklayer.live.open") return;
+    startSession(() => call<LiveInit>({ type: "live.open", url: location.href }), true).catch((e: unknown) => window.alert(`Inklayer: ${(e as Error).message}`));
+  });
+
+  // Automatically, only if this site has comments (the background checks the origin before asking about this page).
+  void startSession(() => call<LiveInit | null>({ type: "live.check", url: location.href }), false).catch(() => undefined);
+}
 
 const STYLES = `
   :host { all: initial; }
@@ -413,8 +459,9 @@ const STYLES = `
   .panel { width: 320px; max-height: min(70vh, 640px); overflow: auto; background: #fff; color: #111827; border-radius: 12px; padding: 10px;
     box-shadow: 0 10px 30px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(0 0 0 / 0.06); display: flex; flex-direction: column; gap: 8px; }
   .header { display: flex; align-items: center; gap: 6px; }
-  .header .project, .header select { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6b7280; }
-  .header select { border: 1px solid #d1d5db; border-radius: 6px; padding: 2px 4px; background: #fff; color: #111827; }
+  .grow { flex: 1; }
+  .target { display: grid; gap: 2px; color: #6b7280; font-size: 12px; }
+  select { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px; background: #fff; color: #111827; max-width: 100%; }
   .icon { padding: 2px 8px; }
   .tools { display: flex; flex-wrap: wrap; gap: 4px; }
   .tool.active { background: #111827; color: #fff; border-color: #111827; }

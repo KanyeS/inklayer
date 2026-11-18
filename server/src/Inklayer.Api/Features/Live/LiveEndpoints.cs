@@ -1,5 +1,6 @@
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Annotations;
+using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Projects;
 using Inklayer.Infrastructure.Persistence;
@@ -7,20 +8,21 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Inklayer.Api.Features.Live;
 
-/// <summary>One site the extension should show annotations on, and the project they belong to.</summary>
-public sealed record LiveSiteResponse(
-    Guid ProjectId, string ProjectName, Guid OrganizationId, string OrganizationName, string Origin, bool MatchQuery, bool MatchHash, Role MyRole);
+/// <summary>A project the caller can use on live pages. Viewers see comments; Commenters and above can add them.</summary>
+public sealed record LiveProjectResponse(Guid Id, string Name, Guid OrganizationId, string OrganizationName, Role MyRole, bool CanComment);
 
-/// <summary>A live page's annotations. <see cref="PageUrl"/> is the normalised key the annotations are stored under.</summary>
-public sealed record LivePageAnnotationsResponse(string PageUrl, IReadOnlyList<AnnotationResponse> Annotations);
+/// <summary>One project's annotations on a live page. <see cref="PageUrl"/> is the key they're stored under, by that project's rules.</summary>
+public sealed record LivePageAnnotationsResponse(Guid ProjectId, string PageUrl, IReadOnlyList<AnnotationResponse> Annotations);
 
 public sealed record LivePageSummaryResponse(string PageUrl, int OpenCount, int ResolvedCount, DateTime LastActivityAt);
 
 /// <summary>
-/// Live mode: annotations on real pages of a project's sites, shown by the browser extension.
+/// Live mode: annotations on real pages, on any site, shown by the browser extension.
 /// <list type="bullet">
-/// <item>The extension first asks which sites to watch (<c>/api/live/sites</c>), so it only runs on, and only reports, pages on those sites.</item>
-/// <item>A page URL must be on one of the project's sites. The server normalises it with the project's matching rules before storing or looking it up.</item>
+/// <item><c>/api/live/origins</c>: the sites (origins only) that have comments the caller can see. The extension checks this
+/// list locally, so it only sends the server a page's full address on sites that have comments, or when the user opens the panel.</item>
+/// <item><c>/api/live/annotations?url=</c>: a page's comments across every project the caller can view.</item>
+/// <item>A page's key is its URL normalised by each project's matching rules (see <see cref="LivePageUrl"/>).</item>
 /// </list>
 /// Editing, resolving, deleting and history use the shared <c>/api/annotations/{id}</c> endpoints.
 /// </summary>
@@ -28,23 +30,25 @@ internal static class LiveEndpoints
 {
     public static IEndpointRouteBuilder MapLiveEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/live/sites", SitesAsync).WithTags("Live").RequireAuthorization()
-            .WithSummary("Every live site of every project the caller can view");
+        var live = app.MapGroup("/api/live").WithTags("Live").RequireAuthorization();
+        live.MapGet("/origins", OriginsAsync).WithSummary("Sites (scheme://host[:port]) with live comments the caller can see");
+        live.MapGet("/projects", ProjectsAsync).WithSummary("Projects the caller can use on live pages, with their role");
+        live.MapGet("/annotations", ListAsync).WithSummary("Comments on one live page across the caller's projects: ?url=<the page's address>");
 
         var byProject = app.MapGroup("/api/projects/{projectId:guid}/live").WithTags("Live").RequireAuthorization();
-        byProject.MapGet("/annotations", ListAsync).WithSummary("Annotations on one live page: ?url=<the page's address>");
         byProject.MapPost("/annotations", CreateAsync);
-        byProject.MapGet("/pages", PagesAsync).WithSummary("Live pages with annotations, most recently active first");
+        byProject.MapGet("/pages", PagesAsync).WithSummary("Live pages with comments, most recently active first");
 
         return app;
     }
 
-    private static async Task<IResult> SitesAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    /// <summary>Every non-archived project the caller can view, with their effective role. Null if the caller is signed out or disabled.</summary>
+    private static async Task<List<(Project Project, Role Role, string OrganizationName)>?> VisibleProjectsAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var user = await currentUser.GetAsync(ct);
         if (user is null || user.IsDisabled)
         {
-            return TypedResults.Unauthorized();
+            return null;
         }
 
         var orgRoles = user.IsSystemAdmin
@@ -55,47 +59,76 @@ internal static class LiveEndpoints
         var overrides = await db.ProjectMembers.Where(m => m.UserId == user.Id).ToDictionaryAsync(m => m.ProjectId, m => m.Role, ct);
         var projects = await db.Projects.AsNoTracking()
             .Where(p => !p.IsArchived && orgIds.Contains(p.OrganizationId))
-            .OrderBy(p => p.Name)
             .ToListAsync(ct);
 
-        var sites = new List<LiveSiteResponse>();
-        foreach (var project in projects.Where(p => p.LiveSites.Count > 0))
-        {
-            var role = PermissionPolicy.EffectiveProjectRole(orgRoles[project.OrganizationId], overrides.TryGetValue(project.Id, out var r) ? r : null);
-            if (!role.Grants(Permission.View))
-            {
-                continue;
-            }
-
-            sites.AddRange(project.LiveSites.Select(origin => new LiveSiteResponse(
-                project.Id, project.Name, project.OrganizationId, orgNames.GetValueOrDefault(project.OrganizationId, ""), origin,
-                project.LiveMatchQuery, project.LiveMatchHash, role)));
-        }
-
-        return TypedResults.Ok(sites);
+        return projects
+            .Select(p => (Project: p, Role: PermissionPolicy.EffectiveProjectRole(orgRoles[p.OrganizationId], overrides.TryGetValue(p.Id, out var r) ? r : null), OrganizationName: orgNames.GetValueOrDefault(p.OrganizationId, "")))
+            .Where(x => x.Role.Grants(Permission.View))
+            .OrderBy(x => x.OrganizationName, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Project.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
-    private static async Task<IResult> ListAsync(Guid projectId, string? url, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    private static async Task<IResult> OriginsAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.View, ct);
-        if (!check.IsAllowed)
+        if (await VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
         {
-            return check.Denied!;
+            return TypedResults.Unauthorized();
         }
 
-        var project = await db.Projects.AsNoTracking().SingleAsync(p => p.Id == projectId, ct);
-        if (PageKey(project, url) is not { } key)
-        {
-            return NotALiveSite(project);
-        }
-
-        var annotations = await db.Annotations.AsNoTracking()
-            .Where(a => a.ProjectId == projectId && a.PageUrl == key && a.DeletedAt == null)
-            .OrderBy(a => a.CreatedAt)
+        var ids = visible.Select(v => v.Project.Id).ToList();
+        var pages = await db.Annotations.AsNoTracking()
+            .Where(a => ids.Contains(a.ProjectId) && a.PageUrl != null && a.DeletedAt == null)
+            .Select(a => a.PageUrl!)
+            .Distinct()
             .ToListAsync(ct);
+        return TypedResults.Ok(pages.Select(LivePageUrl.OriginOf).OfType<string>().Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList());
+    }
+
+    private static async Task<IResult> ProjectsAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    {
+        if (await VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        return TypedResults.Ok(visible.Select(v => new LiveProjectResponse(
+            v.Project.Id, v.Project.Name, v.Project.OrganizationId, v.OrganizationName, v.Role, v.Role.Grants(Permission.Comment))).ToList());
+    }
+
+    private static async Task<IResult> ListAsync(string? url, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    {
+        if (await VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
+        {
+            return TypedResults.Unauthorized();
+        }
+
+        if (LivePageUrl.Normalize(url, matchQuery: false, matchHash: false) is null)
+        {
+            return InvalidUrl();
+        }
+
+        // Each project keys the page by its own rules, so there are at most four distinct keys.
+        var keys = visible.ToDictionary(v => v.Project.Id, v => LivePageUrl.Normalize(url, v.Project.LiveMatchQuery, v.Project.LiveMatchHash)!);
+        var ids = keys.Keys.ToList();
+        var distinctKeys = keys.Values.Distinct(StringComparer.Ordinal).ToList();
+        var annotations = (await db.Annotations.AsNoTracking()
+                .Where(a => ids.Contains(a.ProjectId) && a.PageUrl != null && distinctKeys.Contains(a.PageUrl) && a.DeletedAt == null)
+                .OrderBy(a => a.CreatedAt)
+                .ToListAsync(ct))
+            .Where(a => a.PageUrl == keys[a.ProjectId])
+            .ToList();
+        if (annotations.Count == 0)
+        {
+            return TypedResults.Ok(Array.Empty<LivePageAnnotationsResponse>());
+        }
+
         var authors = await AnnotationEndpoints.AuthorsAsync(db, annotations.Select(a => a.AuthorUserId), ct);
         var userId = currentUser.Id!.Value;
-        return TypedResults.Ok(new LivePageAnnotationsResponse(key, annotations.Select(a => AnnotationEndpoints.ToResponse(a, authors, check.Role, userId)).ToList()));
+        var roles = visible.ToDictionary(v => v.Project.Id, v => v.Role);
+        return TypedResults.Ok(annotations
+            .GroupBy(a => a.ProjectId)
+            .Select(g => new LivePageAnnotationsResponse(g.Key, keys[g.Key], g.Select(a => AnnotationEndpoints.ToResponse(a, authors, roles[g.Key], userId)).ToList()))
+            .ToList());
     }
 
     private static async Task<IResult> CreateAsync(
@@ -108,9 +141,14 @@ internal static class LiveEndpoints
         }
 
         var project = await db.Projects.AsNoTracking().SingleAsync(p => p.Id == projectId, ct);
-        if (PageKey(project, request.Url) is not { } key)
+        if (project.IsArchived)
         {
-            return NotALiveSite(project);
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "This project is archived.");
+        }
+
+        if (LivePageUrl.Normalize(request.Url, project.LiveMatchQuery, project.LiveMatchHash) is not { } key)
+        {
+            return InvalidUrl();
         }
 
         var target = new AnnotationEndpoints.AnnotationTarget(projectId, project.OrganizationId, SnapshotId: null, PageUrl: key);
@@ -131,27 +169,13 @@ internal static class LiveEndpoints
             .GroupBy(a => a.PageUrl!)
             .Select(g => new LivePageSummaryResponse(
                 g.Key,
-                g.Count(a => a.Status == Domain.Annotations.AnnotationStatus.Open),
-                g.Count(a => a.Status == Domain.Annotations.AnnotationStatus.Resolved),
+                g.Count(a => a.Status == AnnotationStatus.Open),
+                g.Count(a => a.Status == AnnotationStatus.Resolved),
                 g.Max(a => a.UpdatedAt)))
             .ToListAsync(ct);
         return TypedResults.Ok(pages.OrderByDescending(p => p.LastActivityAt).ToList());
     }
 
-    /// <summary>The normalised page key, or null if <paramref name="url"/> isn't a page on one of the project's live sites.</summary>
-    private static string? PageKey(Project project, string? url)
-    {
-        var origin = LivePageUrl.OriginOf(url);
-        return origin is not null && project.LiveSites.Contains(origin, StringComparer.Ordinal)
-            ? LivePageUrl.Normalize(url, project.LiveMatchQuery, project.LiveMatchHash)
-            : null;
-    }
-
-    private static IResult NotALiveSite(Project project) => TypedResults.ValidationProblem(
-        new Dictionary<string, string[]>
-        {
-            ["url"] = [project.LiveSites.Count == 0
-                ? "This project has no live sites yet. A project Admin can add them in the project's settings."
-                : $"Must be a page on one of this project's live sites: {string.Join(", ", project.LiveSites)}."],
-        });
+    private static IResult InvalidUrl() => TypedResults.ValidationProblem(
+        new Dictionary<string, string[]> { ["url"] = ["Must be the address of a web page (http or https)."] });
 }

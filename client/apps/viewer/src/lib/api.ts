@@ -77,8 +77,7 @@ export interface Project {
   name: string;
   isArchived: boolean;
   myRole: Role;
-  /** Sites (origins) whose real pages show this project's live comments through the extension. */
-  liveSites: string[];
+  /** Live comments: whether the query string / #hash make a different page. */
   liveMatchQuery: boolean;
   liveMatchHash: boolean;
 }

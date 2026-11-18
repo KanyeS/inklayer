@@ -2,14 +2,14 @@ import { api, type Me, type Project } from "./lib/api";
 import { NotSignedInError, redirectUri, signIn, signOut } from "./lib/auth";
 import { captureTab, getStatus } from "./lib/capture";
 import type { Request, Response, StateResponse } from "./lib/messages";
-import { getLiveSites, handleLive, isLiveRequest, stopLive, syncLiveSites, type LiveRequest } from "./lib/live";
+import { handleLive, isLiveRequest, openLiveInTab, stopLive, syncLiveScript, type LiveRequest } from "./lib/live";
 import { getSettings, updateSettings } from "./lib/settings";
 
-// Keep the live content script registered for the right sites.
-chrome.runtime.onStartup.addListener(() => void syncLiveSites());
-chrome.runtime.onInstalled.addListener(() => void syncLiveSites());
-chrome.permissions.onAdded.addListener(() => void syncLiveSites());
-chrome.permissions.onRemoved.addListener(() => void syncLiveSites());
+// Keep the live content script registered while signed in with site access.
+chrome.runtime.onStartup.addListener(() => void syncLiveScript());
+chrome.runtime.onInstalled.addListener(() => void syncLiveScript());
+chrome.permissions.onAdded.addListener(() => void syncLiveScript());
+chrome.permissions.onRemoved.addListener(() => void syncLiveScript());
 
 chrome.runtime.onMessage.addListener((request: Request | LiveRequest, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
@@ -45,7 +45,7 @@ async function handle(request: Request): Promise<unknown> {
       const { serverUrl } = await getSettings();
       if (!serverUrl) throw new Error("Set the server address first.");
       await signIn(serverUrl);
-      void syncLiveSites();
+      await syncLiveScript();
       return null;
     }
     case "signOut":
@@ -54,6 +54,9 @@ async function handle(request: Request): Promise<unknown> {
       return null;
     case "projects":
       return api<Project[]>(`/api/orgs/${request.organizationId}/projects`);
+    case "openLive":
+      await openLiveInTab(request.tabId);
+      return null;
     case "capture": {
       const tab = await chrome.tabs.get(request.tabId);
       const { maskSelector } = await getSettings();
@@ -75,11 +78,10 @@ async function state(): Promise<StateResponse> {
       if (!(error instanceof NotSignedInError)) throw error;
     }
   }
-  if (me) void syncLiveSites();
+  if (me) void syncLiveScript();
   return {
     serverUrl: settings.serverUrl,
     signedIn: me !== null,
-    liveSites: me ? [...new Set((await getLiveSites()).map((s) => s.origin))] : [],
     me,
     lastProjectId: settings.lastProjectId,
     redirectUri: redirectUri(),

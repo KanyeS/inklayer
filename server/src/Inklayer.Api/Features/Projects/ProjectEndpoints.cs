@@ -12,22 +12,17 @@ namespace Inklayer.Api.Features.Projects;
 public sealed record CreateProjectRequest([property: Required, StringLength(200, MinimumLength = 1)] string Name);
 
 /// <summary>
-/// Only the fields that are present change.
-/// <list type="bullet">
-/// <item><see cref="LiveSites"/> replaces the whole list. Entries are site addresses like <c>https://app.example.com</c>.</item>
-/// <item>Loosening <see cref="LiveMatchQuery"/> or <see cref="LiveMatchHash"/> merges existing live pages that now count as the same page.</item>
-/// </list>
+/// Only the fields that are present change. Loosening <see cref="LiveMatchQuery"/> or <see cref="LiveMatchHash"/> merges
+/// existing live pages that now count as the same page.
 /// </summary>
 public sealed record UpdateProjectRequest(
     [property: StringLength(200, MinimumLength = 1)] string? Name,
     bool? IsArchived,
-    List<string>? LiveSites,
     bool? LiveMatchQuery,
     bool? LiveMatchHash);
 
 public sealed record ProjectResponse(
-    Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role MyRole,
-    IReadOnlyList<string> LiveSites, bool LiveMatchQuery, bool LiveMatchHash);
+    Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role MyRole, bool LiveMatchQuery, bool LiveMatchHash);
 
 public sealed record ProjectMemberResponse(Guid UserId, string Email, string DisplayName, Role OrganizationRole, Role? ProjectRole, Role EffectiveRole);
 
@@ -106,36 +101,9 @@ internal static class ProjectEndpoints
             return check.Denied!;
         }
 
-        List<string>? sites = null;
-        if (request.LiveSites is not null)
-        {
-            sites = [];
-            foreach (var entry in request.LiveSites)
-            {
-                if (!LivePageUrl.TryNormalizeOrigin(entry, out var origin))
-                {
-                    return TypedResults.ValidationProblem(new Dictionary<string, string[]>
-                    {
-                        ["liveSites"] = [$"\"{entry}\" isn't a site address. Use just the scheme and host, like https://app.example.com."],
-                    });
-                }
-
-                if (!sites.Contains(origin, StringComparer.Ordinal))
-                {
-                    sites.Add(origin);
-                }
-            }
-
-            if (sites.Count > LivePageUrl.MaxSites)
-            {
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["liveSites"] = [$"A project can have at most {LivePageUrl.MaxSites} live sites."] });
-            }
-        }
-
         var project = await db.Projects.SingleAsync(p => p.Id == projectId, ct);
         project.Name = request.Name?.Trim() ?? project.Name;
         project.IsArchived = request.IsArchived ?? project.IsArchived;
-        project.LiveSites = sites ?? project.LiveSites;
 
         var matchQuery = request.LiveMatchQuery ?? project.LiveMatchQuery;
         var matchHash = request.LiveMatchHash ?? project.LiveMatchHash;
@@ -248,5 +216,5 @@ internal static class ProjectEndpoints
     }
 
     private static ProjectResponse ToResponse(Project p, Role myRole) =>
-        new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole, p.LiveSites, p.LiveMatchQuery, p.LiveMatchHash);
+        new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole, p.LiveMatchQuery, p.LiveMatchHash);
 }

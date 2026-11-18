@@ -304,10 +304,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<bool>("LiveMatchQuery")
                         .HasColumnType("INTEGER");
 
-                    b.PrimitiveCollection<string>("LiveSites")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)

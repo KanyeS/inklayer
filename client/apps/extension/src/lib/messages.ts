@@ -7,15 +7,14 @@ export type Request =
   | { type: "signIn" }
   | { type: "signOut" }
   | { type: "projects"; organizationId: string }
-  | { type: "capture"; tabId: number; projectId: string };
+  | { type: "capture"; tabId: number; projectId: string }
+  | { type: "openLive"; tabId: number };
 
 export interface StateResponse {
   serverUrl: string | null;
   signedIn: boolean;
   me: Me | null;
   lastProjectId: string | null;
-  /** Sites where the extension shows live comments. */
-  liveSites: string[];
   redirectUri: string;
   status: CaptureStatus;
 }
@@ -28,6 +27,7 @@ export interface ResponseMap {
   signOut: null;
   projects: Project[];
   capture: null;
+  openLive: null;
 }
 
 export async function send<K extends Request["type"]>(request: Extract<Request, { type: K }>): Promise<ResponseMap[K]> {

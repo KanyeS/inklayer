@@ -1,24 +1,25 @@
+import { NotSignedInError } from "./auth";
 import { api, postJson } from "./api";
 import { getSettings } from "./settings";
 
 /**
- * Live mode, background side.
+ * Live mode, background side. Anyone who can comment in a project can annotate any site; Viewers only see comments.
  * <ul>
- * <li>Keeps a list of the sites the user's projects review live, from <code>/api/live/sites</code>.</li>
- * <li>Registers the live content script for those sites only. Other pages never load it, and their URLs never leave the browser.</li>
- * <li>Makes API calls on behalf of the content script, so the access token never enters the web page.</li>
+ * <li>The live content script is registered for every http(s) page, but stays invisible unless the page's site has comments
+ * or the user opens it from the toolbar.</li>
+ * <li>Privacy: the background keeps a cached list of the sites (origins only) that have comments. A page's full address is
+ * only sent to the server on those sites, or when the user asks to comment on that page.</li>
+ * <li>All API calls are made here, checked against the sender's real origin, so the access token never enters a web page.</li>
  * </ul>
  */
 
-export interface LiveSite {
-  projectId: string;
-  projectName: string;
+export interface LiveProject {
+  id: string;
+  name: string;
   organizationId: string;
   organizationName: string;
-  origin: string;
-  matchQuery: boolean;
-  matchHash: boolean;
   myRole: string;
+  canComment: boolean;
 }
 
 export interface LiveAnnotation {
@@ -37,100 +38,80 @@ export interface LiveAnnotation {
   canDelete: boolean;
 }
 
+/** One project's comments on the page. */
 export interface LivePage {
+  projectId: string;
   pageUrl: string;
   annotations: LiveAnnotation[];
 }
 
+export interface LiveInit {
+  projects: LiveProject[];
+  pages: LivePage[];
+  /** The project new comments went into last time, if the user can still comment there. */
+  lastProjectId: string | null;
+}
+
 const SCRIPT_ID = "inklayer-live";
-const COMMENT_ROLES = new Set(["Commenter", "Editor", "Admin", "Owner"]);
-const STALE_AFTER_MS = 10 * 60 * 1000;
+const ALL_SITES = ["https://*/*", "http://*/*"];
+const CACHE_MS = 5 * 60 * 1000;
 
-let lastSync = 0;
-let syncing: Promise<LiveSite[]> | null = null;
+let origins: { at: number; value: Set<string> } | null = null;
+let projects: { at: number; value: LiveProject[] } | null = null;
 
-export const canComment = (role: string) => COMMENT_ROLES.has(role);
-
-/** Fetches the live sites and (re)registers the content script for them. Safe to call often; concurrent calls share one sync. */
-export function syncLiveSites(): Promise<LiveSite[]> {
-  syncing ??= doSync().finally(() => {
-    syncing = null;
-  });
-  return syncing;
-}
-
-/** The cached sites, refreshed in the background when they're older than a few minutes. */
-export async function getLiveSites(): Promise<LiveSite[]> {
-  if (Date.now() - lastSync > STALE_AFTER_MS) return syncLiveSites();
-  const { liveSites } = await chrome.storage.local.get("liveSites");
-  return (liveSites as LiveSite[] | undefined) ?? [];
-}
-
-export async function stopLive(): Promise<void> {
-  await chrome.storage.local.set({ liveSites: [] });
-  await setRegistration([]);
-}
-
-async function doSync(): Promise<LiveSite[]> {
+/** Registers the live script for every site (if the user granted site access), or unregisters it when signed out. */
+export async function syncLiveScript(): Promise<void> {
   const { serverUrl, tokens } = await getSettings();
-  if (!serverUrl || !tokens) {
-    await stopLive();
-    return [];
-  }
-
-  let sites: LiveSite[];
-  try {
-    sites = await api<LiveSite[]>("/api/live/sites");
-  } catch {
-    // Offline or signed out: keep what we had.
-    const { liveSites } = await chrome.storage.local.get("liveSites");
-    return (liveSites as LiveSite[] | undefined) ?? [];
-  }
-
-  // Never run on the Inklayer server itself.
-  const serverOrigin = new URL(serverUrl).origin;
-  sites = sites.filter((s) => s.origin !== serverOrigin);
-  await chrome.storage.local.set({ liveSites: sites });
-  lastSync = Date.now();
-
-  // Match patterns can't carry a port, so this is per host; the content script then asks for its exact origin.
-  const patterns = [...new Set(sites.map((s) => {
-    const url = new URL(s.origin);
-    return `${url.protocol}//${url.hostname}/*`;
-  }))];
-  const allowed: string[] = [];
-  for (const pattern of patterns) {
-    if (await chrome.permissions.contains({ origins: [pattern] })) allowed.push(pattern);
-  }
-  await setRegistration(allowed);
-  return sites;
-}
-
-async function setRegistration(matches: string[]): Promise<void> {
+  const allowed = Boolean(serverUrl && tokens) && await chrome.permissions.contains({ origins: ALL_SITES });
   const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID] });
-  if (matches.length === 0) {
+  if (!allowed) {
     if (existing.length > 0) await chrome.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] });
     return;
   }
-  const script = { id: SCRIPT_ID, matches, js: ["live.js"], runAt: "document_idle" as const, allFrames: false, persistAcrossSessions: true };
-  if (existing.length > 0) await chrome.scripting.updateContentScripts([script]);
-  else await chrome.scripting.registerContentScripts([script]);
+  if (existing.length === 0) {
+    await chrome.scripting.registerContentScripts([
+      { id: SCRIPT_ID, matches: ALL_SITES, js: ["live.js"], runAt: "document_idle", allFrames: false, persistAcrossSessions: true },
+    ]);
+  }
+}
+
+export async function stopLive(): Promise<void> {
+  origins = null;
+  projects = null;
+  await syncLiveScript();
+}
+
+/** Opens the live panel in a tab, injecting the script first if the page loaded before it was registered. */
+export async function openLiveInTab(tabId: number): Promise<void> {
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["live.js"] }); // a no-op if it's already there
+  await chrome.tabs.sendMessage(tabId, { type: "inklayer.live.open" });
+}
+
+async function getOrigins(): Promise<Set<string>> {
+  if (!origins || Date.now() - origins.at > CACHE_MS) origins = { at: Date.now(), value: new Set(await api<string[]>("/api/live/origins")) };
+  return origins.value;
+}
+
+async function getProjects(): Promise<LiveProject[]> {
+  if (!projects || Date.now() - projects.at > CACHE_MS) projects = { at: Date.now(), value: await api<LiveProject[]>("/api/live/projects") };
+  return projects.value;
+}
+
+async function signedIn(): Promise<boolean> {
+  const { serverUrl, tokens } = await getSettings();
+  return Boolean(serverUrl && tokens);
 }
 
 /* -------------------------------------------------------------- requests from the content script */
 
 /** Messages from the live content script. The background checks each one against the sender's actual origin. */
 export type LiveRequest =
-  | { type: "live.init"; url: string }
-  | { type: "live.list"; projectId: string; url: string }
+  | { type: "live.check"; url: string }
+  | { type: "live.open"; url: string }
+  | { type: "live.list"; url: string }
   | { type: "live.create"; projectId: string; url: string; kind: string; body: string; color: string; anchor: unknown; geometry: unknown; viewportWidth: number }
-  | { type: "live.update"; projectId: string; id: string; version: number; status?: "Open" | "Resolved"; body?: string }
-  | { type: "live.delete"; projectId: string; id: string; version: number };
-
-export interface LiveInit {
-  me: { id: string; displayName: string };
-  projects: { id: string; name: string; organizationName: string; myRole: string; canComment: boolean }[];
-}
+  | { type: "live.update"; id: string; version: number; status?: "Open" | "Resolved"; body?: string }
+  | { type: "live.delete"; id: string; version: number };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -138,29 +119,26 @@ export const isLiveRequest = (request: { type?: unknown }): request is LiveReque
 export async function handleLive(request: LiveRequest, senderUrl: string | undefined): Promise<unknown> {
   const senderOrigin = senderUrl ? safeOrigin(senderUrl) : null;
   if (!senderOrigin) throw new Error("Unknown page.");
-  const sites = (await getLiveSites()).filter((s) => s.origin === senderOrigin);
-
-  if (request.type === "live.init") {
-    if (sites.length === 0 || safeOrigin(request.url) !== senderOrigin) return null;
-    const me = await api<{ id: string; displayName: string }>("/api/me");
-    return {
-      me: { id: me.id, displayName: me.displayName },
-      projects: sites.map((s) => ({ id: s.projectId, name: s.projectName, organizationName: s.organizationName, myRole: s.myRole, canComment: canComment(s.myRole) })),
-    } satisfies LiveInit;
-  }
-
-  // Every other request names a project, which must be live on this exact origin.
-  if (!sites.some((s) => s.projectId === request.projectId)) throw new Error("This project isn't live on this site.");
-  const projectPath = `/api/projects/${encodeURIComponent(request.projectId)}/live`;
+  if ("url" in request && safeOrigin(request.url) !== senderOrigin) throw new Error("Wrong page.");
 
   switch (request.type) {
+    case "live.check":
+      // Automatic, on every page load: stay quiet unless this site has comments. Only the origin is checked here.
+      if (!(await signedIn())) return null;
+      if (!(await getOrigins()).has(senderOrigin)) return null;
+      return init(request.url);
+    case "live.open":
+      // The user asked to comment on this page.
+      if (!(await signedIn())) throw new NotSignedInError();
+      return init(request.url);
     case "live.list":
-      if (safeOrigin(request.url) !== senderOrigin) throw new Error("Wrong page.");
-      return api<LivePage>(`${projectPath}/annotations?url=${encodeURIComponent(request.url)}`);
+      return api<LivePage[]>(`/api/live/annotations?url=${encodeURIComponent(request.url)}`);
     case "live.create": {
-      if (safeOrigin(request.url) !== senderOrigin) throw new Error("Wrong page.");
-      const { type: _type, projectId: _projectId, ...body } = request;
-      return postJson<LiveAnnotation>(`${projectPath}/annotations`, body);
+      const { type: _type, projectId, ...body } = request;
+      const created = await postJson<LiveAnnotation>(`/api/projects/${encodeURIComponent(projectId)}/live/annotations`, body);
+      origins?.value.add(senderOrigin);
+      await chrome.storage.local.set({ lastLiveProjectId: projectId });
+      return created;
     }
     case "live.update": {
       const { id, version, status, body } = request;
@@ -173,6 +151,16 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
     case "live.delete":
       return api<null>(`/api/annotations/${encodeURIComponent(request.id)}?version=${request.version}`, { method: "DELETE" });
   }
+}
+
+async function init(url: string): Promise<LiveInit> {
+  const [all, pages, stored] = await Promise.all([
+    getProjects(),
+    api<LivePage[]>(`/api/live/annotations?url=${encodeURIComponent(url)}`),
+    chrome.storage.local.get("lastLiveProjectId"),
+  ]);
+  const last = stored.lastLiveProjectId as string | undefined;
+  return { projects: all, pages, lastProjectId: all.some((p) => p.id === last && p.canComment) ? last! : null };
 }
 
 function safeOrigin(url: string): string | null {

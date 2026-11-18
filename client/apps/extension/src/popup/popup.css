@@ -31,3 +31,8 @@ button:disabled { opacity: 0.55; cursor: default; }
 .ok { color: var(--ok); margin: 0; }
 code { font-size: 11px; word-break: break-all; background: color-mix(in srgb, var(--border) 50%, transparent); padding: 2px 4px; border-radius: 4px; }
 progress { width: 100%; }
+details { display: grid; gap: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+details[open] { gap: 10px; }
+details > :not(summary) { margin-top: 8px; }
+summary { cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); }
+.error:empty { display: none; }

@@ -12,12 +12,6 @@ public sealed class Project
 
     public bool IsArchived { get; set; }
 
-    /// <summary>
-    /// Origins of the sites this project reviews live, e.g. <c>https://app.example.com</c>. The extension shows the project's
-    /// live annotations on these sites, and only asks the server about pages on them.
-    /// </summary>
-    public List<string> LiveSites { get; set; } = [];
-
     /// <summary>Whether the query string distinguishes live pages. Off: <c>/pricing?ref=x</c> and <c>/pricing</c> are the same page.</summary>
     public bool LiveMatchQuery { get; set; }
 

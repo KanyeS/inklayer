@@ -1,40 +1,12 @@
 namespace Inklayer.Domain.Projects;
 
 /// <summary>
-/// URL rules for live-page annotations:
-/// <list type="bullet">
-/// <item>A project's live sites are origins only (scheme, host and port).</item>
-/// <item>A page's key is its origin and path. The query string and #hash are added only if the project says they matter.</item>
-/// </list>
+/// URL rules for live-page annotations: a page's key is its origin and path. The query string and #hash are added only if
+/// the project says they matter, so parts that don't (and may carry tokens) are never stored.
 /// </summary>
 public static class LivePageUrl
 {
     public const int MaxLength = 2048;
-    public const int MaxSites = 20;
-
-    /// <summary>Turns <c>app.example.com</c> or <c>https://App.Example.com/</c> into <c>https://app.example.com</c>.</summary>
-    public static bool TryNormalizeOrigin(string? input, out string origin)
-    {
-        origin = "";
-        var text = input?.Trim() ?? "";
-        if (text.Length == 0 || text.Length > MaxLength)
-        {
-            return false;
-        }
-
-        if (!text.Contains("://", StringComparison.Ordinal))
-        {
-            text = "https://" + text;
-        }
-
-        if (!TryParseWeb(text, out var uri) || uri.AbsolutePath != "/" || uri.Query.Length > 0 || uri.Fragment.Length > 0 || uri.UserInfo.Length > 0)
-        {
-            return false;
-        }
-
-        origin = OriginOf(uri);
-        return true;
-    }
 
     /// <summary>The page key for <paramref name="url"/>, or null if it isn't an absolute http(s) URL.</summary>
     public static string? Normalize(string? url, bool matchQuery, bool matchHash)
