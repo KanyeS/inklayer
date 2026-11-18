@@ -75,13 +75,15 @@ Requires Node.js 22.
 cd client
 npm ci
 npm test             # serializer, CSS and resource-resolution tests
-npm run build        # outputs client/apps/extension/dist
+npm run build        # Chrome: client/apps/extension/dist, Firefox: client/apps/extension/dist-firefox
 ```
 
 To install it:
-1. **Load it.** In Chrome, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose `client/apps/extension/dist`.
+1. **Load it.**
+   - **Chrome** (120 or later): open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose `client/apps/extension/dist`.
+   - **Firefox** (128 or later): open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and choose `client/apps/extension/dist-firefox/manifest.json`. Temporary add-ons are removed when Firefox closes; a permanent install needs the add-on signed by addons.mozilla.org.
 2. **Connect it.** Open the extension popup, enter your server address, and grant site access. Site access is how it reaches your server and fetches the images and fonts of pages you capture.
-3. **Allow its sign-in address.** The popup shows the extension's sign-in address (`https://<extension-id>.chromiumapp.org/`). Add it to the server's `Inklayer:Auth:ExtensionRedirectUris` (`INKLAYER_EXTENSION_REDIRECT_URIS` in Docker).
+3. **Allow its sign-in address.** The popup shows the extension's sign-in address: `https://<extension-id>.chromiumapp.org/` in Chrome, `https://<hash>.extensions.allizom.org/` in Firefox. Add it to the server's `Inklayer:Auth:ExtensionRedirectUris` (`INKLAYER_EXTENSION_REDIRECT_URIS` in Docker). To use both browsers, list both addresses, separated by a comma.
 4. **Capture.** Sign in with Google, pick a project, and click **Capture this page**.
 
 **What a capture contains:**

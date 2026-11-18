@@ -12,7 +12,10 @@ public sealed class InklayerAuthOptions
     /// </summary>
     public string BootstrapAdmins { get; set; } = "";
 
-    /// <summary>Redirect URIs of the browser extension, e.g. <c>https://&lt;extension-id&gt;.chromiumapp.org/</c>. Comma-separated.</summary>
+    /// <summary>
+    /// Redirect URIs of the browser extension, comma-separated: <c>https://&lt;extension-id&gt;.chromiumapp.org/</c> for
+    /// Chrome, <c>https://&lt;hash&gt;.extensions.allizom.org/</c> for Firefox.
+    /// </summary>
     public string ExtensionRedirectUris { get; set; } = "";
 
     /// <summary>Permit OAuth endpoints over plain HTTP. Only for local development; production must sit behind HTTPS.</summary>

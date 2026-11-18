@@ -10,6 +10,7 @@ TestResults/
 # Node
 node_modules/
 dist/
+dist-firefox/
 .vite/
 *.tsbuildinfo
 coverage/

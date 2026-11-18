@@ -111,12 +111,14 @@ async function renderCapture(state: StateResponse): Promise<void> {
   orgSelect.onchange = loadProjects;
 
   captureButton.onclick = async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return;
-    if (!(await chrome.permissions.contains(SITE_ACCESS)) && !(await chrome.permissions.request(SITE_ACCESS))) {
+    // Ask before any other await: Firefox only allows permission requests directly inside the click.
+    // If access is already granted, this returns true without prompting.
+    if (!(await chrome.permissions.request(SITE_ACCESS))) {
       status.replaceChildren(h("p", { className: "error", textContent: "Site access is needed to read the page's images and fonts." }));
       return;
     }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
     captureButton.disabled = true;
     await send({ type: "capture", tabId: tab.id, projectId: projectSelect.value });
   };

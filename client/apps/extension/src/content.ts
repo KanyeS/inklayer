@@ -7,9 +7,19 @@ declare global {
   var __inklayerCapture: ((maskSelector: string | null) => Promise<SerializedPage>) | undefined;
 }
 
+/** Firefox gives content scripts this method on elements; Chrome has chrome.dom.openOrClosedShadowRoot instead. */
+type FirefoxElement = Element & { openOrClosedShadowRoot?: () => ShadowRoot | null };
+
+/** Also reaches closed shadow roots, which only extensions can see. Falls back to open roots only. */
+function getShadowRoot(el: Element): ShadowRoot | null {
+  if (typeof chrome.dom?.openOrClosedShadowRoot === "function") return chrome.dom.openOrClosedShadowRoot(el as HTMLElement) ?? null;
+  const firefox = (el as FirefoxElement).openOrClosedShadowRoot;
+  if (typeof firefox === "function") return firefox.call(el);
+  return el.shadowRoot;
+}
+
 globalThis.__inklayerCapture = (maskSelector) =>
   serializeDocument(document, {
-    // chrome.dom.openOrClosedShadowRoot (extensions only) also reaches closed shadow roots.
-    getShadowRoot: (el) => chrome.dom?.openOrClosedShadowRoot?.(el as HTMLElement) ?? el.shadowRoot,
+    getShadowRoot,
     ...(maskSelector ? { maskSelector } : {}),
   });

@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "vite build && vite build --mode content",
+    "build": "vite build && vite build --mode content && node scripts/build-firefox.mjs",
     "dev": "vite build --watch"
   },
   "dependencies": {

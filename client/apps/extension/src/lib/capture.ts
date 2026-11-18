@@ -36,7 +36,7 @@ export async function captureTab(tab: chrome.tabs.Tab, projectId: string, maskSe
       args: [maskSelector],
     });
     const page = injection?.result as SerializedPage | undefined;
-    if (!page) throw new Error("This page can't be captured (browser pages and the Chrome Web Store are off limits).");
+    if (!page) throw new Error("This page can't be captured (browser pages and extension stores are off limits).");
 
     await setStatus({ state: "working", step: "Collecting images, fonts and styles…", progress: 0 });
     const resolved = await resolveCapture(page, fetchResource, {
