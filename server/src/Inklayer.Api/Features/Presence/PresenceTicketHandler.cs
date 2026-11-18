@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace Inklayer.Api.Features.Presence;
 
-/// <summary>Signs in the presence connection from the ticket in its <c>access_token</c> query parameter. Only used on the hub's path.</summary>
+/// <summary>Signs in a live connection (presence or docs hub) from the ticket in its <c>access_token</c> query parameter. Only used on the hubs' paths.</summary>
 internal sealed class PresenceTicketHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
@@ -20,7 +20,8 @@ internal sealed class PresenceTicketHandler(
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Path.StartsWithSegments(PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase))
+        if (!Request.Path.StartsWithSegments(PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase)
+            && !Request.Path.StartsWithSegments(PresenceEndpoints.DocsHubPath, StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
         }

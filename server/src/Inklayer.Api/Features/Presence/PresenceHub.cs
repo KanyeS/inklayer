@@ -22,25 +22,17 @@ internal sealed class PresenceHub(PresenceRegistry registry, InklayerDbContext d
 {
     public override async Task OnConnectedAsync()
     {
-        var principal = Context.User;
         var ct = Context.ConnectionAborted;
-        if (!Guid.TryParse(principal?.FindFirst(InklayerClaims.Subject)?.Value, out var userId))
+        if (await LiveIdentity.LoadAsync(Context, db, ct) is not { } user)
         {
             Context.Abort();
             return;
         }
 
-        var stamp = principal!.FindFirst(PresenceTicketHandler.StampClaim)?.Value ?? "";
-        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct);
-        if (user is null || user.IsDisabled || !string.Equals(user.SecurityStamp, stamp, StringComparison.Ordinal))
-        {
-            Context.Abort();
-            return;
-        }
-
-        var peer = new PresencePeer(Guid.NewGuid().ToString("N"), user.Id, user.DisplayName, PresenceColors.For(user.Id));
-        var connection = new PresenceConnection(Context.ConnectionId, Context, peer, stamp, Context.GetHttpContext()?.Connection.RemoteIpAddress,
-            new TokenBucket(options.Value.MessagesPerSecond, clock))
+        var stamp = user.SecurityStamp;
+        var peer = LiveIdentity.PeerFor(user);
+        var bucket = LiveIdentity.AttachBucket(Context, options.Value, clock);
+        var connection = new PresenceConnection(Context.ConnectionId, Context, peer, stamp, Context.GetHttpContext()?.Connection.RemoteIpAddress, bucket)
         {
             Organizations = await OrganizationsAsync(user, db, ct),
         };
@@ -99,20 +91,28 @@ internal static class PresenceColors
     }
 }
 
-/// <summary>Drops messages over the connection's rate; a flood closes the connection.</summary>
-internal sealed class PresenceRateFilter(PresenceRegistry registry, IOptions<PresenceOptions> options) : IHubFilter
+/// <summary>
+/// Drops messages over the connection's rate; a flood closes the connection. Used by the presence and docs hubs.
+/// Calls the client waits for an answer from are refused with an error instead of dropped.
+/// </summary>
+internal sealed class PresenceRateFilter(IOptions<PresenceOptions> options) : IHubFilter
 {
+    private static readonly HashSet<string> Answered = new(StringComparer.Ordinal)
+    {
+        nameof(PresenceHub.Join), nameof(PresenceHub.Leave), "Open", "Close", "Update", "Snapshot",
+    };
+
     public async ValueTask<object?> InvokeMethodAsync(HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object?>> next)
     {
-        if (registry.Get(invocationContext.Context.ConnectionId) is { } connection && !connection.Bucket.TryTake())
+        if (LiveIdentity.BucketOf(invocationContext.Context) is { } bucket && !bucket.TryTake())
         {
             // A whole second's allowance refused in a row is a flood, not a fast mouse.
-            if (connection.Bucket.Strikes >= options.Value.MessagesPerSecond)
+            if (bucket.Strikes >= options.Value.MessagesPerSecond)
             {
                 invocationContext.Context.Abort();
             }
 
-            if (invocationContext.HubMethodName is nameof(PresenceHub.Join) or nameof(PresenceHub.Leave))
+            if (Answered.Contains(invocationContext.HubMethodName))
             {
                 throw new HubException("Too many messages. Slow down.");
             }
@@ -122,4 +122,35 @@ internal sealed class PresenceRateFilter(PresenceRegistry registry, IOptions<Pre
 
         return await next(invocationContext);
     }
+}
+
+/// <summary>Who is on a live connection (presence or docs hub), checked against the database when it opens.</summary>
+internal static class LiveIdentity
+{
+    private const string BucketKey = "inklayer.bucket";
+
+    /// <summary>The user behind the connection's ticket, if they still exist, aren't disabled and haven't been signed out everywhere since.</summary>
+    public static async Task<User?> LoadAsync(HubCallerContext context, InklayerDbContext db, CancellationToken ct)
+    {
+        if (!Guid.TryParse(context.User?.FindFirst(InklayerClaims.Subject)?.Value, out var userId))
+        {
+            return null;
+        }
+
+        var stamp = context.User!.FindFirst(PresenceTicketHandler.StampClaim)?.Value ?? "";
+        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == userId, ct);
+        return user is { IsDisabled: false } && string.Equals(user.SecurityStamp, stamp, StringComparison.Ordinal) ? user : null;
+    }
+
+    /// <summary>A new peer id for this connection, with the person's name and colour.</summary>
+    public static PresencePeer PeerFor(User user) => new(Guid.NewGuid().ToString("N"), user.Id, user.DisplayName, PresenceColors.For(user.Id));
+
+    public static TokenBucket AttachBucket(HubCallerContext context, PresenceOptions options, TimeProvider clock)
+    {
+        var bucket = new TokenBucket(options.MessagesPerSecond, clock);
+        context.Items[BucketKey] = bucket;
+        return bucket;
+    }
+
+    public static TokenBucket? BucketOf(HubCallerContext context) => context.Items.TryGetValue(BucketKey, out var value) ? value as TokenBucket : null;
 }

@@ -38,9 +38,9 @@ public sealed record FolderRequest(string Path);
 
 public sealed record MoveFolderRequest(string From, string To);
 
-public sealed record DocRevisionResponse(int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title);
+public sealed record DocRevisionResponse(Guid Id, int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title);
 
-public sealed record DocRevisionContentResponse(int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title, string Content);
+public sealed record DocRevisionContentResponse(Guid Id, int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title, string Content);
 
 public sealed record DocSearchResultResponse(Guid Id, string Folder, string Title, string Snippet);
 
@@ -71,12 +71,15 @@ internal static class DocEndpoints
         byOrg.MapGet("/tags", TagsAsync).WithSummary("Tags with how many docs have each");
         byOrg.MapGet("/graph", GraphAsync).WithSummary("Docs and comments as nodes, links as edges");
 
+        // Live co-editing; WebSockets only, signed in with a presence ticket like the presence hub.
+        app.MapHub<DocsHub>(Presence.PresenceEndpoints.DocsHubPath, o => o.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets);
+
         var docs = app.MapGroup("/api/docs").WithTags("Docs").RequireAuthorization();
         docs.MapGet("/{docId:guid}", GetAsync).WithSummary("A doc's details, links and backlinks (the text comes from the docs hub)");
         docs.MapPatch("/{docId:guid}", UpdateAsync).WithSummary("Rename or move a doc");
         docs.MapDelete("/{docId:guid}", DeleteAsync).WithSummary("Delete a doc: ?version=");
         docs.MapGet("/{docId:guid}/history", HistoryAsync);
-        docs.MapGet("/{docId:guid}/history/{version:int}", RevisionAsync);
+        docs.MapGet("/{docId:guid}/history/{revisionId:guid}", RevisionAsync);
         return app;
     }
 
@@ -265,24 +268,24 @@ internal static class DocEndpoints
 
         var rows = await db.DocRevisions.AsNoTracking().Where(r => r.DocId == docId).OrderByDescending(r => r.OccurredAt).Take(200).ToListAsync(ct);
         var actors = await ActorsAsync(db, rows.Select(r => r.ActorUserId), ct);
-        return TypedResults.Ok(rows.Select(r => new DocRevisionResponse(r.Version, r.Action, actors[r.ActorUserId], r.OccurredAt, r.Folder, r.Title)).ToList());
+        return TypedResults.Ok(rows.Select(r => new DocRevisionResponse(r.Id, r.Version, r.Action, actors[r.ActorUserId], r.OccurredAt, r.Folder, r.Title)).ToList());
     }
 
-    private static async Task<IResult> RevisionAsync(Guid docId, int version, AccessService access, InklayerDbContext db, CancellationToken ct)
+    private static async Task<IResult> RevisionAsync(Guid docId, Guid revisionId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
         if (await ReadableDocAsync(docId, access, db, ct) is { } denied)
         {
             return denied;
         }
 
-        var r = await db.DocRevisions.AsNoTracking().Where(r => r.DocId == docId && r.Version == version).OrderByDescending(r => r.OccurredAt).FirstOrDefaultAsync(ct);
+        var r = await db.DocRevisions.AsNoTracking().SingleOrDefaultAsync(r => r.DocId == docId && r.Id == revisionId, ct);
         if (r is null)
         {
             return TypedResults.NotFound();
         }
 
         var actors = await ActorsAsync(db, [r.ActorUserId], ct);
-        return TypedResults.Ok(new DocRevisionContentResponse(r.Version, r.Action, actors[r.ActorUserId], r.OccurredAt, r.Folder, r.Title, r.Content));
+        return TypedResults.Ok(new DocRevisionContentResponse(r.Id, r.Version, r.Action, actors[r.ActorUserId], r.OccurredAt, r.Folder, r.Title, r.Content));
     }
 
     /* ------------------------------------------------------------------ folders */

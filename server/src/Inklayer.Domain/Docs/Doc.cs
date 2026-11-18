@@ -36,6 +36,10 @@ public sealed class Doc
     /// <summary>The last <see cref="DocUpdate.Seq"/> included in <see cref="State"/>.</summary>
     public long SnapshotSeq { get; set; }
 
+    /// <summary>The last <see cref="DocUpdate.Seq"/> given out. Updates are numbered 1, 2, 3… per doc with no gaps, so an
+    /// editor knows it has every update up to a number before it sends a snapshot that replaces them.</summary>
+    public long LastSeq { get; set; }
+
     public required Guid CreatedByUserId { get; init; }
 
     public DateTime CreatedAt { get; init; }
@@ -76,10 +80,10 @@ public sealed class DocFolder
 /// <summary>A Yjs update made since the doc's last snapshot. Deleted once a snapshot includes it.</summary>
 public sealed class DocUpdate
 {
-    /// <summary>Assigned by the database; increases with every update.</summary>
-    public long Seq { get; init; }
-
     public required Guid DocId { get; init; }
+
+    /// <summary>1, 2, 3… within the doc (see <see cref="Doc.LastSeq"/>).</summary>
+    public required long Seq { get; init; }
 
     public required byte[] Bytes { get; init; }
 

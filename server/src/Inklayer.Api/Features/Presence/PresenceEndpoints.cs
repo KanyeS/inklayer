@@ -17,6 +17,9 @@ internal static class PresenceEndpoints
 {
     public const string HubPath = "/api/presence/hub";
 
+    /// <summary>The docs hub (live co-editing) uses the same tickets.</summary>
+    public const string DocsHubPath = "/api/docs/hub";
+
     public static IServiceCollection AddInklayerPresence(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<PresenceOptions>(configuration.GetSection(PresenceOptions.SectionName));
@@ -34,7 +37,15 @@ internal static class PresenceEndpoints
                 o.KeepAliveInterval = TimeSpan.FromSeconds(15);
                 o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
             })
-            .AddHubOptions<PresenceHub>(o => o.AddFilter<PresenceRateFilter>());
+            .AddHubOptions<PresenceHub>(o => o.AddFilter<PresenceRateFilter>())
+            .AddHubOptions<Docs.DocsHub>(o =>
+            {
+                // Snapshots carry a whole doc (bytes are sent as base64 in JSON).
+                o.MaximumReceiveMessageSize = 3 * 1024 * 1024;
+                o.AddFilter<PresenceRateFilter>();
+            });
+        services.AddSingleton<Docs.DocsRegistry>();
+        services.AddScoped<Docs.DocIndexer>();
         return services;
     }
 

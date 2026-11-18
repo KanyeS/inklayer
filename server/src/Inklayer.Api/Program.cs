@@ -29,7 +29,6 @@ try
     builder.Services.AddInklayerNetworkAccess(builder.Configuration);
     builder.Services.AddInklayerAuth(builder.Configuration, builder.Environment);
     builder.Services.AddInklayerPresence(builder.Configuration);
-    builder.Services.AddScoped<DocIndexer>();
     builder.Services.AddValidation();
     builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 

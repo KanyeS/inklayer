@@ -41,9 +41,7 @@ internal sealed class DocUpdateConfiguration : IEntityTypeConfiguration<DocUpdat
 {
     public void Configure(EntityTypeBuilder<DocUpdate> builder)
     {
-        builder.HasKey(u => u.Seq);
-        builder.Property(u => u.Seq).ValueGeneratedOnAdd();
-        builder.HasIndex(u => new { u.DocId, u.Seq });
+        builder.HasKey(u => new { u.DocId, u.Seq });
         builder.HasOne<Doc>().WithMany().HasForeignKey(u => u.DocId).OnDelete(DeleteBehavior.Cascade);
     }
 }

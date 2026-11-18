@@ -243,6 +243,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("LastRevisionAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("LastSeq")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("TEXT");
 
@@ -431,8 +434,10 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Inklayer.Domain.Docs.DocUpdate", b =>
                 {
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Seq")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("At")
@@ -442,15 +447,10 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("BLOB");
 
-                    b.Property<Guid>("DocId")
-                        .HasColumnType("TEXT");
-
                     b.Property<Guid>("UserId")
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Seq");
-
-                    b.HasIndex("DocId", "Seq");
+                    b.HasKey("DocId", "Seq");
 
                     b.ToTable("DocUpdates");
                 });

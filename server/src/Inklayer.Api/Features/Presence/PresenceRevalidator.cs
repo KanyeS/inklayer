@@ -1,6 +1,9 @@
 using System.Net;
+using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Network;
+using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Network;
+using Microsoft.AspNetCore.SignalR;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -8,15 +11,18 @@ using Microsoft.Extensions.Options;
 namespace Inklayer.Api.Features.Presence;
 
 /// <summary>
-/// Presence connections stay open for hours, so they are checked again while open:
+/// Live connections (presence and docs) stay open for hours, so they are checked again while open:
 /// <list type="bullet">
 /// <item>every few minutes, against the user's account (disabled, or signed out everywhere: closed) and organisations
-/// (rooms they lost access to are left, new ones joined);</item>
+/// (presence rooms they lost access to are left, new ones joined; docs they can no longer see are closed, and edit
+/// rights follow their role);</item>
 /// <item>straight away when an administrator changes the network allow list (connections from outside it are closed).</item>
 /// </list>
 /// </summary>
 internal sealed partial class PresenceRevalidator(
     PresenceRegistry registry,
+    DocsRegistry docs,
+    IHubContext<DocsHub> docsHub,
     NetworkAccess network,
     IServiceScopeFactory scopes,
     IOptions<PresenceOptions> options,
@@ -52,6 +58,53 @@ internal sealed partial class PresenceRevalidator(
 
     public async Task RevalidateAsync(CancellationToken ct)
     {
+        await RevalidatePresenceAsync(ct);
+        await RevalidateDocsAsync(ct);
+    }
+
+    private async Task RevalidateDocsAsync(CancellationToken ct)
+    {
+        var connections = docs.All();
+        if (connections.Count == 0)
+        {
+            return;
+        }
+
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<InklayerDbContext>();
+        foreach (var connection in connections)
+        {
+            var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == connection.Peer.UserId, ct);
+            if (user is not { IsDisabled: false } || !string.Equals(user.SecurityStamp, connection.SecurityStamp, StringComparison.Ordinal))
+            {
+                connection.Context.Abort();
+                continue;
+            }
+
+            foreach (var (docId, open) in connection.Docs)
+            {
+                var role = await DocsHub.RoleAsync(db, user.Id, open.OrganizationId, ct);
+                if (role is null)
+                {
+                    connection.Docs.TryRemove(docId, out _);
+                    await docsHub.Groups.RemoveFromGroupAsync(connection.ConnectionId, DocsHub.Group(docId), ct);
+                    await docsHub.Clients.Client(connection.ConnectionId).SendAsync("closed", docId, "You no longer have access to this doc.", ct);
+                    await docsHub.Clients.Group(DocsHub.Group(docId)).SendAsync("peerLeave", docId, connection.Peer.Id, open.ClientId, ct);
+                    continue;
+                }
+
+                var canEdit = role.Value.Grants(Permission.Comment);
+                if (canEdit != open.CanEdit)
+                {
+                    open.CanEdit = canEdit;
+                    await docsHub.Clients.Client(connection.ConnectionId).SendAsync("access", docId, canEdit, ct);
+                }
+            }
+        }
+    }
+
+    private async Task RevalidatePresenceAsync(CancellationToken ct)
+    {
         var connections = registry.All();
         if (connections.Count == 0)
         {
@@ -84,11 +137,11 @@ internal sealed partial class PresenceRevalidator(
             return;
         }
 
-        foreach (var connection in registry.All())
+        foreach (var (address, context) in registry.All().Select(c => (c.Address, c.Context)).Concat(docs.All().Select(c => (c.Address, c.Context))))
         {
-            if (!(connection.Address is { } address && IPAddress.IsLoopback(address)) && !list.Allows(connection.Address))
+            if (!(address is { } ip && IPAddress.IsLoopback(ip)) && !list.Allows(address))
             {
-                connection.Context.Abort();
+                context.Abort();
             }
         }
     }
