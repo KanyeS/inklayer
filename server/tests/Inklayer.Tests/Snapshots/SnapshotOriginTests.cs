@@ -27,15 +27,49 @@ public sealed class SnapshotOriginTests(InklayerApiFactory factory)
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/html", response.Content.Headers.ContentType!.MediaType);
         Assert.Contains("<h1>Hello</h1>", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert(", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("onerror", html, StringComparison.OrdinalIgnoreCase);
 
         var csp = string.Join(";", response.Headers.GetValues("Content-Security-Policy"));
-        Assert.Contains("script-src 'none'", csp, StringComparison.Ordinal);
         Assert.Contains("default-src 'none'", csp, StringComparison.Ordinal);
-        Assert.Contains("sandbox", csp, StringComparison.Ordinal);
+        Assert.Contains("connect-src 'none'", csp, StringComparison.Ordinal);
         Assert.Contains("frame-ancestors http://localhost", csp, StringComparison.Ordinal);
         Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+
+        // Only Inklayer's overlay may run, through a per-response nonce, in a sandbox without allow-same-origin.
+        var nonce = System.Text.RegularExpressions.Regex.Match(csp, "script-src 'nonce-([^']+)'").Groups[1].Value;
+        Assert.NotEmpty(nonce);
+        Assert.Contains("sandbox allow-scripts", csp, StringComparison.Ordinal);
+        Assert.DoesNotContain("allow-same-origin", csp, StringComparison.Ordinal);
+        Assert.Contains($"<script nonce=\"{nonce}\" src=\"/_inklayer/overlay.js", html, StringComparison.Ordinal);
+        Assert.Contains("data-app-origin=\"http://localhost\"", html, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "<script"));
+    }
+
+    [Fact]
+    public async Task Each_response_gets_a_fresh_nonce()
+    {
+        var snapshot = await CaptureAsync();
+        using var anonymous = factory.CreateClient();
+
+        using var first = await anonymous.GetAsync(snapshot.ViewUrl);
+        using var second = await anonymous.GetAsync(snapshot.ViewUrl);
+
+        Assert.NotEqual(first.Headers.GetValues("Content-Security-Policy").Single(), second.Headers.GetValues("Content-Security-Policy").Single());
+    }
+
+    [Fact]
+    public async Task Assets_load_inside_the_sandboxed_page()
+    {
+        var snapshot = await CaptureAsync();
+        using var anonymous = factory.CreateClient();
+
+        using var response = await anonymous.GetAsync(new Uri(snapshot.ViewUrl!, $"a/{Capture.Hash(Capture.Png)}"));
+
+        // The sandboxed page has an opaque origin: fonts need CORS, and a same-origin resource policy would block images.
+        Assert.Equal("*", response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+        Assert.Equal("cross-origin", response.Headers.GetValues("Cross-Origin-Resource-Policy").Single());
+        Assert.Contains("sandbox", response.Headers.GetValues("Content-Security-Policy").Single(), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Auditing;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Organizations;
@@ -36,6 +37,10 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
     public DbSet<SnapshotAsset> SnapshotAssets => Set<SnapshotAsset>();
 
     public DbSet<OrganizationBlob> OrganizationBlobs => Set<OrganizationBlob>();
+
+    public DbSet<Annotation> Annotations => Set<Annotation>();
+
+    public DbSet<AnnotationRevision> AnnotationRevisions => Set<AnnotationRevision>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -15,10 +15,20 @@ namespace Inklayer.Api.Features.Snapshots;
 /// </summary>
 internal static class SnapshotOriginEndpoints
 {
-    // Note for Phase 3: the annotation overlay will need a nonce-based script-src for its own script only.
-    private const string ContentSecurityPolicy =
+    public const string OverlayPath = "/_inklayer/overlay.js";
+
+    /// <summary>
+    /// The policy for captured pages. The page's own script is never allowed. Only Inklayer's overlay script runs, admitted by a
+    /// per-response nonce. The document is sandboxed with scripts but WITHOUT allow-same-origin, so it gets an opaque origin:
+    /// no cookies, no storage, and no same-origin access to anything.
+    /// </summary>
+    private static string DocumentPolicy(string nonce, string frameAncestors) =>
         "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' data:; " +
-        "script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; sandbox";
+        $"script-src 'nonce-{nonce}'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; " +
+        $"sandbox allow-scripts{frameAncestors}";
+
+    /// <summary>Assets and the overlay script never run as documents.</summary>
+    private const string AssetPolicy = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
     public static WebApplication UseSnapshotOrigin(this WebApplication app)
     {
@@ -29,12 +39,13 @@ internal static class SnapshotOriginEndpoints
             return app;
         }
 
-        // On the snapshot host, refuse everything except /s/ routes. Health checks stay available so a proxy can probe either hostname.
+        // On the snapshot host, refuse everything except /s/ routes and the overlay script. Health checks stay available so a proxy can probe either hostname.
         app.Use((context, next) =>
         {
             if (IsSnapshotHost(context, origin)
                 && !context.Request.Path.StartsWithSegments("/s", StringComparison.Ordinal)
-                && !context.Request.Path.StartsWithSegments("/health", StringComparison.Ordinal))
+                && !context.Request.Path.StartsWithSegments("/health", StringComparison.Ordinal)
+                && context.Request.Path != OverlayPath)
             {
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 return Task.CompletedTask;
@@ -46,27 +57,28 @@ internal static class SnapshotOriginEndpoints
         var frameAncestors = Uri.TryCreate(options.AppOrigin, UriKind.Absolute, out var appOrigin)
             ? $"; frame-ancestors {appOrigin.GetLeftPart(UriPartial.Authority)}"
             : "";
-        var policy = ContentSecurityPolicy + frameAncestors;
 
         var group = app.MapGroup("/s/{snapshotId:guid}/{token}").RequireHost(origin.Authority).ExcludeFromDescription()
             .AddEndpointFilter(async (context, next) =>
             {
                 var headers = context.HttpContext.Response.Headers;
-                headers.ContentSecurityPolicy = policy;
                 headers.XContentTypeOptions = "nosniff";
                 headers["Referrer-Policy"] = "no-referrer";
-                headers["Cross-Origin-Resource-Policy"] = "same-origin";
                 headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
                 return await next(context);
             });
 
-        group.MapGet("/", ServeDocumentAsync);
+        group.MapGet("/", (Guid snapshotId, string token, HttpContext context, SnapshotLinks links, InklayerDbContext db, BlobStore blobs) =>
+            ServeDocumentAsync(snapshotId, token, context, links, db, blobs, appOrigin, frameAncestors));
         group.MapGet("/a/{hash}", ServeAssetAsync);
+
+        app.MapGet(OverlayPath, ServeOverlay).RequireHost(origin.Authority).ExcludeFromDescription();
 
         return app;
     }
 
-    private static async Task<IResult> ServeDocumentAsync(Guid snapshotId, string token, HttpContext context, SnapshotLinks links, InklayerDbContext db, BlobStore blobs)
+    private static async Task<IResult> ServeDocumentAsync(
+        Guid snapshotId, string token, HttpContext context, SnapshotLinks links, InklayerDbContext db, BlobStore blobs, Uri? appOrigin, string frameAncestors)
     {
         if (!links.IsValid(snapshotId, token))
         {
@@ -86,8 +98,25 @@ internal static class SnapshotOriginEndpoints
             return Results.NotFound();
         }
 
-        context.Response.Headers.CacheControl = "private, max-age=600";
-        return Results.Stream(stream, "text/html; charset=utf-8");
+        // A fresh nonce per response admits only the overlay script. The stored HTML can't contain a matching nonce.
+        var nonce = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
+        var overlay = appOrigin is null
+            ? ""
+            : $"\n<script nonce=\"{nonce}\" src=\"{OverlayPath}?v={Uri.EscapeDataString(Hosting.AppVersion.Current)}\" " +
+              $"data-app-origin=\"{appOrigin.GetLeftPart(UriPartial.Authority)}\"></script>\n";
+
+        var headers = context.Response.Headers;
+        headers.ContentSecurityPolicy = DocumentPolicy(nonce, frameAncestors);
+        headers.CacheControl = "private, no-store";
+        return Results.Stream(async body =>
+        {
+            await using (stream)
+            {
+                await stream.CopyToAsync(body, context.RequestAborted);
+            }
+
+            await body.WriteAsync(System.Text.Encoding.UTF8.GetBytes(overlay), context.RequestAborted);
+        }, "text/html; charset=utf-8");
     }
 
     private static async Task<IResult> ServeAssetAsync(Guid snapshotId, string token, string hash, HttpContext context, SnapshotLinks links, InklayerDbContext db, BlobStore blobs)
@@ -107,8 +136,29 @@ internal static class SnapshotOriginEndpoints
             return Results.NotFound();
         }
 
-        context.Response.Headers.CacheControl = "private, max-age=3600, immutable";
+        var headers = context.Response.Headers;
+        headers.ContentSecurityPolicy = AssetPolicy;
+        headers.CacheControl = "private, max-age=3600, immutable";
+        // The page is sandboxed, so its requests come from an opaque ("null") origin. Fonts are fetched in CORS mode
+        // and need this header, and a same-origin resource policy would block images. The token in the URL is what protects access.
+        headers.AccessControlAllowOrigin = "*";
+        headers["Cross-Origin-Resource-Policy"] = "cross-origin";
         return Results.Stream(stream, contentType);
+    }
+
+    private static IResult ServeOverlay(HttpContext context, IWebHostEnvironment environment)
+    {
+        var file = environment.WebRootFileProvider.GetFileInfo(OverlayPath.TrimStart('/'));
+        if (!file.Exists)
+        {
+            return Results.NotFound();
+        }
+
+        var headers = context.Response.Headers;
+        headers.XContentTypeOptions = "nosniff";
+        headers.CacheControl = "public, max-age=300";
+        headers["Cross-Origin-Resource-Policy"] = "cross-origin";
+        return Results.Stream(file.CreateReadStream(), "text/javascript; charset=utf-8");
     }
 
     private static bool IsSnapshotHost(HttpContext context, Uri origin) =>

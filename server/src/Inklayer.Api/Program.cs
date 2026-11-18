@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Inklayer.Api.Auth;
 using Inklayer.Api.Endpoints;
 using Inklayer.Api.Features.Admin;
+using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Me;
 using Inklayer.Api.Features.Organizations;
 using Inklayer.Api.Features.Projects;
@@ -31,6 +32,7 @@ try
 
     app.UseInklayerHosting();
     app.UseSnapshotOrigin();
+    app.UseViewerApp();
     app.UseInklayerAuth();
 
     app.MapInklayerHealthChecks();
@@ -42,6 +44,8 @@ try
     app.MapProjectEndpoints();
     app.MapAdminEndpoints();
     app.MapSnapshotEndpoints();
+    app.MapAnnotationEndpoints();
+    app.MapViewerFallback();
 
     await app.RunAsync();
 }

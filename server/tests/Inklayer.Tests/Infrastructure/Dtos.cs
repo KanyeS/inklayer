@@ -31,3 +31,11 @@ public sealed record SnapshotDto(
     Uri? ViewUrl, string? ScreenshotUrl);
 
 public sealed record SnapshotSummaryDto(Guid Id, string Url, string Title, bool HasScreenshot, int AssetCount);
+
+public sealed record AuthorDto(Guid Id, string DisplayName);
+
+public sealed record AnnotationDto(
+    Guid Id, Guid SnapshotId, string Kind, string Status, string Body, string Color,
+    System.Text.Json.JsonElement Anchor, System.Text.Json.JsonElement Geometry, int Version, AuthorDto Author, bool CanEdit, bool CanDelete);
+
+public sealed record RevisionDto(int Version, string Action, AuthorDto Actor, System.Text.Json.JsonElement State);

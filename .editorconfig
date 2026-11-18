@@ -24,6 +24,8 @@ trim_trailing_whitespace = false
 dotnet_diagnostic.CA1711.severity = none
 # EF Core navigation collections are intentionally List<T>.
 dotnet_diagnostic.CA1002.severity = none
+# Minimal API handlers return IResult by design; concrete result types add noise for no measurable gain.
+dotnet_diagnostic.CA1859.severity = none
 
 # EF Core migrations are generated code
 [**/Migrations/*.cs]

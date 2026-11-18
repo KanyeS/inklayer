@@ -39,3 +39,6 @@ Thumbs.db
 *.db
 *.db-shm
 *.db-wal
+
+# Built web viewer and overlay (produced by client/ builds)
+server/src/Inklayer.Api/wwwroot/
