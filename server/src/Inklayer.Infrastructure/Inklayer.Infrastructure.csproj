@@ -6,5 +6,6 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+    <PackageReference Include="AngleSharp" />
   </ItemGroup>
 </Project>

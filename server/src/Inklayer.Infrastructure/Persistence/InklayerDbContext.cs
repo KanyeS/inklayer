@@ -2,6 +2,7 @@ using Inklayer.Domain.Auditing;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Organizations;
 using Inklayer.Domain.Projects;
+using Inklayer.Domain.Snapshots;
 using Inklayer.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -29,6 +30,12 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+
+    public DbSet<Snapshot> Snapshots => Set<Snapshot>();
+
+    public DbSet<SnapshotAsset> SnapshotAssets => Set<SnapshotAsset>();
+
+    public DbSet<OrganizationBlob> OrganizationBlobs => Set<OrganizationBlob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

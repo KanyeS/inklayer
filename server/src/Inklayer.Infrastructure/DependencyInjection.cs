@@ -30,6 +30,8 @@ public static class DependencyInjection
         var paths = new DataPaths(dataRoot);
         Directory.CreateDirectory(paths.Keys);
         services.AddSingleton(paths);
+        Directory.CreateDirectory(paths.Blobs);
+        services.AddSingleton<Storage.BlobStore>();
 
         services.AddDbContextPool<InklayerDbContext>(options => options
             .UseSqlite(connectionString)

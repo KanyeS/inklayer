@@ -10,4 +10,7 @@ public sealed class DataPaths(string root)
 
     /// <summary>Token-signing and Data Protection keys. These files aren't in the Litestream backup; losing them only signs everyone out.</summary>
     public string Keys => Path.Combine(Root, "keys");
+
+    /// <summary>Content-addressed blobs (snapshot HTML, assets, screenshots), in <c>blobs/ab/cd/abcd…</c> form.</summary>
+    public string Blobs => Path.Combine(Root, "blobs");
 }

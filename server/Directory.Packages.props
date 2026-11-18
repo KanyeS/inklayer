@@ -9,6 +9,9 @@
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.15" />
   </ItemGroup>
+  <ItemGroup Label="HTML processing (MIT)">
+    <PackageVersion Include="AngleSharp" Version="1.10.4" />
+  </ItemGroup>
   <ItemGroup Label="Authentication">
     <!-- MIT -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.15" />

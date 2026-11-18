@@ -19,6 +19,7 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
     public const string BootstrapAdminEmail = "admin@inklayer.test";
     public const string ExtensionRedirectUri = "https://extension-id.chromiumapp.org/";
     public const string TestLoginPath = "/test/login";
+    public const string SnapshotOrigin = "http://snapshots.localhost";
 
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "inklayer-tests", Guid.NewGuid().ToString("N"));
 
@@ -34,6 +35,9 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("Inklayer:Auth:ExtensionRedirectUris", ExtensionRedirectUri);
         builder.UseSetting("Inklayer:Auth:AllowInsecureHttp", "true");
         builder.UseSetting("Inklayer:Auth:AuthRequestsPerMinute", "100000");
+        builder.UseSetting("Inklayer:Snapshots:Origin", SnapshotOrigin);
+        builder.UseSetting("Inklayer:Snapshots:AppOrigin", "http://localhost");
+        builder.UseSetting("Inklayer:Snapshots:MaxBlobBytes", "1048576");
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter, TestLoginStartupFilter>());
     }
 
