@@ -16,7 +16,8 @@ public sealed record CreateShareRequest(string Kind, Guid? ProjectId = null, str
 
 public sealed record ShareResponse(
     Guid Id, string Kind, string Url, Guid OrganizationId, Guid? ProjectId, string? ProjectName, string? PageUrl, Guid? DocId, string? DocTitle,
-    bool IncludeResolved, string CreatedBy, DateTime CreatedAt, DateTime? ExpiresAt, bool Expired, int ViewCount, DateTime? LastViewedAt, bool CanRevoke);
+    bool IncludeResolved, string CreatedBy, DateTime CreatedAt, DateTime? ExpiresAt, bool Expired, int ViewCount, DateTime? LastViewedAt, bool CanRevoke,
+    bool Existing = false);
 
 /// <summary>
 /// Read-only links for people without an account: a page's or a project's comments (Commenters and above in the project),
@@ -74,7 +75,7 @@ internal static class ShareEndpoints
                 .Where(s => s.DocId == doc!.Id && s.RevokedAt == null && (s.ExpiresAt == null || s.ExpiresAt > now)).FirstOrDefaultAsync(ct);
             if (existing is not null)
             {
-                return TypedResults.Ok((await ToResponsesAsync(db, secrets, http, [existing], _ => true, now, ct))[0]);
+                return TypedResults.Ok((await ToResponsesAsync(db, secrets, http, [existing], _ => true, now, ct))[0] with { Existing = true });
             }
 
             organizationId = doc!.OrganizationId;
@@ -99,6 +100,20 @@ internal static class ShareEndpoints
                 if (pageUrl is null || pageUrl.Length > ShareLink.MaxPageUrlLength || LivePageUrl.Candidates(pageUrl).Count == 0)
                 {
                     return Invalid("pageUrl", "Must be the address of a web page (http or https).");
+                }
+
+                // Sharing a page again gives its working link (same page, same options) rather than another one.
+                var keys = LivePageUrl.Candidates(pageUrl);
+                var now = clock.GetUtcNow().UtcDateTime;
+                var same = (await db.ShareLinks.AsNoTracking()
+                        .Where(s => s.Kind == ShareKinds.Page && s.ProjectId == projectId && s.IncludeResolved == request.IncludeResolved
+                            && s.RevokedAt == null && (s.ExpiresAt == null || s.ExpiresAt > now))
+                        .OrderByDescending(s => s.CreatedAt).ToListAsync(ct))
+                    .FirstOrDefault(s => LivePageUrl.Candidates(s.PageUrl).SequenceEqual(keys));
+                if (same is not null)
+                {
+                    return TypedResults.Ok((await ToResponsesAsync(db, secrets, http, [same], s => s.CreatedByUserId == currentUser.Id || check.Role.Grants(Permission.ManageProjects), now, ct))[0]
+                        with { Existing = true });
                 }
             }
         }

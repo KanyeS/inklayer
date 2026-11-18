@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Inklayer.Tests.Features;
 
 public sealed record ShareDto(Guid Id, string Kind, string Url, Guid? ProjectId, string? PageUrl, Guid? DocId, bool IncludeResolved, string CreatedBy,
-    DateTime? ExpiresAt, bool Expired, int ViewCount, bool CanRevoke);
+    DateTime? ExpiresAt, bool Expired, int ViewCount, bool CanRevoke, bool Existing = false);
 
 public sealed record PublicReplyDto(string Author, string Body);
 
@@ -80,6 +80,12 @@ public sealed class SharingTests(InklayerApiFactory factory)
         await viewer.PostJsonAsync("/api/shares", new { kind = "page", projectId, pageUrl = $"{site}/checkout" }).ExpectAsync(HttpStatusCode.Forbidden);
         var share = await ShareAsync(ana, new { kind = "page", projectId, pageUrl = $"{site}/checkout?utm=x" });
         Assert.StartsWith("http://localhost/s/", share.Url, StringComparison.Ordinal);
+        Assert.False(share.Existing);
+
+        // Sharing the same page again gives the same link, even to someone else; another page gets its own.
+        var again = await ShareAsync(ben, new { kind = "page", projectId, pageUrl = $"{site}/checkout?utm=x" }, HttpStatusCode.OK);
+        Assert.Equal((share.Id, share.Url, true, false), (again.Id, again.Url, again.Existing, again.CanRevoke));
+        Assert.NotEqual(share.Id, (await ShareAsync(ana, new { kind = "page", projectId, pageUrl = $"{site}/other" })).Id);
 
         using var guest = Guest();
         using var response = await guest.GetAsync(new Uri($"/api/public/shares/{TokenOf(share)}", UriKind.Relative));

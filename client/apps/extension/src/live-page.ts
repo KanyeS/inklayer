@@ -189,6 +189,8 @@ class LiveSession {
   #dragged = false;
   /** What happened to the last "Share this page", shown under the header. */
   #shareNote = "";
+  /** The last "Share this page" link, shown until closed. */
+  #shared: { url: string; existing: boolean; expiresAt: string | null; projectName: string; copied: boolean } | null = null;
   #inBubble = false;
   /** Which marks have positions; cards are rebuilt only when this changes, not on every move. */
   #markIds = "";
@@ -218,6 +220,7 @@ class LiveSession {
     followColorScheme(this.#host);
     void loadPanelFont();
     this.#root = document.createElement("div");
+    this.#root.className = "root";
     this.#shadow.append(this.#root);
     // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
     for (const type of ["keydown", "keyup", "keypress"] as const) this.#root.addEventListener(type, (e) => e.stopPropagation());
@@ -324,6 +327,13 @@ class LiveSession {
       this.#shareNote = "";
       this.#render();
     }, 8000);
+  }
+
+  /** The pin, on the panel's top-right corner like a pushpin: pinned keeps the panel in place; unpinned, the header drags it. */
+  #cornerPin(): HTMLButtonElement {
+    return h("button", { className: this.#panelPinned ? "corner-pin on" : "corner-pin", ariaPressed: String(this.#panelPinned),
+      title: this.#panelPinned ? "Pinned in place. Click to unpin, then drag the header to move the panel." : "Unpinned: drag the header to move the panel (double-click it to put it back in the corner). Click to pin it here.",
+      onclick: () => this.#setPinned(!this.#panelPinned) }, this.#panelPinned ? pinIcon() : pinOffIcon());
   }
 
   #setPinned(pinned: boolean): void {
@@ -978,14 +988,30 @@ class LiveSession {
     const target = this.#target;
     if (!target) return;
     try {
-      const share = await call<{ url: string }>({ type: "live.share", projectId: target.id, url: location.href });
-      this.#shareNote = (await copyText(share.url))
-        ? `Link copied. Anyone with it can read this page's open comments in ${target.name} for 30 days. Turn it off from the project's Sharing tab.`
-        : `Share link: ${share.url}`;
+      const share = await call<{ url: string; existing: boolean; expiresAt: string | null }>({ type: "live.share", projectId: target.id, url: location.href });
+      this.#shared = { url: share.url, existing: share.existing, expiresAt: share.expiresAt, projectName: target.name, copied: await copyText(share.url) };
+      this.#render();
     } catch (e) {
-      this.#shareNote = `Couldn't share: ${(e as Error).message}`;
+      this.#flashNote(`Couldn't share: ${(e as Error).message}`);
     }
-    this.#flashNote(this.#shareNote);
+  }
+
+  /** The share link, with what it shows and until when; stays until closed. */
+  #sharedBox(): HTMLElement {
+    const shared = this.#shared!;
+    const until = shared.expiresAt ? `until ${new Date(shared.expiresAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}` : "with no end date";
+    const copy = h("button", { className: "link", textContent: shared.copied ? "Copied" : "Copy", onclick: () => void copyText(shared.url).then((ok) => {
+      copy.textContent = ok ? "Copied" : "Couldn't copy";
+      window.setTimeout(() => (copy.textContent = "Copy"), 1500);
+    }) });
+    return h("div", { className: "shared" },
+      h("div", { className: "row" },
+        h("strong", { textContent: shared.existing ? "This page's share link" : "Share link created" }),
+        h("button", { className: "icon close", title: "Close", textContent: "×", onclick: () => { this.#shared = null; this.#render(); } })),
+      h("div", { className: "row link-row" },
+        h("a", { className: "share-url", href: shared.url, target: "_blank", rel: "noopener noreferrer", textContent: shared.url, title: shared.url }), copy),
+      h("p", { className: "hint", textContent: `${shared.existing ? "It already existed, so it's the same link as before. " : ""}${shared.copied ? "Copied. " : ""}`
+        + `Anyone with it can read this page's open comments in ${shared.projectName}, ${until}. Turn it off from the project's Sharing tab.` }));
   }
 
   #setBubblesOpen(open: boolean): void {
@@ -1026,9 +1052,6 @@ class LiveSession {
         title: this.#unread ? `Notifications: ${this.#unread} unread` : "Notifications",
         onclick: () => this.#setView(this.#view === "inbox" ? "comments" : "inbox") },
         bellIcon(), this.#unread > 0 ? h("span", { className: "badge", textContent: this.#unread > 99 ? "99+" : String(this.#unread) }) : ""),
-      h("button", { className: this.#panelPinned ? "icon svg on" : "icon svg", ariaPressed: String(this.#panelPinned),
-        title: this.#panelPinned ? "Pinned in place. Click to unpin, then drag the header to move the panel." : "Unpinned: drag the header to move the panel (double-click it to put it back in the corner). Click to pin it.",
-        onclick: () => this.#setPinned(!this.#panelPinned) }, this.#panelPinned ? pinIcon() : pinOffIcon()),
       h("button", { className: "icon svg", title: "Minimise", onclick: () => { this.#open = false; this.#render(); } }, minimiseIcon()));
     const header = h("div", { className: "header" },
       h("div", { className: "tabs" }, tab("comments", "Comments"), tab("activity", "Activity")), actions);
@@ -1048,14 +1071,15 @@ class LiveSession {
     }
 
     const parts: Node[] = [header];
+    if (this.#shared) parts.push(this.#sharedBox());
     if (this.#shareNote) parts.push(h("p", { className: "hint", textContent: this.#shareNote }));
     if (this.#view === "inbox") {
-      this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#inboxParts()));
+      this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#inboxParts()), this.#cornerPin());
       this.#placePanel();
       return;
     }
     if (this.#view === "activity") {
-      this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#activityParts()));
+      this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#activityParts()), this.#cornerPin());
       this.#placePanel();
       return;
     }
@@ -1121,7 +1145,7 @@ class LiveSession {
         onclick: () => { this.#showResolved = !this.#showResolved; this.#syncOverlay(); this.#render(); } }));
     }
 
-    this.#root.replaceChildren(h("div", { className: "panel" }, ...parts));
+    this.#root.replaceChildren(h("div", { className: "panel" }, ...parts), this.#cornerPin());
     this.#placePanel();
   }
 
@@ -1564,9 +1588,26 @@ const STYLES = `
   .panel { width: 344px; max-width: calc(100vw - 16px); box-sizing: border-box; max-height: min(70vh, 640px); overflow: auto; background: var(--popover); color: var(--popover-foreground); border-radius: 22px; padding: 12px;
     box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.3), 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); display: flex; flex-direction: column; gap: 10px; }
   /* The icons wrap under the tabs rather than ever leaving the panel. */
-  .header { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
-  .actions { display: flex; align-items: center; gap: 0; margin-left: auto; }
-  .actions .icon.svg { padding: 5px; }
+  .root { position: relative; }
+  .shared { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 14px; background: color-mix(in oklch, var(--primary) 8%, transparent); }
+  .shared .row { justify-content: space-between; }
+  .shared .close { padding: 0 6px; font-size: 16px; line-height: 1; }
+  .shared .link-row { gap: 6px; }
+  .share-url { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--primary); user-select: all; }
+  :host(.dark) .share-url { color: oklch(0.811 0.111 293.571); }
+  /* One line: the tabs give way (shortening their labels) before anything leaves the panel. */
+  .header { display: flex; align-items: center; gap: 2px; }
+  .header .tabs { flex: 0 1 auto; min-width: 0; }
+  .header .tab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .actions { display: flex; align-items: center; gap: 0; margin-left: auto; flex: none; }
+  .actions .icon.svg { padding: 4px 5px; border-width: 0; }
+  .corner-pin { position: absolute; top: -7px; right: -7px; width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border-radius: 999px;
+    background: var(--popover); color: var(--muted-foreground); box-shadow: 0 2px 6px rgb(0 0 0 / 0.25), 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent); }
+  .corner-pin svg { width: 13px; height: 13px; }
+  .corner-pin:hover { color: var(--foreground); background: var(--popover); }
+  .corner-pin.on { color: var(--primary); }
+  :host(.dark) .corner-pin { background: var(--popover); }
+  :host(.dark) .corner-pin.on { color: oklch(0.811 0.111 293.571); }
   .icon.bell { position: relative; }
   .icon.bell .badge { position: absolute; top: -3px; right: -4px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px; background: var(--primary);
     color: var(--primary-foreground); font-size: 10px; font-weight: 700; line-height: 15px; text-align: center; }
