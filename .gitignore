@@ -33,3 +33,9 @@ test-results/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# Local SQLite databases
+.data/
+*.db
+*.db-shm
+*.db-wal

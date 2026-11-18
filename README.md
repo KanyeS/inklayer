@@ -16,6 +16,34 @@ Capture any web page with the Chrome extension. Then comment on it, highlight it
 | `client/packages/` | Shared TypeScript packages (overlay, capture, API client) |
 | `deploy/` | Dockerfile, docker-compose, reverse-proxy examples |
 
+## Self-hosting
+
+```bash
+cd deploy
+docker compose up -d          # serves on http://localhost:8080
+```
+
+All data (the SQLite database and snapshots) lives on the `inklayer-data` volume. Run a single replica on local disk, and put a TLS reverse proxy in front (see `deploy/Caddyfile.example`).
+
+## Development
+
+Requires the .NET 10 SDK.
+
+```bash
+cd server
+dotnet test                                  # unit + integration tests
+dotnet run --project src/Inklayer.Api        # http://localhost:5048 (DB at server/.data/)
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `/health/live` | Process is up |
+| `/health/ready` | Database reachable |
+| `/openapi/v1.json` | OpenAPI document |
+| `/api/system/version` | Server version |
+
+Licence check: `dotnet tool restore && dotnet nuget-license -i Inklayer.slnx -t -a ../.github/licenses/allowed-licenses.json -override ../.github/licenses/nuget-overrides.json`
+
 ## Licence
 
 [Apache-2.0](LICENSE). Every dependency must use a permissive licence that allows commercial use (MIT, Apache-2.0, BSD, ISC). CI enforces this. See [CONTRIBUTING.md](CONTRIBUTING.md).

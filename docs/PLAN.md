@@ -24,12 +24,12 @@ Chrome Extension (MV3, TypeScript)          Web Viewer (SPA, TypeScript)
 ┌──────────────── Docker: inklayer-server (.NET 10, ASP.NET Core) ─────────────────┐
 │ API (Minimal APIs) │ Auth (Google OIDC + OpenIddict) │ SignalR │ Snapshot host  │
 └───────────┬──────────────────────┬───────────────────────────┬──────────────────┘
-       PostgreSQL            Blob store (S3-compatible            Valkey (optional:
-   (EF Core, metadata,       or a mounted volume: HTML,           SignalR backplane
-    annotations, audit)      assets, screenshots)                 + cache, multi-node)
+         SQLite (WAL mode, EF Core)           Blob store (files on the /data volume;
+   metadata, annotations, history, audit)     S3-compatible storage optional later):
+                                              HTML, assets, screenshots
 ```
 
-Shipped as a `docker-compose.yml` with these services: `server`, `postgres`, and optionally `valkey` (BSD-licensed Redis fork). TLS is handled by the host's reverse proxy, with Caddy or Traefik as the example setup.
+Shipped as a `docker-compose.yml` with a single `server` service. All state (the SQLite database and snapshot files) lives on one `/data` volume, so a backup is a copy of one folder. TLS is handled by the host's reverse proxy, with Caddy or Traefik as the example setup.
 
 ### Suggested repo layout
 ```
@@ -121,7 +121,8 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
 - through signed, short-lived URLs, so access control still applies.
 
 ### 2.7 Performance for hundreds of users
-- A single node handles this comfortably. Plan for horizontal scaling anyway: a stateless API, a Valkey backplane for SignalR (through the Redis protocol client), and blob storage kept separate from the app.
+- A single node handles this comfortably. SQLite runs in WAL mode, so readers never block and writes (small annotation rows) take a few milliseconds. `busy_timeout` queues writers that arrive at the same moment instead of failing them.
+- **Single replica only.** SQLite allows one writer process, and the volume must be local disk (not NFS/SMB). This is the deliberate trade-off for zero-dependency hosting. If horizontal scaling is ever needed, EF Core makes switching the provider to PostgreSQL a contained change.
 - Snapshot HTML and assets have content-hash URLs, so they get `Cache-Control: immutable` and can sit behind a CDN or the reverse proxy cache.
 - Annotations load per snapshot in one paged query, with indexes on `(SnapshotId, CreatedAt)`.
 - Uploads are chunked and limited in size. Asset processing runs in a background queue (`Channel<T>` / `BackgroundService`).
@@ -133,7 +134,7 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
 
 | Phase | Scope |
 |---|---|
-| **0. Foundations** | Repo layout and CI (GitHub Actions: build, test, Docker image). Postgres and EF migrations, OpenAPI, health checks, Serilog and OpenTelemetry. |
+| **0. Foundations** | Repo layout and CI (GitHub Actions: build, test, Docker image). SQLite (WAL) and EF migrations, OpenAPI, health checks, Serilog and OpenTelemetry. |
 | **1. Auth and tenancy** | Google OIDC sign-in, OpenIddict token broker for the extension, domain allow-list and invites, bootstrap admin, org/project/membership/roles, the authorization handlers, the audit log. |
 | **2. Capture** | Extension popup, login, rrweb snapshot, asset upload with deduplication, screenshot, snapshot list in the viewer. Server-side sanitization and the separate snapshot origin. |
 | **3. Annotation core** | Shared overlay package: element picker, highlight, comment pins, rectangles and arrows, free drawing. Multi-anchor storage and re-anchoring. |
@@ -163,11 +164,11 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
      - **Duende IdentityServer is source-available and paid.** Use OpenIddict (Apache-2.0).
      - **MinIO is AGPL.** Don't bundle it in the compose file; use a local volume by default, with any S3 endpoint as an option. SeaweedFS (Apache-2.0) also works if you want a bundled object store.
      - **Some popular .NET libraries switched to commercial licences:** MediatR, AutoMapper and MassTransit v9+ (with FluentAssertions v8+ for tests), plus ImageSharp (Six Labors split licence). Don't use them; they aren't needed anyway.
-     - **Redis 7.4+ is not open source** (RSAL/SSPL, now AGPL in v8). Use **Valkey** (BSD), which is a drop-in replacement.
+     - **Redis 7.4+ is not open source** (RSAL/SSPL, now AGPL in v8). It isn't needed with a single SQLite node; if a cache or backplane is ever added, use **Valkey** (BSD).
    - **Chosen dependencies (all permissive):**
-     - **Server:** ASP.NET Core and EF Core (MIT), Npgsql (PostgreSQL licence), OpenIddict (Apache-2.0), HtmlSanitizer/AngleSharp (MIT), Serilog (Apache-2.0), OpenTelemetry (Apache-2.0)
+     - **Server:** ASP.NET Core and EF Core (MIT), Microsoft.Data.Sqlite (MIT) with SQLitePCLRaw (Apache-2.0) and SQLite (public domain), OpenIddict (Apache-2.0), HtmlSanitizer/AngleSharp (MIT), Serilog (Apache-2.0), OpenTelemetry (Apache-2.0)
      - **Client:** rrweb-snapshot, perfect-freehand, @medv/finder, React and Vite (all MIT)
-     - **Tests:** xUnit (Apache-2.0), Testcontainers (MIT), Playwright (Apache-2.0)
+     - **Tests:** xUnit (Apache-2.0), Playwright (Apache-2.0)
    - **Enforce it in CI:** fail the build if a disallowed licence appears. Use `nuget-license` for .NET and `license-checker --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD"` for npm.
    - **Contributions:** use a DCO sign-off (no CLA), so the licensing stays clear.
    - **Name:** "Inklayer" isn't trademark-checked. Search before publishing to GitHub, npm and the Chrome Web Store.
@@ -187,13 +188,16 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
 9. **Pages fight the overlay.**
    - Their CSS and z-index can interfere with the drawing layer.
    - *Mitigation:* render the overlay inside a closed shadow root at the maximum z-index.
-10. **Storage growth.**
+10. **SQLite limits.**
+    - Only one server replica, and the database must be on local disk. A write lock is held per transaction, so long write transactions (for example a bulk import) must be kept short or batched.
+    - *Backups:* use `VACUUM INTO` or the SQLite backup API while the server runs. Copying the `.db` file mid-write can capture a corrupt state. Ship an admin "backup now" endpoint and CLI.
+11. **Storage growth.**
     - Snapshots plus screenshots take roughly 2–20 MB each.
     - *Mitigation:* deduplicate by hash, compress with Brotli, and add a retention policy and per-org quotas.
-11. **Self-hosted operations.**
+12. **Self-hosted operations.**
     - Customers need backup and restore, upgrades and migrations, and key persistence.
     - *Mitigation:* document these, apply migrations automatically on startup with a guard, and version the image tags.
-12. **Firefox and Safari** are out of scope at first. The overlay package is browser-agnostic, so supporting them later mainly means porting the extension shell.
+13. **Firefox and Safari** are out of scope at first. The overlay package is browser-agnostic, so supporting them later mainly means porting the extension shell.
 
 ---
 
@@ -206,7 +210,7 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
 
 ## 6. Verification
 - **Unit tests:** xUnit for the authorization handlers and the snapshot sanitizer, including an XSS payload corpus. Vitest for anchoring and re-anchoring.
-- **Integration tests:** `WebApplicationFactory` with Testcontainers for Postgres, covering auth flows, permission isolation between tenants, and the revision history.
+- **Integration tests:** `WebApplicationFactory` with a throwaway SQLite file per test group, covering auth flows, permission isolation between tenants, and the revision history.
 - **End-to-end tests:** Playwright loads the unpacked extension and runs a suite of test sites (an SPA, a site using shadow DOM, a page behind a login, an iframe-heavy page). Each test captures, annotates, reloads, and checks that the annotations re-anchor.
 - **Security:**
   - OWASP ZAP scan

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Inklayer.Api/Inklayer.Api.csproj" />
+    <Project Path="src/Inklayer.Domain/Inklayer.Domain.csproj" />
+    <Project Path="src/Inklayer.Infrastructure/Inklayer.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Inklayer.Tests/Inklayer.Tests.csproj" />
+  </Folder>
+</Solution>

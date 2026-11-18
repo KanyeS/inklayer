@@ -1,0 +1,27 @@
+# Inklayer: self-hosted stack.
+#   cp .env.example .env    (optional, then edit the values)
+#   docker compose up -d
+# Put a TLS reverse proxy in front of it (see Caddyfile.example).
+#
+# Storage is a SQLite database plus snapshot files, both on the `inklayer-data` volume.
+# Run ONE server replica: SQLite allows a single writer, and the volume must be local disk (not NFS/SMB).
+
+name: inklayer
+
+services:
+  server:
+    image: ${INKLAYER_IMAGE:-inklayer-server:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    ports:
+      - "${INKLAYER_PORT:-8080}:8080"
+    volumes:
+      - inklayer-data:/data
+
+volumes:
+  inklayer-data:

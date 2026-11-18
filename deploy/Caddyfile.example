@@ -1,0 +1,10 @@
+# Example reverse proxy with automatic HTTPS (Caddy is Apache-2.0).
+# Snapshots will be served from a separate origin (see docs/PLAN.md §2.6).
+
+inklayer.example.com {
+	reverse_proxy server:8080
+}
+
+snapshots.inklayer.example.com {
+	reverse_proxy server:8080
+}
