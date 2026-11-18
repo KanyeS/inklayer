@@ -1,6 +1,7 @@
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Auditing;
 using Inklayer.Domain.Authorization;
+using Inklayer.Domain.Docs;
 using Inklayer.Domain.Organizations;
 using Inklayer.Domain.Projects;
 using Inklayer.Domain.Settings;
@@ -41,6 +42,18 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
     public DbSet<AnnotationRevision> AnnotationRevisions => Set<AnnotationRevision>();
 
     public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();
+
+    public DbSet<Doc> Docs => Set<Doc>();
+
+    public DbSet<DocFolder> DocFolders => Set<DocFolder>();
+
+    public DbSet<DocUpdate> DocUpdates => Set<DocUpdate>();
+
+    public DbSet<DocRevision> DocRevisions => Set<DocRevision>();
+
+    public DbSet<DocLink> DocLinks => Set<DocLink>();
+
+    public DbSet<DocTag> DocTags => Set<DocTag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

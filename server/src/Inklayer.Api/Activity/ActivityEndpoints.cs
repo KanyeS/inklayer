@@ -13,6 +13,7 @@ public static class ActivityKinds
     public const string Comments = "comments";
     public const string SignIns = "signins";
     public const string Errors = "errors";
+    public const string Docs = "docs";
 }
 
 public sealed record ActivityActor(Guid Id, string DisplayName, string? Email);
@@ -23,11 +24,13 @@ public sealed record ActivityActor(Guid Id, string DisplayName, string? Email);
 /// <item><c>comments</c>: <see cref="Action"/> is created, updated, resolved, reopened or deleted, with the page and project.</item>
 /// <item><c>signins</c>: <see cref="Action"/> is signed_in or sign_in_refused.</item>
 /// <item><c>errors</c>: <see cref="Action"/> is error; <see cref="Detail"/> says which request failed and why.</item>
+/// <item><c>docs</c>: <see cref="Action"/> is created, edited, renamed, moved or deleted, with the doc and its organisation.</item>
 /// </list>
 /// </summary>
 public sealed record ActivityItemResponse(
     string Id, string Kind, string Action, DateTime OccurredAt, ActivityActor? Actor,
-    Guid? ProjectId, string? ProjectName, string? PageUrl, Guid? AnnotationId, string? Detail);
+    Guid? ProjectId, string? ProjectName, string? PageUrl, Guid? AnnotationId, string? Detail,
+    Guid? DocId = null, string? DocTitle = null, Guid? OrganizationId = null);
 
 /// <param name="Kinds">The kinds the caller is allowed to see.</param>
 /// <param name="NextBefore">Pass as <c>?before=</c> to get the next, older page; null when there's nothing older.</param>
@@ -36,7 +39,7 @@ public sealed record ActivityResponse(IReadOnlyList<ActivityItemResponse> Items,
 /// <summary>
 /// The activity log. What each person sees depends on their roles:
 /// <list type="bullet">
-/// <item>Everyone: comment activity (who did what, on which page) in the projects they can view.</item>
+/// <item>Everyone: comment activity (who did what, on which page) in the projects they can view, and doc activity in their organisations.</item>
 /// <item>Organisation Admins and Owners: also sign-ins by members of those organisations.</item>
 /// <item>Instance administrators: also refused sign-ins and server errors, which aren't tied to one organisation.</item>
 /// </list>
@@ -48,7 +51,7 @@ internal static class ActivityEndpoints
     public static IEndpointRouteBuilder MapActivityEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/activity", ListAsync).WithTags("Activity").RequireAuthorization()
-            .WithSummary("Activity log, newest first. ?kind=comments|signins|errors (default: all you can see), ?site=<origin> (comments on one site), ?before=<occurredAt>, ?limit=");
+            .WithSummary("Activity log, newest first. ?kind=comments|docs|signins|errors (default: all you can see), ?site=<origin> (comments on one site), ?before=<occurredAt>, ?limit=");
         return app;
     }
 
@@ -64,7 +67,7 @@ internal static class ActivityEndpoints
         var adminOrgIds = user.IsSystemAdmin
             ? []
             : await db.OrganizationMembers.Where(m => m.UserId == user.Id && (m.Role == Role.Admin || m.Role == Role.Owner)).Select(m => m.OrganizationId).ToListAsync(ct);
-        List<string> allowed = [ActivityKinds.Comments];
+        List<string> allowed = [ActivityKinds.Comments, ActivityKinds.Docs];
         if (user.IsSystemAdmin || adminOrgIds.Count > 0)
         {
             allowed.Add(ActivityKinds.SignIns);
@@ -79,7 +82,7 @@ internal static class ActivityEndpoints
         {
             return kind is ActivityKinds.SignIns or ActivityKinds.Errors
                 ? TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only administrators can see that part of the activity log.")
-                : TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["kind"] = ["Must be comments, signins or errors."] });
+                : TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["kind"] = ["Must be comments, docs, signins or errors."] });
         }
 
         string? siteOrigin = null;
@@ -98,6 +101,14 @@ internal static class ActivityEndpoints
         if (kinds.Contains(ActivityKinds.Comments))
         {
             items.AddRange(await CommentsAsync(db, visible.ToDictionary(v => v.Project.Id, v => v.Project.Name), siteOrigin, cursor, take, showEmails, ct));
+        }
+
+        if (kinds.Contains(ActivityKinds.Docs))
+        {
+            var orgIds = user.IsSystemAdmin
+                ? await db.Organizations.Select(o => o.Id).ToListAsync(ct)
+                : await db.OrganizationMembers.Where(m => m.UserId == user.Id).Select(m => m.OrganizationId).ToListAsync(ct);
+            items.AddRange(await DocsAsync(db, orgIds, cursor, take, showEmails, ct));
         }
 
         if (kinds.Contains(ActivityKinds.SignIns))
@@ -133,6 +144,20 @@ internal static class ActivityEndpoints
         return rows.Select(r => new ActivityItemResponse(
             r.Id.ToString(), ActivityKinds.Comments, r.Action, r.OccurredAt, actors.GetValueOrDefault(r.ActorUserId),
             r.ProjectId, projects[r.ProjectId], r.PageUrl, r.AnnotationId, BodyPreview(r.State))).ToList();
+    }
+
+    private static async Task<List<ActivityItemResponse>> DocsAsync(
+        InklayerDbContext db, List<Guid> organizationIds, DateTime before, int take, bool showEmails, CancellationToken ct)
+    {
+        var rows = await db.DocRevisions.AsNoTracking()
+            .Where(r => organizationIds.Contains(r.OrganizationId) && r.OccurredAt < before)
+            .OrderByDescending(r => r.OccurredAt).Take(take)
+            .Select(r => new { r.Id, r.Action, r.OccurredAt, r.ActorUserId, r.DocId, r.Title, r.Folder, r.OrganizationId })
+            .ToListAsync(ct);
+        var actors = await ActorsAsync(db, rows.Select(r => (Guid?)r.ActorUserId), showEmails, ct);
+        return rows.Select(r => new ActivityItemResponse(
+            r.Id.ToString(), ActivityKinds.Docs, r.Action, r.OccurredAt, actors.GetValueOrDefault(r.ActorUserId),
+            null, null, null, null, r.Folder.Length > 0 ? $"{r.Folder}/{r.Title}" : r.Title, r.DocId, r.Title, r.OrganizationId)).ToList();
     }
 
     private static async Task<List<ActivityItemResponse>> SignInsAsync(

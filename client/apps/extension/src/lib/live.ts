@@ -48,7 +48,7 @@ export interface LivePage {
 
 export interface ActivityItem {
   id: string;
-  kind: "comments" | "signins" | "errors";
+  kind: "comments" | "docs" | "signins" | "errors";
   action: string;
   occurredAt: string;
   actor: { id: string; displayName: string; email: string | null } | null;
@@ -57,6 +57,9 @@ export interface ActivityItem {
   pageUrl: string | null;
   annotationId: string | null;
   detail: string | null;
+  docId?: string | null;
+  docTitle?: string | null;
+  organizationId?: string | null;
 }
 
 export interface ActivityPage {

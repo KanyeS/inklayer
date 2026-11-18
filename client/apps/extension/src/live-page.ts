@@ -29,7 +29,14 @@ const ACTIVITY_VERBS: Record<string, string> = {
   sign_in_refused: "Sign-in refused",
   error: "Server error",
 };
-const KIND_LABELS: Record<ActivityItem["kind"], string> = { comments: "Comments", signins: "Sign-ins", errors: "Errors" };
+const DOC_VERBS: Record<string, string> = {
+  created: "created a doc",
+  edited: "edited a doc",
+  renamed: "renamed a doc",
+  moved: "moved a doc",
+  deleted: "deleted a doc",
+};
+const KIND_LABELS: Record<ActivityItem["kind"], string> = { comments: "Comments", docs: "Docs", signins: "Sign-ins", errors: "Errors" };
 
 /** A comment on this page, and the project it belongs to. */
 type PageAnnotation = LiveAnnotation & { projectId: string };
@@ -423,7 +430,7 @@ class LiveSession {
 
   #activityItem(item: ActivityItem): HTMLLIElement {
     const who = item.actor?.displayName || item.actor?.email || "";
-    const verb = ACTIVITY_VERBS[item.action] ?? item.action;
+    const verb = (item.kind === "docs" ? DOC_VERBS[item.action] : ACTIVITY_VERBS[item.action]) ?? item.action;
     const line = h("div", { className: "meta" },
       who ? h("strong", { textContent: who }) : "", h("span", { className: item.kind === "errors" ? "error" : "", textContent: who ? ` ${verb}` : verb }),
       h("span", { className: "muted grow-left", textContent: timeAgo(item.occurredAt), title: new Date(item.occurredAt).toLocaleString() }));

@@ -48,7 +48,7 @@ public sealed class ActivityTests(InklayerApiFactory factory)
 
         var activity = await ActivityAsync(viewer);
 
-        Assert.Equal(["comments"], activity.Kinds);
+        Assert.Equal(["comments", "docs"], activity.Kinds);
         var events = activity.Items.Where(i => i.AnnotationId == mine.Id).ToList();
         Assert.Equal(["resolved", "created"], events.Select(e => e.Action));
         var created = events[1];
@@ -93,7 +93,7 @@ public sealed class ActivityTests(InklayerApiFactory factory)
 
         var activity = await ActivityAsync(orgAdmin, "?kind=signins&limit=200");
 
-        Assert.Equal(["comments", "signins"], activity.Kinds);
+        Assert.Equal(["comments", "docs", "signins"], activity.Kinds);
         var signIn = Assert.Single(activity.Items, i => i.Actor?.Id == memberMe.Id);
         Assert.Equal(("signed_in", memberMe.Email), (signIn.Action, signIn.Actor!.Email));
         Assert.DoesNotContain(activity.Items, i => i.Actor?.Id == outsiderMe.Id);
@@ -126,7 +126,7 @@ public sealed class ActivityTests(InklayerApiFactory factory)
 
         var activity = await ActivityAsync(admin, "?limit=200");
 
-        Assert.Equal(["comments", "signins", "errors"], activity.Kinds);
+        Assert.Equal(["comments", "docs", "signins", "errors"], activity.Kinds);
         var refused = Assert.Single(activity.Items, i => i.Action == "sign_in_refused" && i.Detail!.Contains(stranger.Email, StringComparison.Ordinal));
         Assert.Null(refused.Actor);
         var error = Assert.Single(activity.Items, i => i.Kind == "errors" && i.Detail!.Contains(marker, StringComparison.Ordinal));

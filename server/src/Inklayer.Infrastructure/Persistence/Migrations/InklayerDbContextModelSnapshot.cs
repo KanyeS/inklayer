@@ -215,6 +215,246 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("ErrorEvents");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Docs.Doc", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(1000000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Folder")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastRevisionAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PathKey")
+                        .IsRequired()
+                        .HasMaxLength(701)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SnapshotSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("State")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TitleKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UpdatedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "PathKey")
+                        .IsUnique()
+                        .HasFilter("\"DeletedAt\" IS NULL");
+
+                    b.HasIndex("OrganizationId", "TitleKey");
+
+                    b.ToTable("Docs");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocFolder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PathKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "PathKey")
+                        .IsUnique();
+
+                    b.ToTable("DocFolders");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SourceAnnotationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SourceDocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TargetAnnotationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TargetDocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TargetKey")
+                        .IsRequired()
+                        .HasMaxLength(701)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(701)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceAnnotationId");
+
+                    b.HasIndex("SourceDocId");
+
+                    b.HasIndex("TargetAnnotationId");
+
+                    b.HasIndex("TargetDocId");
+
+                    b.HasIndex("OrganizationId", "TargetKey");
+
+                    b.ToTable("DocLinks");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Folder")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocId", "Version");
+
+                    b.HasIndex("OrganizationId", "OccurredAt");
+
+                    b.ToTable("DocRevisions");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocTag", b =>
+                {
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tag")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("DocId", "Tag");
+
+                    b.HasIndex("OrganizationId", "Tag");
+
+                    b.ToTable("DocTags");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocUpdate", b =>
+                {
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("At")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Bytes")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Seq");
+
+                    b.HasIndex("DocId", "Seq");
+
+                    b.ToTable("DocUpdates");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Organizations.Invitation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -680,6 +920,69 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
                         .WithMany()
                         .HasForeignKey("AnnotationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.Doc", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocFolder", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocLink", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
+                        .WithMany()
+                        .HasForeignKey("SourceAnnotationId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithMany()
+                        .HasForeignKey("SourceDocId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithMany()
+                        .HasForeignKey("TargetDocId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocRevision", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithMany()
+                        .HasForeignKey("DocId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocTag", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithMany()
+                        .HasForeignKey("DocId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocUpdate", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithMany()
+                        .HasForeignKey("DocId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
