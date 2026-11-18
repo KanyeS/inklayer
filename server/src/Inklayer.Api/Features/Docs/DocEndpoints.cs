@@ -27,7 +27,7 @@ public sealed record DocCommentLinkResponse(Guid AnnotationId, Guid ProjectId, s
 public sealed record DocResponse(
     Guid Id, Guid OrganizationId, string Folder, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DocActor? UpdatedBy,
     bool CanEdit, IReadOnlyList<string> Tags, IReadOnlyList<DocSummaryResponse> Backlinks, IReadOnlyList<DocCommentLinkResponse> CommentBacklinks,
-    IReadOnlyList<DocLinkResponse> Links, IReadOnlyList<Guid> CommentLinks);
+    IReadOnlyList<DocLinkResponse> Links, IReadOnlyList<Guid> CommentLinks, IReadOnlyList<Notifications.PersonResponse>? People = null);
 
 /// <param name="RelinkDocs">After a rename or move: docs whose text links the old name. The client that renamed rewrites those links.</param>
 public sealed record DocChangedResponse(DocResponse Doc, IReadOnlyList<Guid> RelinkDocs);
@@ -581,7 +581,8 @@ internal static class DocEndpoints
 
         var updatedBy = await db.Users.AsNoTracking().Where(u => u.Id == doc.UpdatedByUserId).Select(u => new DocActor(u.Id, u.PreferredName ?? u.DisplayName, u.DisplayName)).SingleOrDefaultAsync(ct);
         return new DocResponse(doc.Id, doc.OrganizationId, doc.Folder, doc.Title, doc.Version, doc.CreatedAt, doc.UpdatedAt, updatedBy,
-            role.Grants(Permission.Comment), tags, backlinks, commentBacklinks, links, commentLinks);
+            role.Grants(Permission.Comment), tags, backlinks, commentBacklinks, links, commentLinks,
+            await Notifications.MentionedPeople.ForAsync(db, [doc.Content], ct));
     }
 
     /// <summary>The comments, among <paramref name="ids"/>, that the caller can see.</summary>

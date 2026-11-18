@@ -17,6 +17,7 @@ import { ROLES, atLeast, del, get, patch, post, put, type Invitation, type Membe
 import { dateTime } from "@/lib/format";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
+import { IntegrationsSection } from "@/components/IntegrationsSection";
 import { personTitle } from "@/lib/people";
 
 export function OrganizationPage({ orgId }: { orgId: string }) {
@@ -45,6 +46,7 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
         <TabsList variant="line" className="mb-4">
           <TabsTrigger value="projects">Projects</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
+          {isAdmin && <TabsTrigger value="integrations">Integrations</TabsTrigger>}
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
         <TabsContent value="projects" className="space-y-4">
@@ -58,6 +60,7 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
           )}
         </TabsContent>
         <TabsContent value="members"><Members org={org.data} /></TabsContent>
+        {isAdmin && <TabsContent value="integrations"><IntegrationsSection orgId={orgId} /></TabsContent>}
         {isAdmin && <TabsContent value="settings"><Settings org={org.data} onSaved={org.reload} /></TabsContent>}
       </Tabs>
     </Page>

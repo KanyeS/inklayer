@@ -4,12 +4,14 @@ using Inklayer.Api.Activity;
 using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Features.Live;
+using Inklayer.Api.Features.Notifications;
 using Inklayer.Api.Features.Me;
 using Inklayer.Api.Features.Projects;
 using Inklayer.Api.Hosting;
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Docs;
+using Inklayer.Domain.Notifications;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ModelContextProtocol;
@@ -115,28 +117,28 @@ internal static class InklayerTools
     [McpServerTool(Name = "reply_to_comment", OpenWorld = false), Description("Reply in a comment's thread, as the signed-in person. [[Doc title]] links a doc.")]
     public static async Task<string> ReplyToComment(
         [Description("Comment id")] Guid commentId, [Description("The reply")] string body,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct) =>
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct) =>
         ToolResults.ToJson(ToolResults.Value<ReplyResponse>(
-            await AnnotationEndpoints.CreateReplyAsync(commentId, new CreateReplyRequest(body), access, currentUser, db, indexer, clock, ct)));
+            await AnnotationEndpoints.CreateReplyAsync(commentId, new CreateReplyRequest(body), access, currentUser, db, indexer, notifications, clock, ct)));
 
     [McpServerTool(Name = "set_comment_status", Idempotent = true, OpenWorld = false), Description("Resolve a comment, or reopen it.")]
     public static async Task<string> SetCommentStatus(
         [Description("Comment id")] Guid commentId, [Description("true to resolve, false to reopen")] bool resolved,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct)
     {
         var version = await VersionOfCommentAsync(db, commentId, ct);
         var request = new UpdateAnnotationRequest(version, null, null, resolved ? AnnotationStatus.Resolved : AnnotationStatus.Open, null, null, null);
-        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, clock, ct))));
+        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, notifications, clock, ct))));
     }
 
     [McpServerTool(Name = "edit_comment", OpenWorld = false), Description("Change a comment's text. Only its author, or a project Admin, can.")]
     public static async Task<string> EditComment(
         [Description("Comment id")] Guid commentId, [Description("The new text")] string body,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct)
     {
         var version = await VersionOfCommentAsync(db, commentId, ct);
         var request = new UpdateAnnotationRequest(version, body, null, null, null, null, null);
-        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, clock, ct))));
+        return ToolResults.ToJson(Summary(ToolResults.Value<AnnotationResponse>(await AnnotationEndpoints.UpdateAsync(commentId, request, access, currentUser, db, indexer, notifications, clock, ct))));
     }
 
     [McpServerTool(Name = "delete_reply", Destructive = true, OpenWorld = false), Description("Delete a reply. Only its author, or a project Admin, can.")]
@@ -272,7 +274,15 @@ internal static class InklayerTools
         "list_docs", "search_docs", "read_doc", "doc_history", "list_tags", "create_doc", "edit_doc", "rename_or_move_doc", "delete_doc",
     };
 
-    private static object Summary(AnnotationResponse a) => new
+    private static object Summary(AnnotationResponse a)
+    {
+        // <@id> mentions as @Name, so assistants read names.
+        var names = (a.People ?? []).ToDictionary(p => p.Id, p => p.DisplayName);
+        a = a with { Body = Mentions.ToNames(a.Body, names), Replies = a.Replies?.Select(r => r with { Body = Mentions.ToNames(r.Body, names) }).ToList() };
+        return SummaryOf(a);
+    }
+
+    private static object SummaryOf(AnnotationResponse a) => new
     {
         a.Id, a.ProjectId, a.PageUrl, a.Kind, a.Status, a.Body, Author = a.Author.DisplayName, AuthorFullName = a.Author.FullName, AuthorRole = a.Author.Role,
         a.CreatedAt, a.CanEdit,

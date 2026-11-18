@@ -34,6 +34,12 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
     /// <summary>The identity provider behind <see cref="OidcProviderId"/>.</summary>
     public FakeOidcProvider Oidc { get; } = new();
 
+    /// <summary>Emails the server sent.</summary>
+    public RecordingEmailSender Emails { get; } = new();
+
+    /// <summary>Calls the server made to Slack, webhooks and issue trackers.</summary>
+    public FakeOutboundHandler Outbound { get; } = new();
+
     public Task InitializeAsync() => Task.CompletedTask;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -61,8 +67,12 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         });
 
         // Configure runs before the handler's post-configuration, which builds the backchannel client from this handler.
-        builder.ConfigureTestServices(services => services.Configure<OpenIdConnectOptions>(
-            AuthSchemes.ForProvider(OidcProviderId), o => o.BackchannelHttpHandler = Oidc));
+        builder.ConfigureTestServices(services =>
+        {
+            services.Configure<OpenIdConnectOptions>(AuthSchemes.ForProvider(OidcProviderId), o => o.BackchannelHttpHandler = Oidc);
+            services.AddSingleton<Inklayer.Api.Features.Notifications.IEmailSender>(Emails);
+            services.AddHttpClient(Inklayer.Api.Features.Notifications.NotificationDispatcher.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => Outbound).SetHandlerLifetime(Timeout.InfiniteTimeSpan);
+        });
     }
 
     /// <summary>A client with its own cookie jar, signed in as <paramref name="identity"/> through the real sign-in rules.</summary>

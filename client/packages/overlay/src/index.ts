@@ -8,4 +8,6 @@ export { toFraction, fromFraction } from "./geometry";
 export {
   PresenceLayer, cursorPositionAt, selectionAnchor, placeCursor, findCursorElement, initials, type CursorPosition, type PresencePeerView,
 } from "./presence";
-export { commentParts, openOnPageUrl, commentToOpen, type CommentPart } from "./commentLinks";
+export {
+  commentParts, mentionParts, encodeMentions, decodeMentions, openOnPageUrl, commentToOpen, MENTION_PATTERN, type CommentPart, type MentionPerson,
+} from "./commentLinks";

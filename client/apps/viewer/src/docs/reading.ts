@@ -12,7 +12,11 @@ import { parseLink, type WikiLink } from "./docMarkdown";
 export interface LinkResolver {
   /** The doc a link points to, or null if it doesn't exist yet. */
   doc(link: WikiLink): { href: string } | null;
+  /** The name (and real name) of a mentioned person. */
+  person?(id: string): { displayName: string; fullName: string } | undefined;
 }
+
+let currentResolver: LinkResolver | null = null;
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: false });
 
@@ -28,6 +32,21 @@ md.inline.ruler.before("link", "wikilink", (state: StateInline, silent: boolean)
   state.pos += m[0].length;
   return true;
 });
+
+// <@id>: an @mention, shown as the person's name. Before autolinks, which would otherwise see "<…>".
+md.inline.ruler.before("autolink", "mention", (state: StateInline, silent: boolean) => {
+  const m = /^<@([0-9a-fA-F-]{36})>/.exec(state.src.slice(state.pos));
+  if (!m) return false;
+  if (!silent) state.push("mention", "", 0).meta = { id: m[1]!.toLowerCase() };
+  state.pos += m[0].length;
+  return true;
+});
+
+md.renderer.rules.mention = (tokens, idx) => {
+  const { id } = tokens[idx]!.meta as { id: string };
+  const person = currentResolver?.person?.(id);
+  return `<span class="doc-mention" title="${escapeHtml(person?.fullName ?? "")}">@${escapeHtml(person?.displayName ?? "someone")}</span>`;
+};
 
 // #tag at the start of the text or after a space; not all digits (headings are block-level, so never reach here).
 md.inline.ruler.push("doctag", (state: StateInline, silent: boolean) => {
@@ -64,6 +83,7 @@ md.renderer.rules.doctag = (tokens, idx) => {
 };
 
 export function renderMarkdown(text: string, resolver: LinkResolver): string {
+  currentResolver = resolver;
   md.renderer.rules.wikilink = (tokens, idx) => {
     const { link } = tokens[idx]!.meta as { link: WikiLink };
     if (link.commentId) {

@@ -22,6 +22,8 @@
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
     <PackageVersion Include="YDotNet" Version="0.7.0" />
     <PackageVersion Include="YDotNet.Native.Linux" Version="0.7.0" />
+    <!-- Email notifications over SMTP (MIT) -->
+    <PackageVersion Include="MailKit" Version="5.0.0" />
   </ItemGroup>
   <ItemGroup Label="Observability (Apache-2.0)">
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Docs;
+using Inklayer.Api.Features.Notifications;
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Infrastructure.Persistence;
@@ -45,7 +46,7 @@ internal static partial class AnnotationEndpoints
     /// <summary>Validates and saves a new annotation. The caller has already checked <see cref="Permission.Comment"/>.</summary>
     internal static async Task<IResult> CreateCoreAsync(
         AnnotationTarget target, AnnotationKind kind, string? body, string? requestedColor, JsonElement anchorJson, JsonElement geometryJson, int viewportWidth,
-        Role role, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        Role role, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
         var anchor = ValidateJson(anchorJson, "anchor", MaxAnchorBytes, errors);
@@ -83,13 +84,15 @@ internal static partial class AnnotationEndpoints
         await db.SaveChangesAsync(ct);
         await indexer.IndexCommentAsync(annotation, ct);
         await db.SaveChangesAsync(ct);
+        await notifications.CommentCreatedAsync(annotation, ct);
 
         var authors = await AuthorsAsync(db, [userId], ct);
         return TypedResults.Created($"/api/annotations/{annotation.Id}", (await EnrichAsync(db, [ToResponse(annotation, authors, role, userId)], _ => role, userId, ct))[0]);
     }
 
     internal static async Task<IResult> UpdateAsync(
-        Guid annotationId, UpdateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        Guid annotationId, UpdateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer,
+        NotificationService notifications, TimeProvider clock, CancellationToken ct)
     {
         var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -131,6 +134,7 @@ internal static partial class AnnotationEndpoints
 
         var now = clock.GetUtcNow().UtcDateTime;
         var action = AnnotationActions.Updated;
+        var previousStatus = annotation.Status;
         if (request.Status is { } status && status != annotation.Status)
         {
             annotation.Status = status;
@@ -140,6 +144,8 @@ internal static partial class AnnotationEndpoints
         }
 
         var bodyChanged = request.Body is not null && request.Body.Trim() != annotation.Body;
+        var oldBody = annotation.Body;
+        var resolvedNow = previousStatus != AnnotationStatus.Resolved && annotation.Status == AnnotationStatus.Resolved;
         annotation.Body = request.Body?.Trim() ?? annotation.Body;
         annotation.Color = request.Color?.ToLowerInvariant() ?? annotation.Color;
         annotation.Anchor = anchor ?? annotation.Anchor;
@@ -165,6 +171,12 @@ internal static partial class AnnotationEndpoints
         {
             await indexer.IndexCommentAsync(annotation, ct);
             await db.SaveChangesAsync(ct);
+            await notifications.CommentEditedAsync(annotation, oldBody, userId, ct);
+        }
+
+        if (resolvedNow)
+        {
+            await notifications.ResolvedAsync(annotation, userId, ct);
         }
 
         return TypedResults.Ok((await EnrichAsync(db, [ToResponse(annotation, authors, check.Role, userId)], _ => check.Role, userId, ct))[0]);
@@ -230,13 +242,14 @@ internal static partial class AnnotationEndpoints
             authors.GetValueOrDefault(annotation.AuthorUserId) ?? new AuthorSummary(annotation.AuthorUserId, "", null), annotation.CreatedAt,
             links.GetValueOrDefault(annotation.Id, []), mentions.GetValueOrDefault(annotation.Id, []),
             (await RepliesAsync(db, [annotation.Id], _ => check.Role, currentUser.Id!.Value, ct)).GetValueOrDefault(annotation.Id, []),
-            check.Role.Grants(Permission.Comment), contexts.GetValueOrDefault(annotation.Id), screenshots.Contains(annotation.Id)));
+            check.Role.Grants(Permission.Comment), contexts.GetValueOrDefault(annotation.Id), screenshots.Contains(annotation.Id),
+            await MentionedPeople.ForAsync(db, [annotation.Body, .. await db.AnnotationReplies.Where(r => r.AnnotationId == annotation.Id && r.DeletedAt == null).Select(r => r.Body).ToListAsync(ct)], ct)));
     }
 
     /* ---------------------------------------------------------------- replies */
 
     internal static async Task<IResult> CreateReplyAsync(
-        Guid annotationId, CreateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        Guid annotationId, CreateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct)
     {
         var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -267,13 +280,14 @@ internal static partial class AnnotationEndpoints
         await db.SaveChangesAsync(ct);
         await indexer.IndexCommentAsync(annotation, ct);
         await db.SaveChangesAsync(ct);
+        await notifications.ReplyAsync(annotation, reply, ct);
 
         var authors = await AuthorsAsync(db, [userId], ct);
         return TypedResults.Created($"/api/replies/{reply.Id}", ToReply(reply, authors, check.Role, userId));
     }
 
     internal static async Task<IResult> UpdateReplyAsync(
-        Guid replyId, UpdateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        Guid replyId, UpdateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct)
     {
         var (reply, annotation, role, denied) = await ReplyForChangeAsync(replyId, access, currentUser, db, ct);
         if (denied is not null || reply is null || annotation is null)
@@ -292,6 +306,7 @@ internal static partial class AnnotationEndpoints
         }
 
         var userId = currentUser.Id!.Value;
+        var oldBody = reply.Body;
         reply.Body = body;
         reply.Version++;
         reply.UpdatedAt = clock.GetUtcNow().UtcDateTime;
@@ -306,6 +321,7 @@ internal static partial class AnnotationEndpoints
 
         await indexer.IndexCommentAsync(annotation, ct);
         await db.SaveChangesAsync(ct);
+        await notifications.ReplyEditedAsync(annotation, reply, oldBody, userId, ct);
         return TypedResults.Ok(ToReply(reply, await AuthorsAsync(db, [reply.AuthorUserId], ct), role, userId));
     }
 
@@ -394,9 +410,12 @@ internal static partial class AnnotationEndpoints
             return kv.Value.Select(x => x with { Author = WithRole(x.Author, orgId) }).ToList();
         });
         var (contexts, screenshots) = await ContextEndpoints.ForAsync(db, [.. responses.Select(r => r.Id)], ct);
+        var mentioned = await MentionedPeople.ForAsync(db, responses.Select(r => r.Body).Concat(replies.Values.SelectMany(l => l.Select(x => x.Body))), ct);
         responses = [.. responses.Select(r => r with
         {
             Author = WithRole(r.Author, r.OrganizationId), Context = contexts.GetValueOrDefault(r.Id), HasScreenshot = screenshots.Contains(r.Id),
+            People = [.. mentioned.Where(p => Domain.Notifications.Mentions.Extract(r.Body).Contains(p.Id)
+                || replies.GetValueOrDefault(r.Id, []).Any(x => Domain.Notifications.Mentions.Extract(x.Body).Contains(p.Id)))],
         })];
         // Links are matched against the comment and its replies together.
         var texts = responses.ToDictionary(r => r.Id, r => string.Join('\n', [r.Body, .. replies.GetValueOrDefault(r.Id, []).Select(x => x.Body)]));

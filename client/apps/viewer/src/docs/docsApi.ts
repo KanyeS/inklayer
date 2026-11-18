@@ -53,6 +53,8 @@ export interface DocInfo {
   commentBacklinks: DocCommentLink[];
   links: DocLinkInfo[];
   commentLinks: string[];
+  /** People @mentioned in the doc. */
+  people?: { id: string; displayName: string; fullName: string }[];
 }
 
 export interface DocRevision {

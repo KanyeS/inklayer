@@ -6,6 +6,7 @@ using Inklayer.Domain.Auditing;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using Inklayer.Api.Features.Notifications;
 using Inklayer.Api.Hosting;
 
 namespace Inklayer.Api.Features.Admin;
@@ -30,6 +31,7 @@ internal static class AdminEndpoints
 
         admin.MapNetworkEndpoints();
         admin.MapAdminFeatureEndpoints();
+        admin.MapAdminEmailEndpoints();
 
         admin.MapGet("/users", async (InklayerDbContext db, CancellationToken ct) =>
             TypedResults.Ok(await db.Users.AsNoTracking().OrderBy(u => u.Email)

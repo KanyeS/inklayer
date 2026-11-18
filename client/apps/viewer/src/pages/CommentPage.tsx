@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { MentionTextarea, type MentionTextareaHandle } from "@/components/MentionTextarea";
 import { Check, Copy, ExternalLink, FileText, MessageSquare } from "lucide-react";
 import { commentParts, openOnPageUrl } from "@inklayer/overlay";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
-import { Textarea } from "@inklayer/ui/components/textarea";
 import { ErrorText, Loading, Page } from "@/components/Layout";
 import { useMe } from "@/App";
 import { ApiError, del, get, post } from "@/lib/api";
@@ -28,6 +28,7 @@ interface CommentDetail {
   canReply: boolean;
   context?: PageContext | null;
   hasScreenshot: boolean;
+  people?: { id: string; displayName: string; fullName: string }[];
 }
 
 interface PageContext {
@@ -70,9 +71,11 @@ export function CommentPage({ commentId }: { commentId: string }) {
   if (!comment.data) return <Page><Loading /></Page>;
   const c = comment.data;
   const docHref = (docId: string) => `/orgs/${c.organizationId}/docs/${docId}`;
-  // With docs turned off, [[links]] are just text.
-  const linked = (text: string) => !me.features.docs ? text : commentParts(text, c.docLinks).map((part, i) => (
+  const linked = (text: string) => commentParts(text, c.docLinks, c.people ?? []).map((part, i) => (
     "text" in part ? <span key={i}>{part.text}</span>
+      : "mention" in part ? <span key={i} className="rounded bg-primary/10 px-0.5 font-semibold text-primary" title={part.fullName ?? part.mention}>@{part.mention}</span>
+      // With docs turned off, [[links]] are just text.
+      : !me.features.docs ? <span key={i}>[[{part.shown}]]</span>
       : part.docId ? <Link key={i} to={docHref(part.docId)} className="text-primary underline underline-offset-4">{part.shown}</Link>
       : <span key={i} className="text-muted-foreground" title="This doc doesn't exist yet">{part.shown}</span>
   ));
@@ -128,7 +131,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
           </li>
         ))}
       </ol>
-      {c.canReply && <ReplyForm commentId={c.id} onSent={comment.reload} />}
+      {c.canReply && <ReplyForm commentId={c.id} orgId={c.organizationId} onSent={comment.reload} />}
 
       {me.features.docs && <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Mentioned in</h2>}
       {!me.features.docs ? null : c.mentionedIn.length === 0 ? (
@@ -154,8 +157,9 @@ function safePath(url: string): string {
   }
 }
 
-function ReplyForm({ commentId, onSent }: { commentId: string; onSent: () => Promise<void> }) {
+function ReplyForm({ commentId, orgId, onSent }: { commentId: string; orgId: string; onSent: () => Promise<void> }) {
   const [body, setBody] = useState("");
+  const box = useRef<MentionTextareaHandle>(null);
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState(false);
   const send = async (e?: FormEvent) => {
@@ -163,7 +167,7 @@ function ReplyForm({ commentId, onSent }: { commentId: string; onSent: () => Pro
     if (!body.trim()) return;
     setBusy(true);
     try {
-      await post(`/api/annotations/${commentId}/replies`, { body });
+      await post(`/api/annotations/${commentId}/replies`, { body: box.current?.encoded() ?? body });
       setBody("");
       setError(null);
       await onSent();
@@ -175,12 +179,14 @@ function ReplyForm({ commentId, onSent }: { commentId: string; onSent: () => Pro
   };
   return (
     <form className="mt-4 flex flex-col gap-2" onSubmit={send}>
-      <Textarea
-        placeholder="Reply… ([[ links a doc; Ctrl+Enter sends)"
+      <MentionTextarea
+        ref={box}
+        orgId={orgId}
+        placeholder="Reply… (@ mentions someone; Ctrl+Enter sends)"
         aria-label="Reply"
         value={body}
         maxLength={10000}
-        onChange={(e) => setBody(e.target.value)}
+        onValueChange={setBody}
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void send();
         }}

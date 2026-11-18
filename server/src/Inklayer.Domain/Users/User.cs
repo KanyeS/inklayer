@@ -22,6 +22,9 @@ public sealed class User
     /// <summary>The name shown to others: the chosen one, or the real one. (In queries, use <c>PreferredName ?? DisplayName</c>.)</summary>
     public string Name => PreferredName ?? DisplayName;
 
+    /// <summary>Email this person their notifications (when their organisation sends emails).</summary>
+    public bool EmailNotifications { get; set; } = true;
+
     public string? AvatarUrl { get; set; }
 
     /// <summary>Instance administrator: can create organisations, manage users and access every organisation.</summary>

@@ -10,6 +10,7 @@ import { ErrorText, Loading } from "@/components/Layout";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
+import { get } from "@/lib/api";
 import { personTitle } from "@/lib/people";
 import { useMe } from "@/App";
 import { DocSession, type AwarenessUser } from "./collab";
@@ -84,7 +85,7 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: {
             snapshot?.status === "offline" ? <ErrorText error={new Error(snapshot.error || "Can't reach the server. Retrying…")} /> : <Loading />
           ) : (
             <Body orgId={orgId} session={session} tree={tree} mode={mode} canEdit={canEdit} commentLinks={info.data.commentLinks} onTag={onTag} onTreeChanged={onTreeChanged}
-              liveCursors={liveCursors} />
+              liveCursors={liveCursors} people={info.data.people ?? []} />
           )}
         </div>
       </main>
@@ -202,7 +203,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
 
 /* ------------------------------------------------------------------ the text */
 
-function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTreeChanged, liveCursors }: {
+function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTreeChanged, liveCursors, people }: {
   orgId: string;
   session: DocSession;
   tree: DocTree;
@@ -212,8 +213,12 @@ function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTree
   onTag: (tag: string) => void;
   onTreeChanged: () => Promise<void>;
   liveCursors: boolean;
+  people: { id: string; displayName: string; fullName: string }[];
 }) {
   const host = useRef<HTMLDivElement>(null);
+  // Names for <@id> mentions: those in the doc, plus anyone picked from @ suggestions here.
+  const names = useRef(new Map<string, { displayName: string; fullName: string }>());
+  for (const p of people) names.current.set(p.id.toLowerCase(), p);
   const editorRef = useRef<DocEditor | null>(null);
   const treeRef = useRef(tree);
   treeRef.current = tree;
@@ -248,6 +253,12 @@ function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTree
       openLink: (link, newTab) => void openLink(link.target, resolveLink(treeRef.current.docs, link)?.id ?? null, newTab),
       openComment: (id) => navigate(`/comments/${id}`),
       commentLabel: (id) => labels.current.get(id),
+      people: async (q) => {
+        const found = await get<{ id: string; displayName: string; fullName: string }[]>(`/api/orgs/${orgId}/members/lookup?q=${encodeURIComponent(q)}`).catch(() => []);
+        for (const p of found) names.current.set(p.id.toLowerCase(), p);
+        return found;
+      },
+      person: (id) => names.current.get(id),
       onPointer: (pointer) => session.awareness.setLocalStateField("pointer", pointer),
     });
     editorRef.current = editor;
@@ -262,7 +273,7 @@ function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTree
 
   usePresence(session, editorRef, liveCursors);
 
-  if (mode === "read") return <Reading orgId={orgId} session={session} tree={tree} onTag={onTag} openLink={openLink} />;
+  if (mode === "read") return <Reading orgId={orgId} session={session} tree={tree} onTag={onTag} openLink={openLink} person={(id) => names.current.get(id)} />;
   return <div ref={host} className="doc-editor min-h-[50vh]" />;
 }
 
@@ -310,12 +321,13 @@ function usePresence(session: DocSession, editorRef: React.RefObject<DocEditor |
   }, [session, editorRef, enabled]);
 }
 
-function Reading({ orgId, session, tree, onTag, openLink }: {
+function Reading({ orgId, session, tree, onTag, openLink, person }: {
   orgId: string;
   session: DocSession;
   tree: DocTree;
   onTag: (tag: string) => void;
   openLink: (target: string | null, resolvedId: string | null, newTab: boolean) => Promise<void>;
+  person: (id: string) => { displayName: string; fullName: string } | undefined;
 }) {
   const [html, setHtml] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -327,6 +339,7 @@ function Reading({ orgId, session, tree, onTag, openLink }: {
         const doc = resolveLink(tree.docs, link);
         return doc ? { href: docPath(orgId, doc.id) } : null;
       },
+      person,
     }));
     render();
     const update = () => {

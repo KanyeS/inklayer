@@ -6,6 +6,7 @@ import { Button } from "@inklayer/ui/components/button";
 import { Spinner } from "@inklayer/ui/components/spinner";
 import { post } from "@/lib/api";
 import { Link } from "@/lib/router";
+import { NotificationBell } from "@/components/NotificationBell";
 
 /** @param wide Full-width pages (docs) use the whole window; others sit in a centred column. */
 export function Layout({ children, wide }: { children: ReactNode; wide?: boolean }) {
@@ -20,6 +21,7 @@ export function Layout({ children, wide }: { children: ReactNode; wide?: boolean
         <div className={cn("mx-auto flex h-14 items-center justify-between gap-4 px-5", !wide && "max-w-6xl")}>
           <Link to="/" className="font-heading text-lg font-bold tracking-tight">Inklayer</Link>
           <nav className="flex items-center gap-2">
+            <NotificationBell />
             {me.isSystemAdmin && (
               <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin" />}>Admin</Button>
             )}

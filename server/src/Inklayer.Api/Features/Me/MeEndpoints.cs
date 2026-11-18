@@ -43,7 +43,7 @@ internal static class MeEndpoints
                 .ToListAsync(ct);
 
         return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.Name, user.AvatarUrl, user.IsSystemAdmin, organizations,
-            FeaturesResponse.From(await features.StatesAsync(ct)), user.DisplayName, user.PreferredName));
+            FeaturesResponse.From(await features.StatesAsync(ct)), user.DisplayName, user.PreferredName, user.EmailNotifications));
     }
 
     private static async Task<IResult> UpdateAsync(UpdateMeRequest request, CurrentUser currentUser, InklayerDbContext db, FeatureSwitches features, CancellationToken ct)
@@ -55,16 +55,22 @@ internal static class MeEndpoints
             return Results.Unauthorized();
         }
 
-        var name = request.PreferredName?.Trim() ?? "";
-        if (name.Length > User.MaxPreferredNameLength || name.Any(char.IsControl))
+        // Only what's given changes. An empty name means "use my real name".
+        if (request.PreferredName is not null)
         {
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            var name = request.PreferredName.Trim();
+            if (name.Length > User.MaxPreferredNameLength || name.Any(char.IsControl))
             {
-                ["preferredName"] = [$"Use at most {User.MaxPreferredNameLength} characters, without line breaks."],
-            });
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["preferredName"] = [$"Use at most {User.MaxPreferredNameLength} characters, without line breaks."],
+                });
+            }
+
+            user.PreferredName = name.Length == 0 ? null : name;
         }
 
-        user.PreferredName = name.Length == 0 ? null : name;
+        user.EmailNotifications = request.EmailNotifications ?? user.EmailNotifications;
         await db.SaveChangesAsync(ct);
         return await MeAsync(currentUser, db, features, ct);
     }
@@ -108,7 +114,8 @@ internal sealed record MyOrganization(Guid Id, string Name, Role Role);
 /// <param name="PreferredName">The name they chose, if any.</param>
 internal sealed record MeResponse(
     Guid Id, string Email, string DisplayName, string? AvatarUrl, bool IsSystemAdmin, IReadOnlyList<MyOrganization> Organizations, FeaturesResponse Features,
-    string FullName, string? PreferredName);
+    string FullName, string? PreferredName, bool EmailNotifications);
 
-/// <param name="PreferredName">The name to be shown as; empty or null for your real name.</param>
-internal sealed record UpdateMeRequest(string? PreferredName);
+/// <param name="PreferredName">The name to be shown as; empty for your real name; null (or left out) to keep it.</param>
+/// <param name="EmailNotifications">Email me my notifications (when my organisation sends emails).</param>
+internal sealed record UpdateMeRequest(string? PreferredName, bool? EmailNotifications = null);

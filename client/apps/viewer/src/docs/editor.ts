@@ -14,6 +14,10 @@ import type { DocSession } from "./collab";
 import { LINK_PATTERN, commentUrlPattern, parseLink, type WikiLink } from "./docMarkdown";
 
 export interface EditorHooks {
+  /** People in the organisation whose name matches, for @ suggestions. */
+  people?(query: string): Promise<{ id: string; displayName: string; fullName: string }[]>;
+  /** Name and real name for a mentioned person, once known. */
+  person?(id: string): { displayName: string; fullName: string } | undefined;
   /** Docs that [[ suggests. */
   titles(): { title: string; folder: string }[];
   openLink(link: WikiLink, newTab: boolean): void;
@@ -53,10 +57,11 @@ export function createEditor(parent: HTMLElement, session: DocSession, hooks: Ed
         yCollab(session.text, session.awareness, { undoManager }),
         editable.of(editableExtensions(session.canEdit)),
         placeholder(session.canEdit ? "Start writing. [[ links a doc, # adds a tag." : "This doc is empty."),
-        autocompletion({ override: [linkCompletion(hooks)], icons: false }),
+        autocompletion({ override: [linkCompletion(hooks), mentionCompletion(hooks)], icons: false }),
         linkMarks,
         tagMarks,
         commentChips(hooks),
+        mentionChips(hooks),
         EditorView.domEventHandlers({
           click(event) {
             const el = (event.target as Element).closest<HTMLElement>(".cm-wikilink");
@@ -221,6 +226,73 @@ function commentChips(hooks: EditorHooks) {
   }, { decorations: (v) => v.decorations });
 }
 
+class MentionChip extends WidgetType {
+  constructor(readonly name: string, readonly fullName: string) {
+    super();
+  }
+
+  override eq(other: MentionChip) {
+    return other.name === this.name && other.fullName === this.fullName;
+  }
+
+  toDOM() {
+    const chip = document.createElement("span");
+    chip.className = "cm-mention";
+    chip.textContent = `@${this.name}`;
+    chip.title = this.fullName;
+    return chip;
+  }
+}
+
+/** <@id> shows as @Name (real name on hover), except while the cursor is in it. */
+function mentionChips(hooks: EditorHooks) {
+  return ViewPlugin.fromClass(class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = this.#build(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged || update.transactions.length > 0) this.decorations = this.#build(update.view);
+    }
+
+    #build(view: EditorView): DecorationSet {
+      const builder = new RangeSetBuilder<Decoration>();
+      const { from: selFrom, to: selTo } = view.state.selection.main;
+      for (const { from, to } of view.visibleRanges) {
+        for (const m of view.state.sliceDoc(from, to).matchAll(/<@([0-9a-f-]{36})>/gi)) {
+          const start = from + m.index;
+          const end = start + m[0].length;
+          if (selFrom <= end && selTo >= start) continue;
+          const person = hooks.person?.(m[1]!.toLowerCase());
+          builder.add(start, end, Decoration.replace({ widget: new MentionChip(person?.displayName ?? "someone", person?.fullName ?? "") }));
+        }
+      }
+      return builder.finish();
+    }
+  }, { decorations: (v) => v.decorations });
+}
+
+/** Typing @ suggests people in the organisation; picking one inserts <@id>, shown as their name. */
+function mentionCompletion(hooks: EditorHooks) {
+  return async (context: CompletionContext): Promise<CompletionResult | null> => {
+    const before = context.matchBefore(/(?:^|\s)@[^\s@<>[\]]{0,30}$/);
+    if (!before || !hooks.people) return null;
+    const at = before.from + before.text.indexOf("@");
+    const people = await hooks.people(before.text.slice(before.text.indexOf("@") + 1));
+    return {
+      from: at,
+      filter: false,
+      options: people.map((p) => ({
+        label: `@${p.displayName}`,
+        detail: p.fullName !== p.displayName ? p.fullName : undefined,
+        apply: `<@${p.id}> `,
+      })),
+    };
+  };
+}
+
 /* ------------------------------------------------------------------ [[ suggestions */
 
 function linkCompletion(hooks: EditorHooks) {
@@ -285,6 +357,7 @@ const theme = EditorView.theme({
     backgroundColor: "color-mix(in oklab, var(--primary) 10%, transparent)", border: "1px solid color-mix(in oklab, var(--primary) 25%, transparent)",
   },
   ".cm-comment-chip-icon": { fontSize: "0.85em" },
+  ".cm-mention": { color: "var(--primary)", fontWeight: "600", backgroundColor: "color-mix(in oklab, var(--primary) 10%, transparent)", borderRadius: "6px", padding: "0 3px" },
   ".cm-tooltip.cm-tooltip-autocomplete": { border: "1px solid var(--border)", borderRadius: "12px", backgroundColor: "var(--popover)", color: "var(--popover-foreground)", overflow: "hidden" },
   ".cm-tooltip-autocomplete ul li[aria-selected]": { backgroundColor: "var(--accent)", color: "var(--accent-foreground)" },
   ".cm-completionDetail": { marginLeft: "8px", color: "var(--muted-foreground)", fontStyle: "normal" },

@@ -90,7 +90,8 @@ internal sealed class DocsRegistry(IOptions<PresenceOptions> options)
 /// </summary>
 [Authorize(AuthenticationSchemes = PresenceTicketHandler.SchemeName)]
 internal sealed partial class DocsHub(
-    DocsRegistry registry, InklayerDbContext db, DocIndexer indexer, IOptions<PresenceOptions> options, TimeProvider clock, FeatureSwitches features) : Hub
+    DocsRegistry registry, InklayerDbContext db, DocIndexer indexer, IOptions<PresenceOptions> options, TimeProvider clock, FeatureSwitches features,
+    Notifications.NotificationService notifications) : Hub
 {
     /// <summary>Ask an editor for a snapshot once this many updates are waiting, and again every <see cref="CompactEvery"/> after.</summary>
     public const int CompactAfter = 100;
@@ -239,6 +240,7 @@ internal sealed partial class DocsHub(
         await db.DocUpdates.Where(u => u.DocId == docId && u.Seq <= upToSeq).ExecuteDeleteAsync();
 
         var doc = await db.Docs.SingleAsync(d => d.Id == docId);
+        var oldContent = doc.Content;
         if (!string.Equals(doc.Content, markdown, StringComparison.Ordinal))
         {
             doc.Content = markdown;
@@ -253,6 +255,11 @@ internal sealed partial class DocsHub(
 
         await db.SaveChangesAsync();
         await tx.CommitAsync();
+        if (!string.Equals(oldContent, markdown, StringComparison.Ordinal))
+        {
+            await notifications.DocEditedAsync(doc, oldContent, editors.Count > 0 ? editors[^1] : me.Peer.UserId, Context.ConnectionAborted);
+        }
+
         return true;
     }
 

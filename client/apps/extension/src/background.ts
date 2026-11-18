@@ -3,7 +3,11 @@ import { NotSignedInError, redirectUri, signIn, signOut } from "./lib/auth";
 import type { Request, Response, StateResponse } from "./lib/messages";
 import { handleLive, isLiveRequest, openLiveInTab, stopLive, syncLiveScript, type LiveRequest } from "./lib/live";
 import { getSettings } from "./lib/settings";
+import { inbox, markRead, startNotifications } from "./lib/notifications";
 import { PRESENCE_PORT, acceptPort, forgetTab, isPresenceOn, setPresence, stopPresence } from "./lib/presence";
+
+// The unread count on the toolbar icon.
+startNotifications();
 
 // Keep the live content script registered while signed in with site access.
 chrome.runtime.onStartup.addListener(() => void syncLiveScript());
@@ -67,6 +71,11 @@ async function handle(request: Request): Promise<unknown> {
       return null;
     case "openLive":
       await openLiveInTab(request.tabId, request.view);
+      return null;
+    case "notifications":
+      return inbox();
+    case "notificationsRead":
+      await markRead(request.ids ?? null);
       return null;
     case "presenceState":
       return isPresenceOn(request.tabId);

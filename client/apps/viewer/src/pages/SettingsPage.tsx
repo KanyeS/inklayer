@@ -4,6 +4,7 @@ import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { Button } from "@inklayer/ui/components/button";
 import { Field, FieldDescription, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
+import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { patch, type Me } from "@/lib/api";
 
 /** Your own settings: the name others see. */
@@ -44,6 +45,18 @@ export function SettingsPage() {
         </div>
         <ErrorText error={error} />
       </form>
+
+      <SectionTitle>Notifications</SectionTitle>
+      <label className="flex max-w-md items-start gap-3 text-sm">
+        <Checkbox className="mt-0.5" checked={me.emailNotifications} onCheckedChange={async (checked) => {
+          await patch<Me>("/api/me", { emailNotifications: checked === true });
+          await reloadMe();
+        }} />
+        <span>
+          Email me when I'm mentioned, when someone replies in a thread I'm in, and when my comment is resolved.
+          <span className="block text-muted-foreground">Only if your organisation sends notifications by email. You always see them under the bell.</span>
+        </span>
+      </label>
     </Page>
   );
 }

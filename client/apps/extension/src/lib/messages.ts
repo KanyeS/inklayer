@@ -1,4 +1,5 @@
 import type { Me } from "./api";
+import type { Inbox } from "./notifications";
 
 /** Messages from the popup to the background worker, and what each one returns. */
 export type Request =
@@ -7,7 +8,9 @@ export type Request =
   | { type: "signOut" }
   | { type: "openLive"; tabId: number; view?: "comments" | "activity" }
   | { type: "presenceState"; tabId: number }
-  | { type: "setPresence"; tabId: number; on: boolean };
+  | { type: "setPresence"; tabId: number; on: boolean }
+  | { type: "notifications" }
+  | { type: "notificationsRead"; ids?: string[] };
 
 export interface StateResponse {
   serverUrl: string | null;
@@ -25,6 +28,8 @@ export interface ResponseMap {
   openLive: null;
   presenceState: boolean;
   setPresence: null;
+  notifications: Inbox;
+  notificationsRead: null;
 }
 
 export async function send<K extends Request["type"]>(request: Extract<Request, { type: K }>): Promise<ResponseMap[K]> {

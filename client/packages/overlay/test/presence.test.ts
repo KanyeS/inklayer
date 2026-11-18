@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { PresenceLayer, commentParts, commentToOpen, cursorPositionAt, initials, openOnPageUrl, placeCursor, selectionAnchor } from "../src";
+import { PresenceLayer, commentParts, commentToOpen, decodeMentions, encodeMentions, cursorPositionAt, initials, openOnPageUrl, placeCursor, selectionAnchor } from "../src";
 
 const HTML = `<main id="article"><p>One</p><p>Two, the paragraph under the pointer.</p><p>Three</p></main>`;
 const page = () => new JSDOM(`<!DOCTYPE html><html><body>${HTML}</body></html>`, { pretendToBeVisual: true }).window.document;
@@ -108,5 +108,26 @@ describe("comment links", () => {
     expect(commentToOpen("https://x.test/a", `https://x.test/a#:~:inklayer=comment:${id}`)).toBe(id);
     expect(commentToOpen(`https://x.test/a#tab=2:~:inklayer=comment:${id}`, undefined)).toBe(id);
     expect(commentToOpen("https://x.test/a#:~:text=hello", undefined)).toBeNull();
+  });
+});
+
+describe("mentions", () => {
+  const ana = { id: "0193a6b2-1111-7222-8333-944455556666", displayName: "Ana", fullName: "Ana Lee" };
+  const anaLee = { id: "0193a6b2-1111-7222-8333-944455557777", displayName: "Ana Lee", fullName: "Ana Lee" };
+
+  it("shows <@id> as names, next to doc links", () => {
+    expect(commentParts(`Ask <@${ana.id}> about [[Spec]]`, [{ text: "Spec", docId: "d1" }], [ana])).toEqual([
+      { text: "Ask " },
+      { mention: "Ana", userId: ana.id, fullName: "Ana Lee" },
+      { text: " about " },
+      { link: "Spec", shown: "Spec", docId: "d1" },
+    ]);
+  });
+
+  it("round-trips between what people type and what's stored", () => {
+    const picked = new Map<string, string>();
+    const shown = decodeMentions(`<@${ana.id}> and <@${anaLee.id}>`, [ana, anaLee], picked);
+    expect(shown).toBe("@Ana and @Ana Lee");
+    expect(encodeMentions(shown, picked)).toBe(`<@${ana.id}> and <@${anaLee.id}>`);
   });
 });

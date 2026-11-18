@@ -163,6 +163,25 @@ The details show in the extension, in the web app, and to AI assistants through 
 - `list_open_comments` lists the open comments in a project, optionally on one page, with their details.
 - `get_comment_screenshot` returns the screenshot as an image, so an assistant can see the problem it's fixing.
 
+### Mentions and notifications
+Type `@` in a comment, reply or doc to mention someone in the organisation. People are suggested by the name they chose or their real name.
+
+Everyone gets in-app notifications: a bell in the web app, and a count on the extension's toolbar icon. They hear about:
+- being mentioned in a comment, reply or doc;
+- replies in a thread they're in;
+- their comment being resolved;
+- an issue linked to their comment being closed.
+
+Organisation Admins can add as many integrations as they like under the organisation's **Integrations** tab:
+
+| Integration | What it does |
+|---|---|
+| **Email** | Emails people their own notifications. The server needs SMTP settings (`INKLAYER_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_FROM`; Amazon SES works). Each person can turn emails off in Settings. |
+| **Slack** | Posts to a channel through an incoming webhook. You choose the events (new comments, mentions, replies, resolved, issues) and, optionally, one project. |
+| **Webhook** | Posts JSON to any https address, signed with `X-Inklayer-Signature: sha256=…` (HMAC-SHA256 of the body with the secret shown when you add it). Use it for Teams, Discord or your own tools. |
+
+Messages wait in an outbox and are retried with growing gaps, up to 8 tries. The last error shows on the integration. Webhook addresses and secrets are stored encrypted.
+
 ### Turning features on and off
 Instance administrators can turn these features off for everyone under **Admin → Features**:
 - **Docs:** the knowledge base, the graph, live doc editing, and `[[links]]` between comments and docs.

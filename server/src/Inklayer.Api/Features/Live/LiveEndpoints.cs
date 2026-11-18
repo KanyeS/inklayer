@@ -135,7 +135,8 @@ internal static class LiveEndpoints
     }
 
     private static async Task<IResult> CreateAsync(
-        Guid projectId, CreateLiveAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, Docs.DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        Guid projectId, CreateLiveAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, Docs.DocIndexer indexer,
+        Notifications.NotificationService notifications, TimeProvider clock, CancellationToken ct)
     {
         var check = await access.CheckProjectAsync(projectId, Permission.Comment, ct);
         if (!check.IsAllowed)
@@ -156,7 +157,7 @@ internal static class LiveEndpoints
 
         var target = new AnnotationEndpoints.AnnotationTarget(projectId, project.OrganizationId, key);
         return await AnnotationEndpoints.CreateCoreAsync(
-            target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, indexer, clock, ct);
+            target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, indexer, notifications, clock, ct);
     }
 
     internal static async Task<IResult> PagesAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)

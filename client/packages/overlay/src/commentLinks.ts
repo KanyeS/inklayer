@@ -9,10 +9,64 @@
  * </ul>
  */
 
-export type CommentPart = { text: string } | { link: string; shown: string; docId: string | null };
+export type CommentPart =
+  | { text: string }
+  | { link: string; shown: string; docId: string | null }
+  | { mention: string; userId: string; fullName: string | null };
 
-/** Splits a comment body into text and [[links]], with the doc each link opens (from the server's docLinks). */
-export function commentParts(body: string, docLinks: { text: string; docId: string | null }[] = []): CommentPart[] {
+/** Someone who can be @mentioned: the name they're shown as, and their real name (for hover). */
+export interface MentionPerson {
+  id: string;
+  displayName: string;
+  fullName?: string | null;
+}
+
+/** <@user-id>: an @mention, stored by id and shown as the person's name. */
+export const MENTION_PATTERN = /<@([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})>/g;
+
+/**
+ * Splits a comment body into text, [[links]] (with the doc each opens, from the server's docLinks) and @mentions (with
+ * names, from the server's people).
+ */
+export function commentParts(body: string, docLinks: { text: string; docId: string | null }[] = [], people: MentionPerson[] = []): CommentPart[] {
+  return linkParts(body, docLinks).flatMap((part) => ("text" in part ? mentionParts(part.text, people) : [part]));
+}
+
+/** Text with its @mentions as separate parts. */
+export function mentionParts(text: string, people: MentionPerson[]): CommentPart[] {
+  const byId = new Map(people.map((p) => [p.id.toLowerCase(), p]));
+  const parts: CommentPart[] = [];
+  let last = 0;
+  for (const m of text.matchAll(MENTION_PATTERN)) {
+    if (m.index > last) parts.push({ text: text.slice(last, m.index) });
+    const person = byId.get(m[1]!.toLowerCase());
+    parts.push({ mention: person?.displayName ?? "someone", userId: m[1]!.toLowerCase(), fullName: person?.fullName ?? null });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}
+
+/** Turns @Name back into <@id> for the people picked while typing, before saving. */
+export function encodeMentions(text: string, picked: Map<string, string>): string {
+  let result = text;
+  // Longest names first, so "@Ana Lee" isn't taken for "@Ana".
+  for (const [name, id] of [...picked].sort((a, b) => b[0].length - a[0].length)) result = result.split(`@${name}`).join(`<@${id}>`);
+  return result;
+}
+
+/** Shows <@id> as @Name for editing, remembering who's who so it can be saved back. */
+export function decodeMentions(text: string, people: MentionPerson[], picked: Map<string, string>): string {
+  const byId = new Map(people.map((p) => [p.id.toLowerCase(), p]));
+  return text.replace(MENTION_PATTERN, (whole, id: string) => {
+    const person = byId.get(id.toLowerCase());
+    if (!person) return whole;
+    picked.set(person.displayName, person.id);
+    return `@${person.displayName}`;
+  });
+}
+
+function linkParts(body: string, docLinks: { text: string; docId: string | null }[]): CommentPart[] {
   const parts: CommentPart[] = [];
   const byKey = new Map(docLinks.map((l) => [l.text.toLowerCase(), l.docId]));
   let last = 0;

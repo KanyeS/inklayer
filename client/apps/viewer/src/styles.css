@@ -27,3 +27,4 @@
 .doc-comment-card.missing { color: var(--muted-foreground) !important; font-style: italic; }
 .doc-comment-card-head, .doc-comment-card-page { display: block; font-size: 0.8em; color: var(--muted-foreground); }
 .doc-comment-card-body { display: block; white-space: pre-wrap; }
+.doc-reading .doc-mention { color: var(--primary); font-weight: 600; background: color-mix(in oklab, var(--primary) 10%, transparent); border-radius: 6px; padding: 0 0.2em; }

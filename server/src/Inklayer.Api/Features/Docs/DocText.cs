@@ -15,7 +15,7 @@ public sealed record TextEdit(int Index, int Delete, string Insert);
 /// core, yrs) to merge the stored snapshot and updates, apply an edit as a proper Yjs change, and send it to everyone
 /// editing in the browser, who merge it like any other edit.
 /// </summary>
-internal sealed class DocText(InklayerDbContext db, DocIndexer indexer, IHubContext<DocsHub> hub, TimeProvider clock)
+internal sealed class DocText(InklayerDbContext db, DocIndexer indexer, IHubContext<DocsHub> hub, TimeProvider clock, Notifications.NotificationService notifications)
 {
     /// <summary>The doc's current text, including live edits not yet in a snapshot. Null if the doc doesn't exist.</summary>
     public async Task<string?> ReadAsync(Guid docId, CancellationToken ct)
@@ -119,6 +119,7 @@ internal sealed class DocText(InklayerDbContext db, DocIndexer indexer, IHubCont
         await tx.CommitAsync(ct);
 
         await hub.Clients.Group(DocsHub.Group(docId)).SendAsync("update", docId, seq, update, ct);
+        await notifications.DocEditedAsync(doc, before, userId, ct);
         return after;
     }
 

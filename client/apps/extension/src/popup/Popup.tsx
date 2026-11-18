@@ -4,6 +4,7 @@ import { Field, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { Spinner } from "@inklayer/ui/components/spinner";
 import { send, type StateResponse } from "@/lib/messages";
+import type { Inbox, InboxItem } from "@/lib/notifications";
 import { normaliseServerUrl, updateSettings } from "@/lib/settings";
 
 const SITE_ACCESS: chrome.permissions.Permissions = { origins: ["https://*/*", "http://*/*"] };
@@ -189,6 +190,7 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
           </p>
         </>
       )}
+      <Notifications />
       {/* Hidden while an administrator has turned docs off. */}
       {state.me!.features.docs && <OpenDocs serverUrl={state.serverUrl!} organizations={state.me!.organizations} />}
       <ErrorText>{error}</ErrorText>
@@ -243,4 +245,48 @@ function Code({ children }: { children: ReactNode }) {
 
 function ErrorText({ children }: { children: ReactNode }) {
   return children ? <p role="alert" className="text-destructive">{children}</p> : null;
+}
+
+const KIND_TEXT: Record<string, string> = {
+  mention: "mentioned you",
+  reply: "replied",
+  resolved: "resolved your comment",
+  issue_closed: "An issue for your comment was closed",
+};
+
+/** Recent notifications; opening one marks it read and opens it in the web app. */
+function Notifications() {
+  const [box, setBox] = useState<Inbox | null>(null);
+  const load = useCallback(() => void send({ type: "notifications" }).then(setBox).catch(() => setBox(null)), []);
+  useEffect(load, [load]);
+  if (!box || box.items.length === 0) return null;
+
+  const open = async (item: InboxItem) => {
+    const url = item.annotationId ? `${box.serverUrl}/comments/${item.annotationId}` : item.docId ? `${box.serverUrl}/orgs/${item.organizationId}/docs/${item.docId}` : box.serverUrl;
+    await send({ type: "notificationsRead", ids: [item.id] });
+    await chrome.tabs.create({ url });
+    window.close();
+  };
+
+  return (
+    <section className="flex flex-col gap-1 border-t pt-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Notifications {box.unread > 0 && `(${box.unread})`}</h2>
+        {box.unread > 0 && <Button variant="link" size="sm" className="h-auto px-0" onClick={async () => { await send({ type: "notificationsRead" }); load(); }}>Mark all read</Button>}
+      </div>
+      <ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
+        {box.items.map((item) => (
+          <li key={item.id}>
+            <button type="button" onClick={() => void open(item)} className={`w-full rounded-lg px-2 py-1.5 text-left hover:bg-muted ${item.read ? "opacity-70" : ""}`}>
+              <span className="block text-xs">
+                {!item.read && <span aria-label="unread" className="mr-1 inline-block size-1.5 rounded-full bg-primary align-middle" />}
+                {item.kind === "issue_closed" ? KIND_TEXT.issue_closed : <><strong title={item.actor?.fullName}>{item.actor?.displayName ?? "Someone"}</strong> {KIND_TEXT[item.kind]}</>}
+              </span>
+              <span className="line-clamp-2 text-xs text-muted-foreground">{item.preview}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

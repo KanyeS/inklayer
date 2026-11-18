@@ -50,6 +50,8 @@ export interface Me {
   /** Real name, from the sign-in provider. displayName is the chosen name, or this. */
   fullName: string;
   preferredName: string | null;
+  /** Email my notifications, when my organisation sends emails. */
+  emailNotifications: boolean;
 }
 
 export interface Features {

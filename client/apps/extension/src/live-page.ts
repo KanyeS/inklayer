@@ -1,7 +1,7 @@
 import {
-  Overlay, commentParts, commentToOpen, resolveElement, resolveRange, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
+  Overlay, commentParts, commentToOpen, decodeMentions, encodeMentions, resolveElement, resolveRange, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
-import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext } from "./lib/live";
+import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext, PersonLookup } from "./lib/live";
 import { browserOf, elementHtml, osOf, screenshotArea, type Rect } from "./lib/pageDetails";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
@@ -420,7 +420,7 @@ class LiveSession {
 
   async #saveDraft(): Promise<void> {
     const draft = this.#draft;
-    const body = this.#draftInput?.value.trim() ?? "";
+    const body = this.#draftInput ? encodeMentions(this.#draftInput.value.trim(), pickedIn(this.#draftInput)) : "";
     const target = this.#target;
     if (!draft || !target || this.#busy) return;
     await this.#mutate(async () => {
@@ -594,13 +594,11 @@ class LiveSession {
   /** Text from a comment or one of its replies, with its [[doc]] links. */
   #linkedText(text: string, a: PageAnnotation): HTMLParagraphElement {
     const p = h("p", { className: "body" });
-    // With docs turned off, [[links]] are just text.
-    if (!this.#init.features.docs) {
-      p.append(text);
-      return p;
-    }
-    for (const part of commentParts(text, a.docLinks ?? [])) {
+    for (const part of commentParts(text, a.docLinks ?? [], a.people ?? [])) {
       if ("text" in part) p.append(part.text);
+      else if ("mention" in part) p.append(h("span", { className: "mention", textContent: `@${part.mention}`, title: part.fullName ?? part.mention }));
+      // With docs turned off, [[links]] are just text.
+      else if (!this.#init.features.docs) p.append(`[[${part.shown}]]`);
       else if (part.docId) {
         p.append(h("a", { className: "doclink", href: this.#docUrl(a.organizationId, part.docId), target: "_blank", rel: "noopener", textContent: part.shown,
           title: `Open the doc "${part.link}"`, onclick: (e: Event) => e.stopPropagation() }));
@@ -743,7 +741,7 @@ class LiveSession {
       box.addEventListener("keydown", (e) => {
         if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
         e.preventDefault();
-        const body = box.value.trim();
+        const body = encodeMentions(box.value.trim(), pickedIn(box));
         if (!body) return;
         box.value = "";
         void this.#mutate(() => call({ type: "live.reply", annotationId: a.id, body }).catch((error: unknown) => {
@@ -754,7 +752,7 @@ class LiveSession {
       this.#replyInputs.set(key, box);
       input = box;
     }
-    return withDocSuggestions(input, () => (this.#init.features.docs ? this.#projects.get(a.projectId)?.organizationId ?? null : null));
+    return withSuggestions(input, () => this.#projects.get(a.projectId)?.organizationId ?? null, this.#init.features.docs);
   }
 
   #setBubblesOpen(open: boolean): void {
@@ -826,7 +824,7 @@ class LiveSession {
         if (e.key === "Escape") this.#cancelDraft();
       };
       parts.push(h("div", { className: "draft" },
-        h("strong", { textContent: "New comment" }), withDocSuggestions(this.#draftInput, () => (this.#init.features.docs ? this.#target?.organizationId ?? null : null)), this.#scopeChooser(),
+        h("strong", { textContent: "New comment" }), withSuggestions(this.#draftInput, () => this.#target?.organizationId ?? null, this.#init.features.docs), this.#scopeChooser(),
         this.#init.features.bugContext ? h("label", { className: "attach", title: "A screenshot of this area, your browser and window size, the element, and the page's recent console errors and failed requests (addresses without query strings)" },
           h("input", { type: "checkbox", checked: this.#attachContext, onchange: (e: Event) => {
             this.#attachContext = (e.target as HTMLInputElement).checked;
@@ -875,10 +873,10 @@ class LiveSession {
 
     if (this.#editing?.id === a.id) {
       const input = this.#editing.input;
-      item.append(withDocSuggestions(input, () => (this.#init.features.docs ? this.#projects.get(a.projectId)?.organizationId ?? null : null)), h("div", { className: "row" },
+      item.append(withSuggestions(input, () => this.#projects.get(a.projectId)?.organizationId ?? null, this.#init.features.docs), h("div", { className: "row" },
         h("button", { className: "primary", textContent: "Save", disabled: this.#busy, onclick: (e: Event) => {
           e.stopPropagation();
-          const body = input.value;
+          const body = encodeMentions(input.value, pickedIn(input));
           this.#editing = null;
           void this.#mutate(() => call({ type: "live.update", id: a.id, version: a.version, body }));
         } }),
@@ -910,7 +908,9 @@ class LiveSession {
     if (a.canEdit) {
       actions.append(h("button", { className: "link", textContent: "Edit", onclick: (e: Event) => {
         e.stopPropagation();
-        this.#editing = { id: a.id, input: h("textarea", { value: a.body, rows: 3, onclick: (ev: Event) => ev.stopPropagation() }) };
+        const box = h("textarea", { rows: 3, onclick: (ev: Event) => ev.stopPropagation() });
+        box.value = decodeMentions(a.body, a.people ?? [], pickedIn(box));
+        this.#editing = { id: a.id, input: box };
         this.#render();
         this.#editing.input.focus();
       } }));
@@ -1011,53 +1011,81 @@ function pageLogs(): Promise<Pick<PageContext, "console" | "network">> {
 /** The suggestion list for each comment box, kept with the box across re-renders. */
 const suggestionLists = new WeakMap<HTMLTextAreaElement, HTMLUListElement>();
 
+/** People picked from @ suggestions in each box, by the name shown, so "@Name" can be saved as <@id>. */
+const pickedPeople = new WeakMap<HTMLTextAreaElement, Map<string, string>>();
+
+export function pickedIn(input: HTMLTextAreaElement): Map<string, string> {
+  let picked = pickedPeople.get(input);
+  if (!picked) pickedPeople.set(input, (picked = new Map()));
+  return picked;
+}
+
+type Suggestion = { kind: "doc"; doc: DocLookup } | { kind: "person"; person: PersonLookup };
+
 /**
- * Typing [[ in a comment box suggests docs from the project's organisation; picking one completes the link.
- * Returns the box wrapped with its suggestion list.
+ * Suggestions while typing in a comment or reply box: [[ suggests docs (while docs are on), @ suggests people in the
+ * project's organisation. Returns the box wrapped with its suggestion list.
  */
-function withDocSuggestions(input: HTMLTextAreaElement, organizationId: () => string | null): HTMLElement {
+function withSuggestions(input: HTMLTextAreaElement, organizationId: () => string | null, docsOn: boolean): HTMLElement {
   let list = suggestionLists.get(input);
   if (!list) {
     const ul = h("ul", { className: "suggest" });
     ul.hidden = true;
-    let docs: DocLookup[] = [];
+    let items: Suggestion[] = [];
     let active = 0;
     let timer = 0;
-    const typed = () => /\[\[([^[\]\n|#]*)$/.exec(input.value.slice(0, input.selectionStart))?.[1] ?? null;
+    const typed = (): { kind: "doc" | "person"; q: string; start: number } | null => {
+      const before = input.value.slice(0, input.selectionStart);
+      const doc = docsOn ? /\[\[([^[\]\n|#]*)$/.exec(before) : null;
+      if (doc) return { kind: "doc", q: doc[1]!, start: before.length - doc[0].length };
+      const person = /(?:^|\s)@([^\s@<>]{0,30})$/.exec(before);
+      return person ? { kind: "person", q: person[1]!, start: before.length - person[1]!.length - 1 } : null;
+    };
     const show = () => {
-      ul.replaceChildren(...docs.map((d, i) => h("li", {
+      ul.replaceChildren(...items.map((item, i) => h("li", {
         className: i === active ? "active" : "",
         onmousedown: (e: Event) => {
           e.preventDefault();
-          pick(d);
+          pick(item);
         },
-      }, h("span", { textContent: d.title }), d.folder ? h("span", { className: "muted", textContent: ` ${d.folder}` }) : "")));
-      ul.hidden = docs.length === 0;
+      }, ...(item.kind === "doc"
+        ? [h("span", { textContent: item.doc.title }), item.doc.folder ? h("span", { className: "muted", textContent: ` ${item.doc.folder}` }) : ""]
+        : [h("span", { textContent: `@${item.person.displayName}` }), item.person.fullName !== item.person.displayName ? h("span", { className: "muted", textContent: ` ${item.person.fullName}` }) : ""]))));
+      ul.hidden = items.length === 0;
     };
-    const pick = (d: DocLookup) => {
-      const caret = input.selectionStart;
-      const start = input.value.slice(0, caret).lastIndexOf("[[");
-      const after = input.value.slice(caret);
-      const closed = after.startsWith("]]");
-      input.value = `${input.value.slice(0, start)}[[${d.title}${closed ? "" : "]]"}${after}`;
-      const end = start + 2 + d.title.length + 2;
+    const pick = (item: Suggestion) => {
+      const at = typed();
+      if (!at) return;
+      const after = input.value.slice(input.selectionStart);
+      let insert: string;
+      if (item.kind === "doc") {
+        insert = `[[${item.doc.title}${after.startsWith("]]") ? "" : "]]"}`;
+      } else {
+        insert = `@${item.person.displayName} `;
+        pickedIn(input).set(item.person.displayName, item.person.id);
+      }
+      input.value = input.value.slice(0, at.start) + insert + after;
+      const end = at.start + insert.length + (item.kind === "doc" && after.startsWith("]]") ? 2 : 0);
       input.setSelectionRange(end, end);
-      docs = [];
+      items = [];
       show();
       input.focus();
     };
     input.addEventListener("input", () => {
       clearTimeout(timer);
-      const q = typed();
+      const at = typed();
       const org = organizationId();
-      if (q === null || !org) {
-        docs = [];
+      if (!at || !org) {
+        items = [];
         show();
         return;
       }
       timer = window.setTimeout(() => {
-        call<DocLookup[]>({ type: "live.docs", orgId: org, q }).then((found) => {
-          docs = typed() === null ? [] : found;
+        const request = at.kind === "doc"
+          ? call<DocLookup[]>({ type: "live.docs", orgId: org, q: at.q }).then((docs) => docs.map((doc): Suggestion => ({ kind: "doc", doc })))
+          : call<PersonLookup[]>({ type: "live.people", orgId: org, q: at.q }).then((people) => people.map((person): Suggestion => ({ kind: "person", person })));
+        request.then((found) => {
+          items = typed() === null ? [] : found;
           active = 0;
           show();
         }).catch(() => undefined);
@@ -1067,12 +1095,12 @@ function withDocSuggestions(input: HTMLTextAreaElement, organizationId: () => st
     input.addEventListener("keydown", (e) => {
       if (ul.hidden) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        active = (active + (e.key === "ArrowDown" ? 1 : docs.length - 1)) % docs.length;
+        active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
         show();
       } else if ((e.key === "Enter" && !e.ctrlKey && !e.metaKey) || e.key === "Tab") {
-        pick(docs[active]!);
+        pick(items[active]!);
       } else if (e.key === "Escape") {
-        docs = [];
+        items = [];
         show();
       } else {
         return;
@@ -1081,7 +1109,7 @@ function withDocSuggestions(input: HTMLTextAreaElement, organizationId: () => st
       e.stopImmediatePropagation();
     }, true);
     input.addEventListener("blur", () => window.setTimeout(() => {
-      docs = [];
+      items = [];
       show();
     }, 150));
     suggestionLists.set(input, ul);
@@ -1293,6 +1321,7 @@ const STYLES = `
   details.context li.error { color: var(--destructive); }
   .icon.on { color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
   .replies-count { margin: 0; font-size: 12px; }
+  .mention { color: var(--primary); font-weight: 600; background: color-mix(in oklab, var(--primary) 10%, transparent); border-radius: 6px; padding: 0 3px; }
   .doclink { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
   .doclink.missing { color: var(--muted-foreground); text-decoration-style: dashed; }
   .mentions { margin: 0; font-size: 12px; }

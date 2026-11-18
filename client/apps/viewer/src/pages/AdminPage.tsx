@@ -6,6 +6,7 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
+import { EmailSetupSection } from "@/components/EmailSetupSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { NetworkAccessSection } from "@/components/NetworkAccessSection";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
@@ -62,6 +63,7 @@ export function AdminPage() {
       </form>
       <div className="mt-4"><ErrorText error={error ?? users.error} /></div>
       <FeaturesSection />
+      <EmailSetupSection />
       <NetworkAccessSection />
       <SectionTitle>Users</SectionTitle>
       <Table>

@@ -7,6 +7,7 @@ using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Features.Live;
 using Inklayer.Api.Features.Mcp;
+using Inklayer.Api.Features.Notifications;
 using Inklayer.Api.Features.Me;
 using Inklayer.Api.Features.Organizations;
 using Inklayer.Api.Features.Presence;
@@ -32,6 +33,7 @@ try
     builder.Services.AddInklayerAuth(builder.Configuration, builder.Environment);
     builder.Services.AddInklayerPresence(builder.Configuration);
     builder.Services.AddInklayerMcp();
+    builder.Services.AddInklayerNotifications(builder.Configuration);
     builder.Services.AddValidation();
     builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -53,6 +55,7 @@ try
     app.MapAdminEndpoints();
     app.MapAnnotationEndpoints();
     app.MapContextEndpoints();
+    app.MapNotificationEndpoints();
     app.MapLiveEndpoints();
     app.MapPresenceEndpoints();
     app.MapDocEndpoints();

@@ -49,6 +49,8 @@ export interface LiveAnnotation {
   /** Page details captured with the comment, if the commenter attached them. */
   context?: PageContext | null;
   hasScreenshot?: boolean;
+  /** People @mentioned in the comment or its replies, for showing <@id> as names. */
+  people?: PersonLookup[];
 }
 
 export interface LiveReply {
@@ -60,6 +62,13 @@ export interface LiveReply {
   version: number;
   canEdit: boolean;
   canDelete: boolean;
+}
+
+/** Someone suggested while typing @, or mentioned in a comment. */
+export interface PersonLookup {
+  id: string;
+  displayName: string;
+  fullName: string;
 }
 
 /** A doc suggested while typing [[ in a comment. */
@@ -186,6 +195,7 @@ export type LiveRequest =
   | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string }
   | { type: "live.font" }
   | { type: "live.docs"; orgId: string; q: string }
+  | { type: "live.people"; orgId: string; q: string }
   | { type: "live.context"; annotationId: string; context: PageContext }
   | { type: "live.capture"; annotationId: string; area: Rect; viewportWidth: number }
   | { type: "live.screenshot"; annotationId: string }
@@ -263,6 +273,11 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
       return postJson<LiveReply>(`/api/annotations/${encodeURIComponent(request.annotationId)}/replies`, { body: request.body });
     case "live.replyDelete":
       return api<null>(`/api/replies/${encodeURIComponent(request.id)}?version=${request.version}`, { method: "DELETE" });
+    case "live.people": {
+      // Only organisations the user has projects in.
+      if (!(await getProjects()).some((p) => p.organizationId === request.orgId)) throw new Error("Unknown organisation.");
+      return api<PersonLookup[]>(`/api/orgs/${encodeURIComponent(request.orgId)}/members/lookup?q=${encodeURIComponent(request.q.slice(0, 100))}`);
+    }
     case "live.docs": {
       // Only organisations the user has projects in, so a page can't make the extension probe others.
       if (!(await getProjects()).some((p) => p.organizationId === request.orgId)) throw new Error("Unknown organisation.");
