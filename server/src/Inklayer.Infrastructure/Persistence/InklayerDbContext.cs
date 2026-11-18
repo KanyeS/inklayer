@@ -41,6 +41,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<AnnotationRevision> AnnotationRevisions => Set<AnnotationRevision>();
 
+    public DbSet<AnnotationReply> AnnotationReplies => Set<AnnotationReply>();
+
     public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();
 
     public DbSet<Doc> Docs => Set<Doc>();

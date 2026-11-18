@@ -87,4 +87,8 @@ export type OverlayMessage =
   | { type: "ready"; width: number; height: number }
   | { type: "draft"; draft: Draft }
   | { type: "selected"; id: string | null }
-  | { type: "anchors"; quality: Record<string, AnchorQuality> };
+  | { type: "anchors"; quality: Record<string, AnchorQuality> }
+  /** Where each annotation's badge is, in document coordinates; sent after drawing, when anything moved. */
+  | { type: "marks"; positions: Record<string, Point> }
+  /** The pointer moved onto an annotation's mark or badge (its id), or off it (null). */
+  | { type: "hover"; id: string | null };

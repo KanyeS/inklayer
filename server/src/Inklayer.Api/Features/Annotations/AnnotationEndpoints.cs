@@ -30,6 +30,11 @@ internal static partial class AnnotationEndpoints
         annotations.MapPatch("/{annotationId:guid}", UpdateAsync);
         annotations.MapDelete("/{annotationId:guid}", DeleteAsync).WithSummary("Soft-delete; send ?version= to guard against deleting a changed annotation");
         annotations.MapGet("/{annotationId:guid}/history", HistoryAsync).WithSummary("Every revision, oldest first");
+        annotations.MapPost("/{annotationId:guid}/replies", CreateReplyAsync).WithSummary("Reply in a comment's thread (Commenters and above)");
+
+        var replies = app.MapGroup("/api/replies").WithTags("Annotations").RequireAuthorization();
+        replies.MapPatch("/{replyId:guid}", UpdateReplyAsync).WithSummary("Edit your reply (project Admins: anyone's)");
+        replies.MapDelete("/{replyId:guid}", DeleteReplyAsync).WithSummary("Delete a reply: ?version=");
 
         return app;
     }
@@ -80,7 +85,7 @@ internal static partial class AnnotationEndpoints
         await db.SaveChangesAsync(ct);
 
         var authors = await AuthorsAsync(db, [userId], ct);
-        return TypedResults.Created($"/api/annotations/{annotation.Id}", (await WithDocLinksAsync(db, [ToResponse(annotation, authors, role, userId)], ct))[0]);
+        return TypedResults.Created($"/api/annotations/{annotation.Id}", (await EnrichAsync(db, [ToResponse(annotation, authors, role, userId)], _ => role, userId, ct))[0]);
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -162,7 +167,7 @@ internal static partial class AnnotationEndpoints
             await db.SaveChangesAsync(ct);
         }
 
-        return TypedResults.Ok((await WithDocLinksAsync(db, [ToResponse(annotation, authors, check.Role, userId)], ct))[0]);
+        return TypedResults.Ok((await EnrichAsync(db, [ToResponse(annotation, authors, check.Role, userId)], _ => check.Role, userId, ct))[0]);
     }
 
     private static async Task<IResult> DeleteAsync(
@@ -202,7 +207,7 @@ internal static partial class AnnotationEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<IResult> GetAsync(Guid annotationId, AccessService access, InklayerDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var annotation = await db.Annotations.AsNoTracking().SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -222,14 +227,164 @@ internal static partial class AnnotationEndpoints
         return TypedResults.Ok(new AnnotationDetailResponse(
             annotation.Id, annotation.OrganizationId, annotation.ProjectId, projectName, annotation.PageUrl, annotation.Body, annotation.Status,
             authors.GetValueOrDefault(annotation.AuthorUserId) ?? new AuthorSummary(annotation.AuthorUserId, "", null), annotation.CreatedAt,
-            links.GetValueOrDefault(annotation.Id, []), mentions.GetValueOrDefault(annotation.Id, [])));
+            links.GetValueOrDefault(annotation.Id, []), mentions.GetValueOrDefault(annotation.Id, []),
+            (await RepliesAsync(db, [annotation.Id], _ => check.Role, currentUser.Id!.Value, ct)).GetValueOrDefault(annotation.Id, []),
+            check.Role.Grants(Permission.Comment)));
     }
 
-    /// <summary>Adds each comment's doc links and the docs that mention it.</summary>
-    internal static async Task<List<AnnotationResponse>> WithDocLinksAsync(InklayerDbContext db, IReadOnlyList<AnnotationResponse> responses, CancellationToken ct)
+    /* ---------------------------------------------------------------- replies */
+
+    private static async Task<IResult> CreateReplyAsync(
+        Guid annotationId, CreateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
-        var (links, mentions) = await DocLinksAsync(db, responses.ToDictionary(r => r.Id, r => r.Body), ct);
-        return [.. responses.Select(r => r with { DocLinks = links.GetValueOrDefault(r.Id, []), MentionedIn = mentions.GetValueOrDefault(r.Id, []) })];
+        var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
+        if (annotation is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var check = await access.CheckProjectAsync(annotation.ProjectId, Permission.Comment, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        if (await db.Projects.AnyAsync(p => p.Id == annotation.ProjectId && p.IsArchived, ct))
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "This project is archived.");
+        }
+
+        if (request.Body?.Trim() is not { Length: > 0 } body)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["body"] = ["Write something to reply."] });
+        }
+
+        var userId = currentUser.Id!.Value;
+        var now = clock.GetUtcNow().UtcDateTime;
+        var reply = new AnnotationReply { AnnotationId = annotation.Id, AuthorUserId = userId, Body = body, CreatedAt = now, UpdatedAt = now };
+        db.AnnotationReplies.Add(reply);
+        await db.SaveChangesAsync(ct);
+        await indexer.IndexCommentAsync(annotation, ct);
+        await db.SaveChangesAsync(ct);
+
+        var authors = await AuthorsAsync(db, [userId], ct);
+        return TypedResults.Created($"/api/replies/{reply.Id}", ToReply(reply, authors, check.Role, userId));
+    }
+
+    private static async Task<IResult> UpdateReplyAsync(
+        Guid replyId, UpdateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+    {
+        var (reply, annotation, role, denied) = await ReplyForChangeAsync(replyId, access, currentUser, db, ct);
+        if (denied is not null || reply is null || annotation is null)
+        {
+            return denied ?? TypedResults.NotFound();
+        }
+
+        if (request.Version != reply.Version)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "This reply was changed by someone else. Reload to see it.");
+        }
+
+        if (request.Body?.Trim() is not { Length: > 0 } body)
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["body"] = ["A reply can't be empty. Delete it instead."] });
+        }
+
+        var userId = currentUser.Id!.Value;
+        reply.Body = body;
+        reply.Version++;
+        reply.UpdatedAt = clock.GetUtcNow().UtcDateTime;
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "This reply was changed by someone else. Reload to see it.");
+        }
+
+        await indexer.IndexCommentAsync(annotation, ct);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(ToReply(reply, await AuthorsAsync(db, [reply.AuthorUserId], ct), role, userId));
+    }
+
+    private static async Task<IResult> DeleteReplyAsync(
+        Guid replyId, int? version, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+    {
+        var (reply, annotation, _, denied) = await ReplyForChangeAsync(replyId, access, currentUser, db, ct);
+        if (denied is not null || reply is null || annotation is null)
+        {
+            return denied ?? TypedResults.NotFound();
+        }
+
+        if (version is { } expected && expected != reply.Version)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "This reply was changed by someone else. Reload to see it.");
+        }
+
+        reply.DeletedAt = clock.GetUtcNow().UtcDateTime;
+        reply.Version++;
+        await db.SaveChangesAsync(ct);
+        await indexer.IndexCommentAsync(annotation, ct);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>The reply and its comment, if the caller may change the reply: its author (Commenter and above) or a project Admin.</summary>
+    private static async Task<(AnnotationReply? Reply, Annotation? Annotation, Role Role, IResult? Denied)> ReplyForChangeAsync(
+        Guid replyId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    {
+        var reply = await db.AnnotationReplies.SingleOrDefaultAsync(r => r.Id == replyId && r.DeletedAt == null, ct);
+        var annotation = reply is null ? null : await db.Annotations.SingleOrDefaultAsync(a => a.Id == reply.AnnotationId && a.DeletedAt == null, ct);
+        if (reply is null || annotation is null)
+        {
+            return (null, null, default, TypedResults.NotFound());
+        }
+
+        var check = await access.CheckProjectAsync(annotation.ProjectId, Permission.View, ct);
+        if (!check.IsAllowed)
+        {
+            return (null, null, default, check.Denied);
+        }
+
+        return CanChangeReply(reply, check.Role, currentUser.Id!.Value)
+            ? (reply, annotation, check.Role, null)
+            : (null, null, default, TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only its author or a project Admin can change this reply."));
+    }
+
+    private static bool CanChangeReply(AnnotationReply reply, Role role, Guid userId) =>
+        (reply.AuthorUserId == userId && role.Grants(Permission.Comment)) || role.Grants(Permission.ManageProjects);
+
+    private static ReplyResponse ToReply(AnnotationReply r, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) => new(
+        r.Id, r.Body, authors.GetValueOrDefault(r.AuthorUserId) ?? new AuthorSummary(r.AuthorUserId, "", null), r.CreatedAt, r.UpdatedAt, r.Version,
+        CanChangeReply(r, role, userId), CanChangeReply(r, role, userId));
+
+    /// <summary>The replies of each comment, oldest first. <paramref name="roleOf"/> gives the caller's role in a comment's project.</summary>
+    private static async Task<Dictionary<Guid, List<ReplyResponse>>> RepliesAsync(
+        InklayerDbContext db, List<Guid> annotationIds, Func<Guid, Role> roleOf, Guid userId, CancellationToken ct)
+    {
+        var rows = await (from r in db.AnnotationReplies.AsNoTracking()
+                          where annotationIds.Contains(r.AnnotationId) && r.DeletedAt == null
+                          join a in db.Annotations on r.AnnotationId equals a.Id
+                          orderby r.CreatedAt
+                          select new { Reply = r, a.ProjectId }).ToListAsync(ct);
+        var authors = await AuthorsAsync(db, rows.Select(x => x.Reply.AuthorUserId), ct);
+        return rows.GroupBy(x => x.Reply.AnnotationId)
+            .ToDictionary(g => g.Key, g => g.Select(x => ToReply(x.Reply, authors, roleOf(x.ProjectId), userId)).ToList());
+    }
+
+    /// <summary>Adds each comment's replies, doc links and the docs that mention it. <paramref name="roleOf"/> gives the caller's role in a project.</summary>
+    internal static async Task<List<AnnotationResponse>> EnrichAsync(
+        InklayerDbContext db, IReadOnlyList<AnnotationResponse> responses, Func<Guid, Role> roleOf, Guid userId, CancellationToken ct)
+    {
+        var replies = await RepliesAsync(db, [.. responses.Select(r => r.Id)], roleOf, userId, ct);
+        // Links are matched against the comment and its replies together.
+        var texts = responses.ToDictionary(r => r.Id, r => string.Join('\n', [r.Body, .. replies.GetValueOrDefault(r.Id, []).Select(x => x.Body)]));
+        var (links, mentions) = await DocLinksAsync(db, texts, ct);
+        return [.. responses.Select(r => r with
+        {
+            DocLinks = links.GetValueOrDefault(r.Id, []), MentionedIn = mentions.GetValueOrDefault(r.Id, []), Replies = replies.GetValueOrDefault(r.Id, []),
+        })];
     }
 
     private static async Task<(Dictionary<Guid, List<AnnotationDocLink>> Links, Dictionary<Guid, List<AnnotationMention>> Mentions)> DocLinksAsync(

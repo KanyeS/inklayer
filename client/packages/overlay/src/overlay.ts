@@ -43,6 +43,8 @@ export class Overlay {
   #draft: Draft | null = null;
   #preview: { tool: Tool; points: [number, number, number][] } | null = null;
   #frame = 0;
+  #positions = new Map<string, Point>();
+  #sentPositions = "";
 
   constructor(doc: Document, send: (message: OverlayMessage) => void, options: OverlayOptions = {}) {
     this.#doc = doc;
@@ -174,6 +176,7 @@ export class Overlay {
     this.#surface.style.height = `${height}px`;
     this.#svg.replaceChildren();
     this.#badges.replaceChildren();
+    this.#positions.clear();
 
     for (const annotation of this.#annotations) {
       const resolved = this.#resolved.get(annotation.id);
@@ -194,13 +197,24 @@ export class Overlay {
     }
 
     if (this.#preview) this.#drawPreview();
+
+    // Tell the host where the badges are (for comment bubbles), only when something moved.
+    const positions = Object.fromEntries(this.#positions);
+    const key = JSON.stringify(positions);
+    if (key !== this.#sentPositions) {
+      this.#sentPositions = key;
+      this.#send({ type: "marks", positions });
+    }
   }
 
   #drawOne(a: OverlayAnnotation, box: Box, range: Range | null, state: { draft: boolean; selected: boolean; faded: boolean; orphaned: boolean }): void {
     const group = this.#doc.createElementNS(SVG_NS, "g");
     group.setAttribute("class", ["mark", state.draft ? "draft" : "", state.selected ? "selected" : "", state.faded ? "faded" : "", state.orphaned ? "orphaned" : ""].join(" "));
     group.style.setProperty("--c", a.color);
-    if (a.id) group.addEventListener("click", (e) => this.#onMarkClick(e, a.id));
+    if (a.id) {
+      group.addEventListener("click", (e) => this.#onMarkClick(e, a.id));
+      this.#hoverEvents(group, a.id);
+    }
 
     let badgeAt: Point = { x: box.x, y: box.y };
     const g = a.geometry;
@@ -249,8 +263,17 @@ export class Overlay {
     badge.style.top = `${badgeAt.y}px`;
     badge.textContent = state.draft ? "+" : String(a.label);
     if (state.orphaned) badge.title = "The element this was attached to has changed; shown where it originally was.";
-    if (a.id) badge.addEventListener("click", (e) => this.#onMarkClick(e, a.id));
+    if (a.id) {
+      badge.addEventListener("click", (e) => this.#onMarkClick(e, a.id));
+      this.#hoverEvents(badge, a.id);
+      this.#positions.set(a.id, { x: round(badgeAt.x), y: round(badgeAt.y) });
+    }
     this.#badges.append(badge);
+  }
+
+  #hoverEvents(el: Element, id: string): void {
+    el.addEventListener("mouseenter", () => this.#send({ type: "hover", id }));
+    el.addEventListener("mouseleave", () => this.#send({ type: "hover", id: null }));
   }
 
   #drawPreview(): void {

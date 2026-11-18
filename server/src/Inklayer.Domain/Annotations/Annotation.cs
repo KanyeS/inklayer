@@ -105,3 +105,26 @@ public sealed class AnnotationRevision
     /// <summary>JSON of the annotation's state after the change.</summary>
     public required string State { get; init; }
 }
+
+/// <summary>A reply in a comment's thread. Soft-deleted like annotations; the thread keeps its order by <see cref="CreatedAt"/>.</summary>
+public sealed class AnnotationReply
+{
+    public const int MaxBodyLength = 10_000;
+
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+
+    public required Guid AnnotationId { get; init; }
+
+    public required Guid AuthorUserId { get; init; }
+
+    public required string Body { get; set; }
+
+    /// <summary>Starts at 1; edits and deletes send it back to detect conflicting changes.</summary>
+    public int Version { get; set; } = 1;
+
+    public DateTime CreatedAt { get; init; }
+
+    public DateTime UpdatedAt { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+}

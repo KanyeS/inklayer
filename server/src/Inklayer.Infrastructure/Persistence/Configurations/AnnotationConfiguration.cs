@@ -21,6 +21,19 @@ internal sealed class AnnotationConfiguration : IEntityTypeConfiguration<Annotat
     }
 }
 
+internal sealed class AnnotationReplyConfiguration : IEntityTypeConfiguration<AnnotationReply>
+{
+    public void Configure(EntityTypeBuilder<AnnotationReply> builder)
+    {
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Body).HasMaxLength(AnnotationReply.MaxBodyLength);
+        builder.Property(r => r.Version).IsConcurrencyToken();
+        builder.HasIndex(r => new { r.AnnotationId, r.CreatedAt });
+        builder.HasIndex(r => r.CreatedAt);
+        builder.HasOne<Annotation>().WithMany().HasForeignKey(r => r.AnnotationId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class AnnotationRevisionConfiguration : IEntityTypeConfiguration<AnnotationRevision>
 {
     public void Configure(EntityTypeBuilder<AnnotationRevision> builder)

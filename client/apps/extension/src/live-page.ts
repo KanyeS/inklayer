@@ -1,9 +1,10 @@
 import {
   Overlay, commentParts, commentToOpen, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
-import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
+import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest } from "./lib/live";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
+import { BubbleLayer } from "./bubbles";
 import { PresenceClient } from "./presence-page";
 
 type View = "comments" | "activity";
@@ -28,6 +29,7 @@ const ACTIVITY_VERBS: Record<string, string> = {
   signed_in: "signed in",
   sign_in_refused: "Sign-in refused",
   error: "Server error",
+  replied: "replied to a comment",
 };
 const DOC_VERBS: Record<string, string> = {
   created: "created a doc",
@@ -155,6 +157,19 @@ class LiveSession {
   #view: View = "comments";
   #activity: ActivityState | null = null;
   #marksVisible = true;
+  readonly #bubbles: BubbleLayer;
+  /** The comment whose mark the pointer is on, shown in a bubble until it leaves. */
+  #hoverId: string | null = null;
+  /** Bubbles kept open with the pin button. */
+  readonly #pinned = new Set<string>();
+  /** Every comment's bubble open, not just on hover (the user's choice, remembered). */
+  #bubblesOpen = false;
+  #inBubble = false;
+  /** Which marks have positions; cards are rebuilt only when this changes, not on every move. */
+  #markIds = "";
+  #hideTimer = 0;
+  /** Reply boxes, kept across re-renders so typing isn't lost. Keyed by place ("bubble:" or "panel:") and comment id. */
+  readonly #replyInputs = new Map<string, HTMLTextAreaElement>();
   #showResolved = false;
   #busy = false;
   #error = "";
@@ -180,7 +195,19 @@ class LiveSession {
     // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
     for (const type of ["keydown", "keyup", "keypress"] as const) this.#root.addEventListener(type, (e) => e.stopPropagation());
 
-    this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { ignoreEventsFrom: [this.#host] });
+    this.#bubbles = new BubbleLayer(STYLES, () => {
+      this.#inBubble = true;
+      clearTimeout(this.#hideTimer);
+    }, () => {
+      this.#inBubble = false;
+      this.#scheduleHide();
+    });
+    followColorScheme(this.#bubbles.host);
+    this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { ignoreEventsFrom: [this.#host, this.#bubbles.host] });
+    void chrome.storage.local.get("bubblesOpen").then((stored) => {
+      this.#bubblesOpen = stored.bubblesOpen === true;
+      this.#renderBubbles();
+    }).catch(() => undefined);
     document.documentElement.append(this.#host);
   }
 
@@ -217,6 +244,7 @@ class LiveSession {
     // Single-page apps change the URL without reloading; some also replace parts of html.
     setInterval(() => {
       if (this.#overlay.ensureAttached() || !this.#host.isConnected) document.documentElement.append(this.#host);
+      this.#bubbles.ensureAttached();
       if (location.href !== this.#href) {
         this.#href = location.href;
         this.#draft = null;
@@ -325,6 +353,26 @@ class LiveSession {
         this.#render();
         break;
       case "ready":
+        break;
+      case "marks": {
+        this.#bubbles.setPositions(message.positions);
+        const ids = Object.keys(message.positions).sort().join();
+        if (ids !== this.#markIds) {
+          this.#markIds = ids;
+          this.#renderBubbles();
+        }
+        break;
+      }
+      case "hover":
+        if (message.id) {
+          clearTimeout(this.#hideTimer);
+          if (this.#tool === "select" && message.id !== this.#hoverId) {
+            this.#hoverId = message.id;
+            this.#renderBubbles();
+          }
+        } else {
+          this.#scheduleHide();
+        }
         break;
     }
   }
@@ -452,8 +500,13 @@ class LiveSession {
 
   /** The comment's text, with [[doc]] links that open the doc. Built with text nodes only. */
   #bodyOf(a: PageAnnotation): HTMLParagraphElement {
+    return this.#linkedText(a.body, a);
+  }
+
+  /** Text from a comment or one of its replies, with its [[doc]] links. */
+  #linkedText(text: string, a: PageAnnotation): HTMLParagraphElement {
     const p = h("p", { className: "body" });
-    for (const part of commentParts(a.body, a.docLinks ?? [])) {
+    for (const part of commentParts(text, a.docLinks ?? [])) {
       if ("text" in part) p.append(part.text);
       else if (part.docId) {
         p.append(h("a", { className: "doclink", href: this.#docUrl(a.organizationId, part.docId), target: "_blank", rel: "noopener", textContent: part.shown,
@@ -512,6 +565,108 @@ class LiveSession {
       typing.el.focus();
       typing.el.setSelectionRange(typing.start, typing.end);
     }
+    this.#renderBubbles();
+  }
+
+  /* ------------------------------------------------------------------ bubbles */
+
+  /** Hides the hover bubble shortly after the pointer leaves, unless it moved into the bubble or a reply is being written there. */
+  #scheduleHide(): void {
+    clearTimeout(this.#hideTimer);
+    this.#hideTimer = window.setTimeout(() => {
+      const id = this.#hoverId;
+      if (!id || this.#inBubble) return;
+      if (this.#bubbles.hasFocus(id) || this.#replyInputs.get(`bubble:${id}`)?.value.trim()) return;
+      this.#hoverId = null;
+      this.#renderBubbles();
+    }, 350);
+  }
+
+  #renderBubbles(): void {
+    if (!this.#marksVisible) {
+      this.#bubbles.show([], () => []);
+      return;
+    }
+    const visible = this.#visible();
+    const ids = visible.filter((a) => this.#bubblesOpen || this.#pinned.has(a.id) || a.id === this.#hoverId).map((a) => a.id);
+    this.#bubbles.show(ids, (id) => this.#bubbleContent(visible.find((a) => a.id === id)!));
+  }
+
+  #bubbleContent(a: PageAnnotation): Node[] {
+    const pinned = this.#pinned.has(a.id);
+    const pin = h("button", {
+      className: pinned ? "pin-toggle on" : "pin-toggle",
+      title: pinned ? "Unpin: show only on hover" : "Pin: keep this open",
+      onclick: () => {
+        if (pinned) this.#pinned.delete(a.id);
+        else this.#pinned.add(a.id);
+        this.#renderBubbles();
+      },
+    });
+    pin.append(pinIcon());
+    const dot = h("span", { className: "dot" });
+    dot.style.background = a.color;
+    const nodes: Node[] = [
+      h("div", { className: "bubble-head" }, dot, h("strong", { textContent: a.author.displayName || "Someone" }),
+        h("span", { className: "muted", textContent: timeAgo(a.createdAt) }),
+        a.status === "Resolved" ? h("span", { className: "muted", textContent: "· resolved" }) : "",
+        h("span", { className: "grow" }), pin),
+    ];
+    if (a.body) nodes.push(this.#bodyOf(a));
+    if (a.replies?.length) nodes.push(this.#repliesOf(a));
+    if (this.#canCommentIn(a.projectId)) {
+      nodes.push(this.#replyBox(a, "bubble"));
+      const resolved = a.status === "Resolved";
+      nodes.push(h("div", { className: "row" },
+        h("button", { className: "link", textContent: resolved ? "Reopen" : "Resolve", disabled: this.#busy,
+          onclick: () => void this.#mutate(() => call({ type: "live.update", id: a.id, version: a.version, status: resolved ? "Open" : "Resolved" })) }),
+        h("button", { className: "link", textContent: "Show in list", onclick: () => this.focusComment(a.id) })));
+    }
+    return nodes;
+  }
+
+  #repliesOf(a: PageAnnotation): HTMLUListElement {
+    const list = h("ul", { className: "replies" });
+    for (const r of a.replies ?? []) {
+      const meta = h("div", { className: "meta" }, h("strong", { textContent: r.author.displayName || "Someone" }), h("span", { className: "muted", textContent: ` ${timeAgo(r.createdAt)}` }));
+      if (r.canDelete) {
+        meta.append(" ", h("button", { className: "link danger", textContent: "Delete", disabled: this.#busy, onclick: (e: Event) => {
+          e.stopPropagation();
+          if (window.confirm("Delete this reply?")) void this.#mutate(() => call({ type: "live.replyDelete", id: r.id, version: r.version }));
+        } }));
+      }
+      list.append(h("li", { className: "reply" }, meta, this.#linkedText(r.body, a)));
+    }
+    return list;
+  }
+
+  /** A box to reply in a comment's thread. Enter sends; Shift+Enter starts a new line; [[ suggests docs. */
+  #replyBox(a: PageAnnotation, place: "bubble" | "panel"): HTMLElement {
+    const key = `${place}:${a.id}`;
+    let input = this.#replyInputs.get(key);
+    if (!input) {
+      const box = h("textarea", { className: "reply-box", placeholder: "Reply… (Enter to send)", rows: 1, onclick: (e: Event) => e.stopPropagation() });
+      box.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+        e.preventDefault();
+        const body = box.value.trim();
+        if (!body) return;
+        box.value = "";
+        void this.#mutate(() => call({ type: "live.reply", annotationId: a.id, body }).catch((error: unknown) => {
+          box.value = body; // keep what they wrote
+          throw error;
+        }));
+      });
+      this.#replyInputs.set(key, box);
+      input = box;
+    }
+    return withDocSuggestions(input, () => this.#projects.get(a.projectId)?.organizationId ?? null);
+  }
+
+  #setBubblesOpen(open: boolean): void {
+    this.#bubblesOpen = open;
+    void chrome.storage.local.set({ bubblesOpen: open }).catch(() => undefined);
+    this.#render();
   }
 
   #draw(): void {
@@ -526,6 +681,9 @@ class LiveSession {
       h("button", { className: this.#view === view ? "tab active" : "tab", textContent: label, onclick: () => this.#setView(view) });
     const header = h("div", { className: "header" },
       h("div", { className: "tabs grow" }, tab("comments", "Comments"), tab("activity", "Activity")),
+      h("button", { className: this.#bubblesOpen ? "icon on" : "icon",
+        title: this.#bubblesOpen ? "Comments are open next to their marks. Click to show them only on hover." : "Open every comment next to its mark (otherwise they show on hover)",
+        textContent: this.#bubblesOpen ? "All open" : "On hover", onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }),
       h("button", { className: "icon", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page", textContent: this.#marksVisible ? "Hide" : "Show",
         onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } }),
       h("button", { className: "icon", title: "Minimise", textContent: "–", onclick: () => { this.#open = false; this.#render(); } }));
@@ -636,6 +794,12 @@ class LiveSession {
         mentions.append(h("a", { href: this.#docUrl(a.organizationId, d.docId), target: "_blank", rel: "noopener", textContent: d.title, onclick: (e: Event) => e.stopPropagation() }));
       });
       item.append(mentions);
+    }
+    if (a.id === this.#selected) {
+      if (a.replies?.length) item.append(this.#repliesOf(a));
+      if (this.#canCommentIn(a.projectId)) item.append(this.#replyBox(a, "panel"));
+    } else if (a.replies?.length) {
+      item.append(h("p", { className: "muted replies-count", textContent: a.replies.length === 1 ? "1 reply" : `${a.replies.length} replies` }));
     }
     const actions = h("div", { className: "row actions" });
     const act = (label: string, run: () => Promise<unknown>) => h("button", { className: "link", textContent: label, disabled: this.#busy, onclick: (e: Event) => { e.stopPropagation(); void this.#mutate(run); } });
@@ -785,6 +949,25 @@ function withDocSuggestions(input: HTMLTextAreaElement, organizationId: () => st
   return h("div", { className: "suggest-wrap" }, input, list);
 }
 
+/** A pushpin, for keeping a comment bubble open. Built as DOM, not parsed. */
+function pinIcon(): SVGSVGElement {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  for (const d of ["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"]) {
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  return svg;
+}
+
 /** Copies text; pages without a secure context can't use the clipboard API, so fall back to the old way. */
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -845,7 +1028,7 @@ if (!globalThis.__inklayerLive && window.top === window) {
   }
 
   // Live cursors: only in tabs where the user turned it on in the toolbar popup. The flag lasts until the tab closes.
-  const presence = new PresenceClient(() => Array.from(document.querySelectorAll("inklayer-live")));
+  const presence = new PresenceClient(() => Array.from(document.querySelectorAll("inklayer-live, inklayer-bubbles")));
   chrome.runtime.onMessage.addListener((message: { type?: string; on?: boolean }, sender) => {
     if (sender.id !== chrome.runtime.id || message?.type !== "inklayer.presence") return;
     if (message.on) presence.start();
@@ -937,6 +1120,8 @@ const STYLES = `
   .scope input { accent-color: var(--primary); margin: 2px 0 0; }
   .scope-text { display: grid; gap: 1px; min-width: 0; }
   .actions { gap: 2px; }
+  .icon.on { color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
+  .replies-count { margin: 0; font-size: 12px; }
   .doclink { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
   .doclink.missing { color: var(--muted-foreground); text-decoration-style: dashed; }
   .mentions { margin: 0; font-size: 12px; }

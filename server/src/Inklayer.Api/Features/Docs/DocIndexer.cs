@@ -36,7 +36,7 @@ public sealed partial class DocIndexer(InklayerDbContext db)
             $"INSERT INTO \"DocSearch\" (\"DocId\", \"OrganizationId\", \"Title\", \"Content\") VALUES ({id}, {org}, {doc.Title}, {doc.Content})", ct);
     }
 
-    /// <summary>Rebuilds a comment's links to docs from its body. A deleted comment links nothing.</summary>
+    /// <summary>Rebuilds a comment's links to docs from its body and its replies. A deleted comment links nothing.</summary>
     public async Task IndexCommentAsync(Annotation annotation, CancellationToken ct)
     {
         await db.DocLinks.Where(l => l.SourceAnnotationId == annotation.Id).ExecuteDeleteAsync(ct);
@@ -45,7 +45,8 @@ public sealed partial class DocIndexer(InklayerDbContext db)
             return;
         }
 
-        var links = DocMarkdown.Links(annotation.Body).Where(l => l.Target is not null).ToList();
+        var replies = await db.AnnotationReplies.Where(r => r.AnnotationId == annotation.Id && r.DeletedAt == null).Select(r => r.Body).ToListAsync(ct);
+        var links = DocMarkdown.Links(string.Join('\n', [annotation.Body, .. replies])).Where(l => l.Target is not null).ToList();
         await AddLinksAsync(annotation.OrganizationId, links, l => new DocLink
         {
             OrganizationId = annotation.OrganizationId, SourceAnnotationId = annotation.Id, TargetKey = l.Key!, Text = l.Target!,

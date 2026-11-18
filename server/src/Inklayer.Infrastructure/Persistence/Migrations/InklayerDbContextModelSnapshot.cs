@@ -94,6 +94,45 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("Annotations");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationReply", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AnnotationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AuthorUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(10000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("AnnotationId", "CreatedAt");
+
+                    b.ToTable("AnnotationReplies");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationRevision", b =>
                 {
                     b.Property<Guid>("Id")
@@ -911,6 +950,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasOne("Inklayer.Domain.Projects.Project", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationReply", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
+                        .WithMany()
+                        .HasForeignKey("AnnotationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

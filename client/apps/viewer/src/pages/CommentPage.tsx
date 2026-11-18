@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Check, Copy, ExternalLink, FileText, MessageSquare } from "lucide-react";
 import { commentParts, openOnPageUrl } from "@inklayer/overlay";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
+import { Textarea } from "@inklayer/ui/components/textarea";
 import { ErrorText, Loading, Page } from "@/components/Layout";
-import { ApiError, get } from "@/lib/api";
+import { ApiError, del, get, post } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
@@ -21,6 +22,17 @@ interface CommentDetail {
   createdAt: string;
   docLinks: { text: string; docId: string | null; title: string | null }[];
   mentionedIn: { docId: string; title: string }[];
+  replies: Reply[];
+  canReply: boolean;
+}
+
+interface Reply {
+  id: string;
+  body: string;
+  author: { id: string; displayName: string };
+  createdAt: string;
+  version: number;
+  canDelete: boolean;
 }
 
 /**
@@ -41,6 +53,11 @@ export function CommentPage({ commentId }: { commentId: string }) {
   if (!comment.data) return <Page><Loading /></Page>;
   const c = comment.data;
   const docHref = (docId: string) => `/orgs/${c.organizationId}/docs/${docId}`;
+  const linked = (text: string) => commentParts(text, c.docLinks).map((part, i) => (
+    "text" in part ? <span key={i}>{part.text}</span>
+      : part.docId ? <Link key={i} to={docHref(part.docId)} className="text-primary underline underline-offset-4">{part.shown}</Link>
+      : <span key={i} className="text-muted-foreground" title="This doc doesn't exist yet">{part.shown}</span>
+  ));
 
   const copy = async () => {
     await navigator.clipboard.writeText(`${location.origin}/comments/${c.id}`);
@@ -58,13 +75,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
         <p className="mb-3 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{c.author.displayName}</span> · <span title={dateTime(c.createdAt)}>{timeAgo(c.createdAt)}</span>
         </p>
-        <p className="text-lg whitespace-pre-wrap">
-          {commentParts(c.body, c.docLinks).map((part, i) => (
-            "text" in part ? <span key={i}>{part.text}</span>
-              : part.docId ? <Link key={i} to={docHref(part.docId)} className="text-primary underline underline-offset-4">{part.shown}</Link>
-              : <span key={i} className="text-muted-foreground" title="This doc doesn't exist yet">{part.shown}</span>
-          ))}
-        </p>
+        <p className="text-lg whitespace-pre-wrap">{linked(c.body)}</p>
         <p className="mt-4 truncate text-sm text-muted-foreground" title={c.pageUrl}>{hostOf(c.pageUrl)}{safePath(c.pageUrl)}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Button nativeButton={false} render={<a href={openOnPageUrl(c.pageUrl, c.id)} target="_blank" rel="noopener noreferrer" />}>
@@ -76,6 +87,24 @@ export function CommentPage({ commentId }: { commentId: string }) {
         </div>
         <p className="mt-3 text-xs text-muted-foreground">Paste the link into a doc to link this comment there.</p>
       </article>
+
+      <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Replies</h2>
+      {c.replies.length === 0 && <p className="text-sm text-muted-foreground">No replies yet.</p>}
+      <ol className="space-y-3">
+        {c.replies.map((r) => (
+          <li key={r.id} className="rounded-2xl border px-4 py-3">
+            <p className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{r.author.displayName}</span>
+              <span title={dateTime(r.createdAt)}>{timeAgo(r.createdAt)}</span>
+              {r.canDelete && (
+                <Button variant="link" size="sm" className="ml-auto h-auto px-0 text-destructive" onClick={async () => { await del(`/api/replies/${r.id}?version=${r.version}`); await comment.reload(); }}>Delete</Button>
+              )}
+            </p>
+            <p className="whitespace-pre-wrap">{linked(r.body)}</p>
+          </li>
+        ))}
+      </ol>
+      {c.canReply && <ReplyForm commentId={c.id} onSent={comment.reload} />}
 
       <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Mentioned in</h2>
       {c.mentionedIn.length === 0 ? (
@@ -99,4 +128,43 @@ function safePath(url: string): string {
   } catch {
     return "";
   }
+}
+
+function ReplyForm({ commentId, onSent }: { commentId: string; onSent: () => Promise<void> }) {
+  const [body, setBody] = useState("");
+  const [error, setError] = useState<Error | null>(null);
+  const [busy, setBusy] = useState(false);
+  const send = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (!body.trim()) return;
+    setBusy(true);
+    try {
+      await post(`/api/annotations/${commentId}/replies`, { body });
+      setBody("");
+      setError(null);
+      await onSent();
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="mt-4 flex flex-col gap-2" onSubmit={send}>
+      <Textarea
+        placeholder="Reply… ([[ links a doc; Ctrl+Enter sends)"
+        aria-label="Reply"
+        value={body}
+        maxLength={10000}
+        onChange={(e) => setBody(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void send();
+        }}
+      />
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={busy || !body.trim()}>Reply</Button>
+        <ErrorText error={error} />
+      </div>
+    </form>
+  );
 }

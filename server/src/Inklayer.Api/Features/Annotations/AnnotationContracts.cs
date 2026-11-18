@@ -39,7 +39,15 @@ public sealed record AnnotationResponse(
     JsonElement Anchor, JsonElement Geometry, int ViewportWidth, int Version,
     AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ResolvedAt, Guid? ResolvedByUserId,
     bool CanEdit, bool CanDelete, Guid OrganizationId = default,
-    IReadOnlyList<AnnotationDocLink>? DocLinks = null, IReadOnlyList<AnnotationMention>? MentionedIn = null);
+    IReadOnlyList<AnnotationDocLink>? DocLinks = null, IReadOnlyList<AnnotationMention>? MentionedIn = null,
+    IReadOnlyList<ReplyResponse>? Replies = null);
+
+/// <summary>A reply in a comment's thread, oldest first.</summary>
+public sealed record ReplyResponse(Guid Id, string Body, AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, int Version, bool CanEdit, bool CanDelete);
+
+public sealed record CreateReplyRequest([property: Required, StringLength(10_000)] string? Body);
+
+public sealed record UpdateReplyRequest([property: Range(1, int.MaxValue)] int Version, [property: Required, StringLength(10_000)] string? Body);
 
 /// <param name="Text">The link as written (lowercase target is matched; this keeps the original).</param>
 public sealed record AnnotationDocLink(string Text, Guid? DocId, string? Title);
@@ -49,6 +57,7 @@ public sealed record AnnotationMention(Guid DocId, string Title);
 /// <summary>One comment on its own, for links from docs: where it is and which docs mention it.</summary>
 public sealed record AnnotationDetailResponse(
     Guid Id, Guid OrganizationId, Guid ProjectId, string ProjectName, string PageUrl, string Body, AnnotationStatus Status, AuthorSummary Author,
-    DateTime CreatedAt, IReadOnlyList<AnnotationDocLink> DocLinks, IReadOnlyList<AnnotationMention> MentionedIn);
+    DateTime CreatedAt, IReadOnlyList<AnnotationDocLink> DocLinks, IReadOnlyList<AnnotationMention> MentionedIn,
+    IReadOnlyList<ReplyResponse> Replies, bool CanReply);
 
 public sealed record AnnotationRevisionResponse(int Version, string Action, AuthorSummary Actor, DateTime OccurredAt, JsonElement State);

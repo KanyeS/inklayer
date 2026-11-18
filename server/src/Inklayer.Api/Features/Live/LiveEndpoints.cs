@@ -125,7 +125,8 @@ internal static class LiveEndpoints
         var authors = await AnnotationEndpoints.AuthorsAsync(db, annotations.Select(a => a.AuthorUserId), ct);
         var userId = currentUser.Id!.Value;
         var roles = visible.ToDictionary(v => v.Project.Id, v => v.Role);
-        var responses = (await AnnotationEndpoints.WithDocLinksAsync(db, [.. annotations.Select(a => AnnotationEndpoints.ToResponse(a, authors, roles[a.ProjectId], userId))], ct))
+        var responses = (await AnnotationEndpoints.EnrichAsync(
+                db, [.. annotations.Select(a => AnnotationEndpoints.ToResponse(a, authors, roles[a.ProjectId], userId))], p => roles[p], userId, ct))
             .ToDictionary(r => r.Id);
         return TypedResults.Ok(annotations
             .GroupBy(a => (a.ProjectId, a.PageUrl))

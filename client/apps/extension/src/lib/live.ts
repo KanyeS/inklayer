@@ -42,6 +42,19 @@ export interface LiveAnnotation {
   docLinks?: { text: string; docId: string | null; title: string | null }[];
   /** Docs that link this comment. */
   mentionedIn?: { docId: string; title: string }[];
+  /** The thread, oldest first. */
+  replies?: LiveReply[];
+}
+
+export interface LiveReply {
+  id: string;
+  body: string;
+  author: { id: string; displayName: string };
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 /** A doc suggested while typing [[ in a comment. */
@@ -153,7 +166,9 @@ export type LiveRequest =
   | { type: "live.delete"; id: string; version: number }
   | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string }
   | { type: "live.font" }
-  | { type: "live.docs"; orgId: string; q: string };
+  | { type: "live.docs"; orgId: string; q: string }
+  | { type: "live.reply"; annotationId: string; body: string }
+  | { type: "live.replyDelete"; id: string; version: number };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -203,6 +218,10 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
     }
     case "live.font":
       return panelFont();
+    case "live.reply":
+      return postJson<LiveReply>(`/api/annotations/${encodeURIComponent(request.annotationId)}/replies`, { body: request.body });
+    case "live.replyDelete":
+      return api<null>(`/api/replies/${encodeURIComponent(request.id)}?version=${request.version}`, { method: "DELETE" });
     case "live.docs": {
       // Only organisations the user has projects in, so a page can't make the extension probe others.
       if (!(await getProjects()).some((p) => p.organizationId === request.orgId)) throw new Error("Unknown organisation.");

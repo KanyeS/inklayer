@@ -21,7 +21,7 @@ public sealed record ActivityActor(Guid Id, string DisplayName, string? Email);
 /// <summary>
 /// One line of the activity log.
 /// <list type="bullet">
-/// <item><c>comments</c>: <see cref="Action"/> is created, updated, resolved, reopened or deleted, with the page and project.</item>
+/// <item><c>comments</c>: <see cref="Action"/> is created, updated, resolved, reopened, deleted or replied, with the page and project.</item>
 /// <item><c>signins</c>: <see cref="Action"/> is signed_in or sign_in_refused.</item>
 /// <item><c>errors</c>: <see cref="Action"/> is error; <see cref="Detail"/> says which request failed and why.</item>
 /// <item><c>docs</c>: <see cref="Action"/> is created, edited, renamed, moved or deleted, with the doc and its organisation.</item>
@@ -140,10 +140,28 @@ internal static class ActivityEndpoints
         }
 
         var rows = await query.OrderByDescending(x => x.OccurredAt).Take(take).ToListAsync(ct);
-        var actors = await ActorsAsync(db, rows.Select(r => (Guid?)r.ActorUserId), showEmails, ct);
-        return rows.Select(r => new ActivityItemResponse(
-            r.Id.ToString(), ActivityKinds.Comments, r.Action, r.OccurredAt, actors.GetValueOrDefault(r.ActorUserId),
-            r.ProjectId, projects[r.ProjectId], r.PageUrl, r.AnnotationId, BodyPreview(r.State))).ToList();
+
+        // Replies, which have no revisions of their own.
+        var replyQuery = from r in db.AnnotationReplies
+                         join a in db.Annotations on r.AnnotationId equals a.Id
+                         where ids.Contains(a.ProjectId) && r.DeletedAt == null && a.DeletedAt == null && r.CreatedAt < before
+                         select new { r.Id, r.CreatedAt, r.AuthorUserId, r.Body, a.ProjectId, a.PageUrl, AnnotationId = a.Id };
+        if (siteOrigin is not null)
+        {
+            var prefix = siteOrigin + "/";
+            replyQuery = replyQuery.Where(x => x.PageUrl.StartsWith(prefix));
+        }
+
+        var replies = await replyQuery.OrderByDescending(x => x.CreatedAt).Take(take).ToListAsync(ct);
+        var actors = await ActorsAsync(db, rows.Select(r => (Guid?)r.ActorUserId).Concat(replies.Select(r => (Guid?)r.AuthorUserId)), showEmails, ct);
+        return [
+            .. rows.Select(r => new ActivityItemResponse(
+                r.Id.ToString(), ActivityKinds.Comments, r.Action, r.OccurredAt, actors.GetValueOrDefault(r.ActorUserId),
+                r.ProjectId, projects[r.ProjectId], r.PageUrl, r.AnnotationId, BodyPreview(r.State))),
+            .. replies.Select(r => new ActivityItemResponse(
+                r.Id.ToString(), ActivityKinds.Comments, "replied", r.CreatedAt, actors.GetValueOrDefault(r.AuthorUserId),
+                r.ProjectId, projects[r.ProjectId], r.PageUrl, r.AnnotationId, r.Body.Length > BodyPreviewLength ? r.Body[..BodyPreviewLength] + "…" : r.Body)),
+        ];
     }
 
     private static async Task<List<ActivityItemResponse>> DocsAsync(
