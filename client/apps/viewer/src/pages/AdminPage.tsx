@@ -1,10 +1,16 @@
 import { useState, type FormEvent } from "react";
-import { useMe } from "../App";
-import { ErrorText } from "../components/Layout";
-import { get, post, type AdminUser, type Organization } from "../lib/api";
-import { timeAgo } from "../lib/format";
-import { navigate } from "../lib/router";
-import { useAsync } from "../lib/useAsync";
+import { useMe } from "@/App";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
+import { Badge } from "@inklayer/ui/components/badge";
+import { Button } from "@inklayer/ui/components/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
+import { Input } from "@inklayer/ui/components/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
+import { get, post, type AdminUser, type Organization } from "@/lib/api";
+import { timeAgo } from "@/lib/format";
+import { navigate } from "@/lib/router";
+import { useAsync } from "@/lib/useAsync";
 
 export function AdminPage() {
   const { me, reloadMe } = useMe();
@@ -13,7 +19,7 @@ export function AdminPage() {
   const [domains, setDomains] = useState("");
   const [error, setError] = useState<Error | null>(null);
 
-  if (!me.isSystemAdmin) return <div className="page"><p className="error">Instance administrators only.</p></div>;
+  if (!me.isSystemAdmin) return <Page><p className="text-destructive">Instance administrators only.</p></Page>;
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
@@ -25,10 +31,9 @@ export function AdminPage() {
       setError(err as Error);
     }
   };
-  const toggle = async (user: AdminUser) => {
-    if (!user.isDisabled && !confirm(`Disable ${user.email}? They are signed out everywhere immediately.`)) return;
+  const setDisabled = async (user: AdminUser, disabled: boolean) => {
     try {
-      await post(`/api/admin/users/${user.id}/${user.isDisabled ? "enable" : "disable"}`);
+      await post(`/api/admin/users/${user.id}/${disabled ? "disable" : "enable"}`);
       await users.reload();
     } catch (err) {
       setError(err as Error);
@@ -36,29 +41,57 @@ export function AdminPage() {
   };
 
   return (
-    <div className="page">
-      <h1>Administration</h1>
-      <h2>New organisation</h2>
-      <form className="stack narrow" onSubmit={create}>
-        <label>Name<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} /></label>
-        <label>Email domains that join automatically (optional; Google Workspace, or a domain your SSO provider is verified for)<input value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="acme.com" /></label>
-        <div><button className="primary" type="submit">Create organisation</button></div>
+    <Page>
+      <PageTitle>Administration</PageTitle>
+      <SectionTitle>New organisation</SectionTitle>
+      <form className="max-w-md" onSubmit={create}>
+        <FieldGroup className="gap-5">
+          <Field>
+            <FieldLabel htmlFor="org-name">Name</FieldLabel>
+            <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="org-domains">Email domains that join automatically</FieldLabel>
+            <Input id="org-domains" value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="acme.com" />
+            <FieldDescription>Optional. Google Workspace, or a domain your SSO provider is verified for.</FieldDescription>
+          </Field>
+          <div><Button type="submit">Create organisation</Button></div>
+        </FieldGroup>
       </form>
-      <ErrorText error={error ?? users.error} />
-      <h2>Users</h2>
-      <table className="table">
-        <thead><tr><th>Name</th><th>Email</th><th>Last sign-in</th><th /></tr></thead>
-        <tbody>
+      <div className="mt-4"><ErrorText error={error ?? users.error} /></div>
+      <SectionTitle>Users</SectionTitle>
+      <Table>
+        <TableHeader>
+          <TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Last sign-in</TableHead><TableHead /></TableRow>
+        </TableHeader>
+        <TableBody>
           {users.data?.map((u) => (
-            <tr key={u.id} className={u.isDisabled ? "disabled" : ""}>
-              <td>{u.displayName} {u.isSystemAdmin && <span className="pill">Admin</span>}</td>
-              <td className="muted">{u.email}</td>
-              <td className="muted">{timeAgo(u.lastSignInAt)}</td>
-              <td className="right">{u.id !== me.id && <button className="link danger" onClick={() => void toggle(u)}>{u.isDisabled ? "Enable" : "Disable"}</button>}</td>
-            </tr>
+            <TableRow key={u.id} className={u.isDisabled ? "opacity-50" : undefined}>
+              <TableCell>
+                <span className="flex items-center gap-2">
+                  {u.displayName}
+                  {u.isSystemAdmin && <Badge variant="secondary">Admin</Badge>}
+                  {u.isDisabled && <Badge variant="outline">Disabled</Badge>}
+                </span>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{u.email}</TableCell>
+              <TableCell className="text-muted-foreground">{timeAgo(u.lastSignInAt)}</TableCell>
+              <TableCell className="text-right">
+                {u.id !== me.id && (u.isDisabled ? (
+                  <Button variant="outline" size="sm" onClick={() => void setDisabled(u, false)}>Enable</Button>
+                ) : (
+                  <ConfirmButton
+                    title={`Disable ${u.email}?`}
+                    description="They are signed out everywhere immediately."
+                    confirmLabel="Disable"
+                    onConfirm={() => void setDisabled(u, true)}
+                  >Disable</ConfirmButton>
+                ))}
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Page>
   );
 }

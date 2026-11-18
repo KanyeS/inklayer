@@ -3,6 +3,7 @@ import {
 } from "@inklayer/overlay";
 import type { ActivityItem, ActivityPage, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
 import type { Response } from "./lib/messages";
+import themeTokens from "@inklayer/ui/tokens.css?inline";
 
 type View = "comments" | "activity";
 
@@ -129,6 +130,8 @@ class LiveSession {
     this.#host.setAttribute("style", "all:initial;position:fixed;right:16px;bottom:16px;z-index:2147483647;");
     this.#shadow = this.#host.attachShadow({ mode: "closed" });
     this.#shadow.innerHTML = `<style>${STYLES}</style>`;
+    followColorScheme(this.#host);
+    void loadPanelFont();
     this.#root = document.createElement("div");
     this.#shadow.append(this.#root);
     // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
@@ -537,6 +540,33 @@ class LiveSession {
   }
 }
 
+/* ------------------------------------------------------------------ theme */
+
+const PANEL_FONT = "Inklayer Outfit";
+let panelFontRequested = false;
+
+/** Adds the theme's font to the page under a name of its own, once, when the panel first shows. Without it the panel uses the system font. */
+async function loadPanelFont(): Promise<void> {
+  if (panelFontRequested) return;
+  panelFontRequested = true;
+  try {
+    const base64 = await call<string>({ type: "live.font" });
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const face = new FontFace(PANEL_FONT, bytes.buffer, { weight: "100 900", display: "swap" });
+    document.fonts.add(await face.load());
+  } catch {
+    // The system font is fine.
+  }
+}
+
+/** The theme's dark palette applies under :host(.dark); follow the system setting like the viewer and popup do. */
+function followColorScheme(host: HTMLElement): void {
+  const dark = window.matchMedia("(prefers-color-scheme: dark)");
+  const apply = () => host.classList.toggle("dark", dark.matches);
+  apply();
+  dark.addEventListener("change", apply);
+}
+
 /* ---------------------------------------------------------------- start-up */
 
 let session: LiveSession | null = null;
@@ -573,54 +603,75 @@ if (!globalThis.__inklayerLive && window.top === window) {
   void startSession(() => call<LiveInit | null>({ type: "live.check", url: location.href }), false).catch(() => undefined);
 }
 
+/** The shared colour tokens, scoped to the panel's shadow root. */
+const TOKENS = themeTokens.replace(/\/\*[\s\S]*?\*\//g, "").replace(/:root/g, ":host").replace(/\.dark\b/g, ":host(.dark)");
+
 const STYLES = `
-  :host { all: initial; }
-  * { box-sizing: border-box; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  button { cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #111827; border-radius: 6px; padding: 4px 8px; }
+  ${TOKENS}
+  :host { all: initial; --ring-focus: 0 0 0 3px color-mix(in oklch, var(--ring) 35%, transparent); }
+  * { box-sizing: border-box; font: 13px/1.45 "${PANEL_FONT}", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  :focus-visible { outline: none; box-shadow: var(--ring-focus); }
+  button { cursor: pointer; border: 1px solid var(--border); background: var(--background); color: var(--foreground); border-radius: 999px;
+    padding: 4px 10px; font-weight: 500; transition: background-color 120ms, color 120ms; }
+  button:hover { background: var(--muted); }
   button:disabled { opacity: 0.5; cursor: default; }
-  button.primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
-  button.link { border: none; background: none; padding: 2px 4px; color: #4f46e5; }
-  button.link.danger { color: #b91c1c; }
-  .launcher { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; border: none; background: #111827; color: #fff;
-    box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); font-weight: 600; }
-  .count { background: #f59e0b; color: #111827; border-radius: 999px; min-width: 20px; padding: 0 6px; text-align: center; font-weight: 700; }
-  .count.zero { background: #374151; color: #d1d5db; }
-  .panel { width: 320px; max-height: min(70vh, 640px); overflow: auto; background: #fff; color: #111827; border-radius: 12px; padding: 10px;
-    box-shadow: 0 10px 30px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(0 0 0 / 0.06); display: flex; flex-direction: column; gap: 8px; }
-  .header { display: flex; align-items: center; gap: 6px; }
-  .tabs { display: flex; gap: 2px; }
-  .tab { border: none; background: none; padding: 4px 8px; border-radius: 6px; color: #6b7280; font-weight: 600; }
-  .tab.active { background: #eef2ff; color: #3730a3; }
+  button.primary { background: var(--primary); border-color: transparent; color: var(--primary-foreground); }
+  button.primary:hover { background: color-mix(in oklch, var(--primary) 80%, transparent); }
+  button.link { border: none; background: none; padding: 2px 4px; color: var(--primary); }
+  button.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+  button.link.danger { color: var(--destructive); }
+  /* The dark theme's --primary is a fill colour; as text on the dark panel it needs to be lighter (Tailwind violet-300). */
+  :host(.dark) button.link:not(.danger), :host(.dark) .where a { color: oklch(0.811 0.111 293.571); }
+  :host(.dark) button:not(.primary, .tool.active, .tab.active) { background: transparent; }
+  :host(.dark) button:not(.primary, .link, .tab, .icon, .tool.active):hover { background: var(--muted); }
+  .launcher { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border: none; background: var(--primary); color: var(--primary-foreground);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.25); font-weight: 600; }
+  .launcher:hover { background: color-mix(in oklch, var(--primary) 88%, black); }
+  .count { background: var(--primary-foreground); color: var(--primary); border-radius: 999px; min-width: 22px; padding: 0 7px; text-align: center; font-weight: 700; }
+  .count.zero { background: color-mix(in oklch, var(--primary-foreground) 25%, transparent); color: var(--primary-foreground); }
+  .panel { width: 330px; max-height: min(70vh, 640px); overflow: auto; background: var(--popover); color: var(--popover-foreground); border-radius: 22px; padding: 12px;
+    box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.3), 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); display: flex; flex-direction: column; gap: 10px; }
+  .header { display: flex; align-items: center; gap: 4px; }
+  .tabs { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--muted); }
+  .tab { border: none; background: none; padding: 3px 12px; color: var(--muted-foreground); font-weight: 500; }
+  .tab:hover { background: none; color: var(--foreground); }
+  .tab.active { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+  :host(.dark) .tab.active { background: var(--input); }
   .filters select { flex: 1; min-width: 0; }
   .activity .item { cursor: default; }
   .activity .item.here { cursor: pointer; }
   .grow-left { margin-left: auto; white-space: nowrap; }
   .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .where a { color: #4f46e5; text-decoration: none; }
+  .where a { color: var(--primary); text-decoration: none; }
   .where a:hover { text-decoration: underline; }
-  .error-detail { color: #991b1b; font-family: ui-monospace, monospace; font-size: 12px; }
+  .error-detail { color: var(--destructive); font-family: ui-monospace, monospace; font-size: 12px; }
   .grow { flex: 1; }
-  .target { display: grid; gap: 2px; color: #6b7280; font-size: 12px; }
-  select { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px; background: #fff; color: #111827; max-width: 100%; }
-  .icon { padding: 2px 8px; }
+  .target { display: grid; gap: 4px; color: var(--muted-foreground); font-size: 12px; }
+  select { appearance: auto; border: 1px solid transparent; border-radius: 999px; padding: 5px 10px; background: color-mix(in oklch, var(--input) 50%, transparent);
+    color: var(--foreground); max-width: 100%; }
+  select option { background: Canvas; color: CanvasText; }
+  .icon { padding: 2px 10px; border-color: transparent; background: none; color: var(--muted-foreground); }
+  .icon:hover { color: var(--foreground); }
   .tools { display: flex; flex-wrap: wrap; gap: 4px; }
-  .tool.active { background: #111827; color: #fff; border-color: #111827; }
-  .colors { display: flex; gap: 6px; }
-  .swatch { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #d1d5db; }
-  .swatch.active { box-shadow: 0 0 0 2px #111827; }
-  .hint, .muted, .empty { color: #6b7280; margin: 0; font-size: 12px; }
-  .error { color: #b91c1c; margin: 0; }
-  .draft { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: #eef2ff; }
-  textarea { width: 100%; resize: vertical; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px; color: #111827; background: #fff; }
+  .tool.active, .tool.active:hover { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+  .colors { display: flex; gap: 8px; padding: 2px; }
+  .swatch { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 2px solid var(--popover); box-shadow: 0 0 0 1px var(--border); }
+  .swatch.active { box-shadow: 0 0 0 2px var(--foreground); }
+  .hint, .muted, .empty { color: var(--muted-foreground); margin: 0; font-size: 12px; }
+  .error { color: var(--destructive); margin: 0; }
+  .draft { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 16px; background: var(--muted); }
+  textarea { width: 100%; resize: vertical; border: 1px solid transparent; border-radius: 14px; padding: 8px 10px; color: var(--foreground);
+    background: var(--background); }
+  textarea::placeholder { color: var(--muted-foreground); }
   .row { display: flex; gap: 6px; align-items: center; }
-  .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-  .item { padding: 6px 8px; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
-  .item:hover { background: #f9fafb; }
-  .item.selected { background: #eef2ff; }
+  .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .item { padding: 8px 10px; border-radius: 14px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+  .item:hover { background: color-mix(in oklch, var(--muted) 70%, transparent); }
+  .item.selected { background: color-mix(in oklch, var(--primary) 12%, transparent); }
   .item.resolved { opacity: 0.6; }
   .meta { display: flex; align-items: center; gap: 6px; }
   .badge { color: #fff; border-radius: 11px; min-width: 20px; height: 20px; padding: 0 6px; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }
-  .warn { color: #92400e; background: #fef3c7; border-radius: 4px; padding: 0 4px; font-size: 11px; }
+  .warn { color: #92400e; background: #fef3c7; border-radius: 999px; padding: 0 6px; font-size: 11px; }
   .body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .actions { gap: 2px; }
 `;

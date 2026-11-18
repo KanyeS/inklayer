@@ -494,11 +494,12 @@ function round(n: number): number {
   return Math.round(n * 10_000) / 10_000;
 }
 
+// Colours follow the Inklayer theme (packages/ui tokens): --primary for hover, --foreground for drafts and selection.
 const STYLES = `
   :host { all: initial; }
   .shapes { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
   .surface { position: absolute; top: 0; left: 0; pointer-events: none; cursor: crosshair; touch-action: none; }
-  .hover { position: absolute; display: none; pointer-events: none; outline: 2px dashed #4f46e5; outline-offset: 1px; background: rgb(79 70 229 / 0.06); border-radius: 2px; }
+  .hover { position: absolute; display: none; pointer-events: none; outline: 2px dashed oklch(0.491 0.27 292.581); outline-offset: 1px; background: oklch(0.491 0.27 292.581 / 0.06); border-radius: 2px; }
   .mark { pointer-events: visiblePainted; cursor: pointer; }
   .mark .outline { fill: none; stroke: var(--c); stroke-width: 2; stroke-dasharray: 6 4; }
   .mark .highlight { fill: color-mix(in srgb, var(--c) 35%, transparent); stroke: none; mix-blend-mode: multiply; }
@@ -511,9 +512,9 @@ const STYLES = `
   .mark.orphaned .rect, .mark.orphaned .outline { stroke-dasharray: 2 4; }
   .mark.draft { opacity: 0.85; }
   .badge { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box;
-    border-radius: 11px; background: var(--c); color: #fff; font: 600 12px/22px system-ui, -apple-system, sans-serif; text-align: center;
+    border-radius: 11px; background: var(--c); color: #fff; font: 600 12px/22px "Inklayer Outfit", system-ui, -apple-system, sans-serif; text-align: center;
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 2px #fff; pointer-events: auto; cursor: pointer; user-select: none; }
   .badge.pin { transform: translate(-50%, -100%); border-bottom-left-radius: 2px; }
-  .badge.selected { box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 3px #111827; }
-  .badge.draft { background: #111827; }
+  .badge.selected { box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 3px oklch(0.145 0.008 326); }
+  .badge.draft { background: oklch(0.145 0.008 326); }
 `;

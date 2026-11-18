@@ -2,7 +2,7 @@ import { createContext, useContext } from "react";
 import { ApiError, get, type Me } from "./lib/api";
 import { match, usePath } from "./lib/router";
 import { useAsync } from "./lib/useAsync";
-import { Layout } from "./components/Layout";
+import { Layout, Loading, Page, PageTitle } from "./components/Layout";
 import { AdminPage } from "./pages/AdminPage";
 import { HomePage } from "./pages/HomePage";
 import { OrganizationPage } from "./pages/OrganizationPage";
@@ -21,9 +21,9 @@ export function App() {
   const path = usePath();
   const { data: me, error, loading, reload } = useAsync(() => get<Me>("/api/me"), []);
 
-  if (loading && !me) return <div className="center muted">Loading…</div>;
+  if (loading && !me) return <div className="grid min-h-svh place-items-center"><Loading /></div>;
   if (error instanceof ApiError && error.status === 401) return <SignInPage />;
-  if (error || !me) return <div className="center error">Couldn't reach the server: {error?.message}</div>;
+  if (error || !me) return <div className="grid min-h-svh place-items-center p-6 text-destructive">Couldn't reach the server: {error?.message}</div>;
 
   let page: React.ReactNode = <NotFound />;
   let params: Record<string, string> | null;
@@ -40,5 +40,5 @@ export function App() {
 }
 
 function NotFound() {
-  return <div className="page"><h1>Not found</h1><p className="muted">That page doesn't exist.</p></div>;
+  return <Page><PageTitle>Not found</PageTitle><p className="text-muted-foreground">That page doesn't exist.</p></Page>;
 }

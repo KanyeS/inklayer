@@ -1,3 +1,4 @@
+import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url";
 import { NotSignedInError } from "./auth";
 import { api, postJson } from "./api";
 import { getSettings } from "./settings";
@@ -132,7 +133,8 @@ export type LiveRequest =
   | { type: "live.create"; projectId: string; url: string; kind: string; body: string; color: string; anchor: unknown; geometry: unknown; viewportWidth: number }
   | { type: "live.update"; id: string; version: number; status?: "Open" | "Resolved"; body?: string }
   | { type: "live.delete"; id: string; version: number }
-  | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string };
+  | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string }
+  | { type: "live.font" };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -180,7 +182,30 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
       query.set("limit", "30");
       return api<ActivityPage>(`/api/activity?${query}`);
     }
+    case "live.font":
+      return panelFont();
   }
+}
+
+let panelFontData: Promise<string> | null = null;
+
+/**
+ * The theme's body font (Outfit, Latin), base64, for the panel on web pages. Sent as data rather than made a
+ * web-accessible resource, so pages can't probe for the extension and their font-src CSP doesn't apply.
+ */
+function panelFont(): Promise<string> {
+  panelFontData ??= fetch(chrome.runtime.getURL(outfitLatinUrl))
+    .then((r) => r.arrayBuffer())
+    .then((buffer) => {
+      let binary = "";
+      for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte);
+      return btoa(binary);
+    })
+    .catch((error: unknown) => {
+      panelFontData = null;
+      throw error;
+    });
+  return panelFontData;
 }
 
 async function init(url: string): Promise<LiveInit> {

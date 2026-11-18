@@ -7,5 +7,19 @@
   "scripts": {
     "build": "vite build && vite build --mode live && node scripts/build-firefox.mjs",
     "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "@fontsource-variable/outfit": "5.3.0",
+    "@inklayer/overlay": "*",
+    "@inklayer/ui": "*",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "tailwindcss": "^4.3.5"
   }
 }

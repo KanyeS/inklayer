@@ -1,38 +1,5 @@
-:root {
-  color-scheme: light dark;
-  --bg: #ffffff;
-  --fg: #111827;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --accent: #4f46e5;
-  --accent-fg: #ffffff;
-  --danger: #b91c1c;
-  --ok: #047857;
-  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+@import "@inklayer/ui/globals.css";
+
+body {
+  width: 320px;
 }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #111827; --fg: #f3f4f6; --muted: #9ca3af; --border: #374151; --accent: #818cf8; --accent-fg: #111827; --danger: #f87171; --ok: #34d399; }
-}
-* { box-sizing: border-box; }
-body { margin: 0; width: 320px; background: var(--bg); color: var(--fg); }
-header { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--border); }
-.logo { font-weight: 700; letter-spacing: -0.01em; }
-#who { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 190px; }
-main { padding: 14px; display: grid; gap: 10px; }
-label { display: grid; gap: 4px; font-weight: 600; font-size: 12px; }
-input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--fg); width: 100%; }
-button { font: inherit; font-weight: 600; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer; }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-button:disabled { opacity: 0.55; cursor: default; }
-.row { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-.link { background: none; border: none; padding: 0; color: var(--accent); font-weight: 500; cursor: pointer; }
-.muted { color: var(--muted); font-size: 12px; margin: 0; }
-.error { color: var(--danger); margin: 0; }
-.ok { color: var(--ok); margin: 0; }
-code { font-size: 11px; word-break: break-all; background: color-mix(in srgb, var(--border) 50%, transparent); padding: 2px 4px; border-radius: 4px; }
-progress { width: 100%; }
-details { display: grid; gap: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
-details[open] { gap: 10px; }
-details > :not(summary) { margin-top: 8px; }
-summary { cursor: pointer; font-weight: 600; font-size: 12px; color: var(--muted); }
-.error:empty { display: none; }
