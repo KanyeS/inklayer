@@ -37,9 +37,10 @@ public sealed class SystemEndpointTests(InklayerApiFactory factory)
     }
 
     [Fact]
-    public async Task Unknown_routes_return_404()
+    public async Task Unknown_api_routes_return_404()
     {
-        var response = await _client.GetAsync(new Uri("/does-not-exist", UriKind.Relative));
+        // Non-API paths fall back to the web viewer (client-side routing) when it's built, so test an API path.
+        var response = await _client.GetAsync(new Uri("/api/system/does-not-exist", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

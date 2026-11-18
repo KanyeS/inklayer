@@ -136,7 +136,7 @@ async function renderCapture(state: StateResponse): Promise<void> {
       case "done": {
         const parts: Node[] = [h("p", { className: "ok", textContent: "Captured." })];
         if (s.failedResources > 0) parts.push(h("p", { className: "muted", textContent: `${s.failedResources} file(s) couldn't be fetched; the screenshot shows the page as it was.` }));
-        if (s.snapshot.viewUrl) parts.push(h("button", { textContent: "Open snapshot", onclick: () => void chrome.tabs.create({ url: s.snapshot.viewUrl! }) }));
+        parts.push(h("button", { textContent: "Open and annotate", onclick: () => void chrome.tabs.create({ url: new URL(`/snapshots/${s.snapshot.id}`, state.serverUrl!).href }) }));
         status.replaceChildren(...parts);
         break;
       }

@@ -85,6 +85,18 @@ When re-anchoring, the overlay tries each anchor in order and marks the annotati
 
 **Free drawing:** strokes are stored as vector points in document coordinates, rendered with `perfect-freehand` (MIT). A stroke can optionally be pinned to an element, in which case its coordinates are stored relative to that element's box. Each stroke records the viewport width so the viewer can warn when the layout differs.
 
+**As built (Phase 3):**
+- **Anchors:** `client/packages/overlay` stores, for each annotation:
+  - one unique CSS selector per shadow scope (preferring stable ids and `data-testid`, ignoring framework-generated ids);
+  - an XPath;
+  - normalised text;
+  - the original box;
+  - for highlights, a text quote with prefix and suffix plus the text position.
+- **Re-anchoring** reports `exact`, `fallback` or `orphaned`.
+- **Geometry** is stored as fractions of the anchor element's box.
+- **Tested in Firefox** with a two-origin harness that uses the production CSP: rendering, messaging, the pin and highlight tools, link blocking, and cookie/storage isolation.
+- **Not yet tested in a browser:** the drawing tools, which need real pointer input.
+
 ### 2.3 Annotation model and history
 - **Annotation types:** `comment`, `highlight`, `drawing`, `rect`, `arrow`, `pin`.
 - **Fields on each annotation:** status (`open` / `resolved`), assignee, labels such as bug or design, and severity for QA.
@@ -142,6 +154,7 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
 - **Sanitizer:** built on AngleSharp (MIT) rather than HtmlSanitizer. Its rules are structural, which keeps CSS intact, and it has an XSS test corpus.
 - **Phase 3 change needed:** the overlay will need its own script inside the frame. That means switching to a per-response `script-src 'nonce-…'` for Inklayer's overlay script only, and `sandbox allow-scripts`, still without `allow-same-origin`.
 - **Not done yet:** a blob store that removes files no snapshot uses any more, and per-organisation storage quotas.
+- **Phase 3 (done):** the overlay script is admitted by a per-response nonce, with `sandbox allow-scripts` and still no `allow-same-origin`. The viewer posts to the opaque-origin frame with targetOrigin `*`, checking `event.source` on replies. The overlay posts only to the app origin the server injects. The sanitizer strips `name` from `img`/`form` to stop DOM clobbering.
 
 ### 2.7 Performance for hundreds of users
 - A single node handles this comfortably. SQLite runs in WAL mode, so readers never block and writes (small annotation rows) take a few milliseconds. `busy_timeout` queues writers that arrive at the same moment instead of failing them.

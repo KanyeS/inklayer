@@ -1,6 +1,14 @@
 # syntax=docker/dockerfile:1
 # Build context: repository root.  docker build -f deploy/Dockerfile -t inklayer-server .
 
+# Web viewer and annotation overlay. Both are static files that end up in the server's wwwroot.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS client
+WORKDIR /src/client
+COPY client/ ./
+RUN npm ci --no-audit --no-fund \
+ && npm run build -w @inklayer/viewer \
+ && npm run build -w @inklayer/overlay
+
 # The SDK stage runs on the build machine's own architecture and cross-compiles for the
 # target (amd64/arm64). Multi-arch images build fast, with no QEMU emulation.
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -16,6 +24,7 @@ COPY server/src/Inklayer.Api/Inklayer.Api.csproj server/src/Inklayer.Api/
 RUN dotnet restore server/src/Inklayer.Api/Inklayer.Api.csproj -a $TARGETARCH
 
 COPY server/src/ server/src/
+COPY --from=client /src/server/src/Inklayer.Api/wwwroot server/src/Inklayer.Api/wwwroot
 RUN dotnet publish server/src/Inklayer.Api/Inklayer.Api.csproj \
       -c Release --no-restore -a $TARGETARCH --no-self-contained -o /app \
       -p:Version=${VERSION} -p:InformationalVersion=${VERSION}

@@ -12,8 +12,9 @@ Capture any web page with the Chrome extension. Then comment on it, highlight it
 |---|---|
 | `server/` | ASP.NET Core (.NET 10) API, auth, real-time hub, snapshot host |
 | `client/apps/extension/` | Chrome extension (Manifest V3) for capture and annotation |
-| `client/apps/viewer/` | Web viewer for captured pages |
-| `client/packages/` | Shared TypeScript packages (overlay, capture, API client) |
+| `client/apps/viewer/` | Web viewer: organisations, projects, snapshots, and the annotation workspace (React) |
+| `client/packages/overlay/` | Annotation overlay injected into captured pages: anchoring, drawing tools |
+| `client/packages/capture/` | Page serializer and resource resolver used by the extension |
 | `deploy/` | Dockerfile, docker-compose, reverse-proxy examples |
 
 ## Self-hosting
@@ -35,6 +36,12 @@ Requires the .NET 10 SDK.
 cd server
 dotnet test                                  # unit + integration tests
 dotnet run --project src/Inklayer.Api        # app on http://localhost:5048, captured pages on :5049 (data in server/.data/)
+```
+
+Build the web viewer and overlay into the server's `wwwroot` first (once, or after client changes):
+
+```bash
+cd client && npm ci && npm run build
 ```
 
 To sign in locally, create a Google OAuth client (type "Web application") with redirect URI `http://localhost:5048/auth/callback/google`, then:
@@ -83,6 +90,27 @@ To install it:
 - **A screenshot** of the visible area.
 
 The server sanitizes the HTML, then serves it only from the separate snapshot origin under signed, expiring links, with scripts and external loads blocked.
+
+### Annotating
+
+Open a snapshot in the web viewer (`/snapshots/{id}`, or **Open and annotate** in the extension).
+
+| Tool | Key | What it does |
+|---|---|---|
+| Select | V | Click a mark to find its comment; click a comment to scroll to its mark |
+| Comment pin | C | Pin a comment to a point on an element |
+| Element | E | Outline a whole element |
+| Highlight | H | Select text to highlight it |
+| Rectangle / Arrow | R / A | Drag to draw |
+| Draw | D | Freehand ink (pen pressure supported) |
+
+**How marks stay attached:**
+- **Anchors:** each mark is attached to an element through several independent anchors: CSS selectors (shadow DOM aware), XPath, text, and its original position. Shapes are stored relative to that element, so they follow layout changes.
+- **Orphans:** if the element can't be found, the mark is shown where it originally was and flagged in the list.
+
+**Comments:** Commenters and above can annotate and resolve. Authors and project Admins can edit and delete. Every change is versioned (`GET /api/annotations/{id}/history`), and conflicting edits are refused rather than overwritten.
+
+**What runs inside the captured page:** only Inklayer's overlay script runs there, admitted by a per-response CSP nonce. The page is sandboxed with an opaque origin, so it has no cookies, no storage and no network access, and it talks to the viewer only through `postMessage`.
 
 ### How sign-in and access work
 - **Google only.** Inklayer stores no passwords.

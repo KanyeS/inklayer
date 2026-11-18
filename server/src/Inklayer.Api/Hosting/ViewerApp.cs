@@ -10,10 +10,16 @@ internal static class ViewerApp
 
     public static WebApplication UseViewerApp(this WebApplication app)
     {
+        var policy = ViewerPolicy(app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Features.Snapshots.SnapshotOptions>>().Value.OriginUri);
         app.UseStaticFiles(new StaticFileOptions
         {
             OnPrepareResponse = ctx =>
             {
+                if (ctx.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
+                {
+                    ctx.Context.Response.Headers.ContentSecurityPolicy = policy;
+                }
+
                 // Vite fingerprints everything under /assets, so it can be cached forever.
                 ctx.Context.Response.Headers.CacheControl = ctx.Context.Request.Path.StartsWithSegments("/assets", StringComparison.Ordinal)
                     ? "public, max-age=31536000, immutable"
