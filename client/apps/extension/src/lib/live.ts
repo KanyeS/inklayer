@@ -1,6 +1,6 @@
 import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url";
 import { NotSignedInError } from "./auth";
-import { api, postJson } from "./api";
+import { api, postJson, type Features } from "./api";
 import { getSettings } from "./settings";
 
 /**
@@ -101,6 +101,8 @@ export interface LiveInit {
   lastProjectId: string | null;
   /** The Inklayer server, for links to docs and comments. */
   serverUrl: string;
+  /** Which major features are on for this server. */
+  features: Features;
 }
 
 const SCRIPT_ID = "inklayer-live";
@@ -109,6 +111,12 @@ const CACHE_MS = 5 * 60 * 1000;
 
 let origins: { at: number; value: Set<string> } | null = null;
 let projects: { at: number; value: LiveProject[] } | null = null;
+let features: { at: number; value: Features } | null = null;
+
+async function getFeatures(): Promise<Features> {
+  if (!features || Date.now() - features.at > CACHE_MS) features = { at: Date.now(), value: await api<Features>("/api/features") };
+  return features.value;
+}
 
 /** Registers the live script for every site (if the user granted site access), or unregisters it when signed out. */
 export async function syncLiveScript(): Promise<void> {
@@ -129,6 +137,7 @@ export async function syncLiveScript(): Promise<void> {
 export async function stopLive(): Promise<void> {
   origins = null;
   projects = null;
+  features = null;
   await syncLiveScript();
 }
 
@@ -252,16 +261,18 @@ function panelFont(): Promise<string> {
 }
 
 async function init(url: string): Promise<LiveInit> {
-  const [all, pages, stored, settings] = await Promise.all([
+  const [all, pages, stored, settings, on] = await Promise.all([
     getProjects(),
     api<LivePage[]>(`/api/live/annotations?url=${encodeURIComponent(url)}`),
     chrome.storage.local.get("lastLiveProjectId"),
     getSettings(),
+    getFeatures(),
   ]);
   const last = stored.lastLiveProjectId as string | undefined;
   return {
     projects: all, pages, lastProjectId: all.some((p) => p.id === last && p.canComment) ? last! : null,
     serverUrl: new URL(settings.serverUrl!).origin,
+    features: on,
   };
 }
 

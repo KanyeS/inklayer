@@ -6,6 +6,7 @@ using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Features.Live;
 using Inklayer.Api.Features.Me;
 using Inklayer.Api.Features.Projects;
+using Inklayer.Api.Hosting;
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Docs;
@@ -36,8 +37,8 @@ internal static class InklayerTools
     /* ------------------------------------------------------------------ who and where */
 
     [McpServerTool(Name = "whoami", ReadOnly = true), Description("The signed-in person and the organisations they belong to, with their role in each.")]
-    public static async Task<string> WhoAmI(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct) =>
-        ToolResults.ToJson(ToolResults.Value<MeResponse>(await MeEndpoints.MeAsync(currentUser, db, ct)));
+    public static async Task<string> WhoAmI(CurrentUser currentUser, InklayerDbContext db, FeatureSwitches features, CancellationToken ct) =>
+        ToolResults.ToJson(ToolResults.Value<MeResponse>(await MeEndpoints.MeAsync(currentUser, db, features, ct)));
 
     [McpServerTool(Name = "list_projects", ReadOnly = true), Description("Projects in an organisation. Page comments belong to projects.")]
     public static async Task<string> ListProjects(
@@ -137,9 +138,9 @@ internal static class InklayerTools
 
     [McpServerTool(Name = "recent_activity", ReadOnly = true), Description("Recent activity the person can see, newest first: comments and replies, docs, and (for admins) sign-ins and errors.")]
     public static async Task<string> RecentActivity(
-        CurrentUser currentUser, InklayerDbContext db, CancellationToken ct,
+        CurrentUser currentUser, InklayerDbContext db, FeatureSwitches features, CancellationToken ct,
         [Description("Only one kind: comments, docs, signins or errors")] string? kind = null, [Description("How many, at most 100 (default 30)")] int? limit = null) =>
-        ToolResults.ToJson(ToolResults.Value<ActivityResponse>(await ActivityEndpoints.ListAsync(kind, null, null, Math.Clamp(limit ?? 30, 1, 100), currentUser, db, ct)).Items);
+        ToolResults.ToJson(ToolResults.Value<ActivityResponse>(await ActivityEndpoints.ListAsync(kind, null, null, Math.Clamp(limit ?? 30, 1, 100), currentUser, db, features, ct)).Items);
 
     /* ------------------------------------------------------------------ docs: changing */
 
@@ -215,6 +216,12 @@ internal static class InklayerTools
     }
 
     /* ------------------------------------------------------------------ helpers */
+
+    /// <summary>Tools that work on docs: hidden and refused while docs are turned off.</summary>
+    public static readonly HashSet<string> DocTools = new(StringComparer.Ordinal)
+    {
+        "list_docs", "search_docs", "read_doc", "doc_history", "list_tags", "create_doc", "edit_doc", "rename_or_move_doc", "delete_doc",
+    };
 
     private static object Summary(AnnotationResponse a) => new
     {

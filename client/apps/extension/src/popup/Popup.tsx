@@ -175,15 +175,20 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
     <>
       <Button size="lg" onClick={() => void open("comments")}>Comment on this page</Button>
       <p className="text-xs text-muted-foreground">Comments appear on the page for everyone in your projects who has the extension.</p>
-      <Button variant={live ? "secondary" : "outline"} disabled={live === null} onClick={() => void toggleLive()}>
-        {live && <span aria-hidden className="size-2 rounded-full bg-[#0ACF83] shadow-[0_0_0_3px_rgb(10_207_131/0.2)]" />}
-        {live ? "Stop live cursors on this tab" : "Live cursors on this tab"}
-      </Button>
-      <p className="text-xs text-muted-foreground">
-        {live
-          ? "People in your organisations who are on this page with live cursors on see your pointer and selections. Only this tab shares."
-          : "See the pointers and selections of people in your organisations on the same page, and share yours. Only this tab, until you close it."}
-      </p>
+      {/* Hidden while an administrator has turned live cursors off. */}
+      {state.me!.features.liveCursors && (
+        <>
+          <Button variant={live ? "secondary" : "outline"} disabled={live === null} onClick={() => void toggleLive()}>
+            {live && <span aria-hidden className="size-2 rounded-full bg-[#0ACF83] shadow-[0_0_0_3px_rgb(10_207_131/0.2)]" />}
+            {live ? "Stop live cursors on this tab" : "Live cursors on this tab"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            {live
+              ? "People in your organisations who are on this page with live cursors on see your pointer and selections. Only this tab shares."
+              : "See the pointers and selections of people in your organisations on the same page, and share yours. Only this tab, until you close it."}
+          </p>
+        </>
+      )}
       <Button variant="outline" title="Who commented where; admins also see sign-ins and errors" onClick={() => void open("activity")}>Activity log</Button>
       <ErrorText>{error}</ErrorText>
       {footer}

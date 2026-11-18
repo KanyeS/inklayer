@@ -6,6 +6,7 @@ import { ErrorText, SectionTitle } from "@/components/Layout";
 import { del, get } from "@/lib/api";
 import { dateTime, timeAgo } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
+import { useMe } from "@/App";
 
 interface ConnectedApp {
   clientId: string;
@@ -18,6 +19,7 @@ interface ConnectedApp {
  * disconnect each, and the address to give a new one.
  */
 export function ConnectedApps() {
+  const { me } = useMe();
   const apps = useAsync(() => get<ConnectedApp[]>("/api/me/apps"), []);
   const [error, setError] = useState<Error | null>(null);
   const [copied, setCopied] = useState(false);
@@ -42,14 +44,22 @@ export function ConnectedApps() {
   return (
     <section>
       <SectionTitle>Connected apps</SectionTitle>
-      <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
-        AI assistants such as Claude can use Inklayer as you: read and reply to comments, and read and edit docs, wherever your role allows.
-        Add this MCP server address to the app, then sign in and allow it.
-      </p>
-      <div className="mb-4 flex max-w-2xl items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
-        <code className="min-w-0 flex-1 truncate text-sm">{mcpUrl}</code>
-        <Button variant="ghost" size="sm" onClick={() => void copy()}>{copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy"}</Button>
-      </div>
+      {me.features.mcp ? (
+        <>
+          <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
+            AI assistants such as Claude can use Inklayer as you: read and reply to comments, and read and edit docs, wherever your role allows.
+            Add this MCP server address to the app, then sign in and allow it.
+          </p>
+          <div className="mb-4 flex max-w-2xl items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2">
+            <code className="min-w-0 flex-1 truncate text-sm">{mcpUrl}</code>
+            <Button variant="ghost" size="sm" onClick={() => void copy()}>{copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy"}</Button>
+          </div>
+        </>
+      ) : (
+        <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
+          AI assistants are turned off on this server. Apps you connected before can't use Inklayer while it's off; you can still disconnect them here.
+        </p>
+      )}
       <ErrorText error={error ?? apps.error} />
       {apps.data?.length === 0 && <p className="text-sm text-muted-foreground">No apps connected.</p>}
       <ul className="max-w-2xl divide-y rounded-xl border empty:hidden">

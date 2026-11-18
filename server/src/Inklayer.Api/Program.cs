@@ -28,6 +28,7 @@ try
     builder.Services.AddInklayerInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
     builder.Services.AddInklayerHosting(builder.Configuration);
     builder.Services.AddInklayerNetworkAccess(builder.Configuration);
+    builder.Services.AddInklayerFeatureSwitches(builder.Configuration);
     builder.Services.AddInklayerAuth(builder.Configuration, builder.Environment);
     builder.Services.AddInklayerPresence(builder.Configuration);
     builder.Services.AddInklayerMcp();
@@ -45,6 +46,7 @@ try
     app.MapSystemEndpoints();
     app.MapInklayerAuthEndpoints();
     app.MapMeEndpoints();
+    app.MapFeatureEndpoints();
     app.MapAppsEndpoints();
     app.MapOrganizationEndpoints();
     app.MapProjectEndpoints();

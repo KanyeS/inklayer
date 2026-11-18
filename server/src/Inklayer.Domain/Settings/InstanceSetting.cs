@@ -6,6 +6,9 @@ public sealed class InstanceSetting
     /// <summary>The networks Inklayer answers from, one entry per line (see <c>IpAllowList</c>). Empty: every network.</summary>
     public const string AllowedNetworks = "network.allowed";
 
+    /// <summary>Features an administrator turned on or off, as JSON (<c>{"docs":false}</c>). Features not listed follow the server's configuration.</summary>
+    public const string Features = "features";
+
     public required string Key { get; init; }
 
     public required string Value { get; set; }

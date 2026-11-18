@@ -135,6 +135,8 @@ export class DocSession {
   readonly peers = new Map<string, Peer>();
   /** True once the server's copy has been loaded. */
   loaded = false;
+  /** Send this person's caret, selection and pointer to others. Off when live cursors are turned off on the server. */
+  shareAwareness = true;
 
   readonly #listeners = new Set<() => void>();
   readonly #applied = new Set<number>();
@@ -325,7 +327,7 @@ export class DocSession {
   }
 
   async #sendAwareness(): Promise<void> {
-    if (!this.loaded || this.#closed || !docsHub.connected) return;
+    if (!this.loaded || this.#closed || !this.shareAwareness || !docsHub.connected) return;
     const update = encodeAwarenessUpdate(this.awareness, [this.doc.clientID]);
     await (await docsHub.connection()).send("Awareness", this.docId, toBase64(update)).catch(() => undefined);
   }

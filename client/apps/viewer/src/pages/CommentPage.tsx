@@ -5,6 +5,7 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Textarea } from "@inklayer/ui/components/textarea";
 import { ErrorText, Loading, Page } from "@/components/Layout";
+import { useMe } from "@/App";
 import { ApiError, del, get, post } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { Link } from "@/lib/router";
@@ -40,6 +41,7 @@ interface Reply {
  * mention it. "Open on the page" opens the page with that comment selected, if the extension is installed.
  */
 export function CommentPage({ commentId }: { commentId: string }) {
+  const { me } = useMe();
   const comment = useAsync(() => get<CommentDetail>(`/api/annotations/${commentId}`), [commentId]);
   const [copied, setCopied] = useState(false);
 
@@ -53,7 +55,8 @@ export function CommentPage({ commentId }: { commentId: string }) {
   if (!comment.data) return <Page><Loading /></Page>;
   const c = comment.data;
   const docHref = (docId: string) => `/orgs/${c.organizationId}/docs/${docId}`;
-  const linked = (text: string) => commentParts(text, c.docLinks).map((part, i) => (
+  // With docs turned off, [[links]] are just text.
+  const linked = (text: string) => !me.features.docs ? text : commentParts(text, c.docLinks).map((part, i) => (
     "text" in part ? <span key={i}>{part.text}</span>
       : part.docId ? <Link key={i} to={docHref(part.docId)} className="text-primary underline underline-offset-4">{part.shown}</Link>
       : <span key={i} className="text-muted-foreground" title="This doc doesn't exist yet">{part.shown}</span>
@@ -85,7 +88,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
             {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy link"}
           </Button>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Paste the link into a doc to link this comment there.</p>
+        {me.features.docs && <p className="mt-3 text-xs text-muted-foreground">Paste the link into a doc to link this comment there.</p>}
       </article>
 
       <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Replies</h2>
@@ -106,8 +109,8 @@ export function CommentPage({ commentId }: { commentId: string }) {
       </ol>
       {c.canReply && <ReplyForm commentId={c.id} onSent={comment.reload} />}
 
-      <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Mentioned in</h2>
-      {c.mentionedIn.length === 0 ? (
+      {me.features.docs && <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Mentioned in</h2>}
+      {!me.features.docs ? null : c.mentionedIn.length === 0 ? (
         <p className="text-sm text-muted-foreground">No docs link this comment yet.</p>
       ) : (
         <ul className="space-y-1">

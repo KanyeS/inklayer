@@ -10,6 +10,7 @@ import { ErrorText, Loading } from "@/components/Layout";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
+import { useMe } from "@/App";
 import { DocSession, type AwarenessUser } from "./collab";
 import { headings } from "./docMarkdown";
 import { docPath, docsApi, type CommentInfo, type DocInfo, type DocRevision, type DocTree } from "./docsApi";
@@ -42,15 +43,19 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: {
   const [mode, setMode] = useState<Mode>(tree.canEdit ? "edit" : "read");
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  const { me } = useMe();
+  const liveCursors = me.features.liveCursors;
+
   // One live session per doc view: open on mount, save and leave on unmount.
   useEffect(() => {
     const s = new DocSession(docId);
+    s.shareAwareness = liveCursors;
     setSession(s);
     void s.open();
     return () => {
       void s.close();
     };
-  }, [docId]);
+  }, [docId, liveCursors]);
 
   // Links, backlinks and tags are worked out by the server from saved text: refresh them every so often.
   useEffect(() => {
@@ -77,7 +82,8 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: {
           {!snapshot?.loaded ? (
             snapshot?.status === "offline" ? <ErrorText error={new Error(snapshot.error || "Can't reach the server. Retrying…")} /> : <Loading />
           ) : (
-            <Body orgId={orgId} session={session} tree={tree} mode={mode} canEdit={canEdit} commentLinks={info.data.commentLinks} onTag={onTag} onTreeChanged={onTreeChanged} />
+            <Body orgId={orgId} session={session} tree={tree} mode={mode} canEdit={canEdit} commentLinks={info.data.commentLinks} onTag={onTag} onTreeChanged={onTreeChanged}
+              liveCursors={liveCursors} />
           )}
         </div>
       </main>
@@ -195,7 +201,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
 
 /* ------------------------------------------------------------------ the text */
 
-function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTreeChanged }: {
+function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTreeChanged, liveCursors }: {
   orgId: string;
   session: DocSession;
   tree: DocTree;
@@ -204,6 +210,7 @@ function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTree
   commentLinks: string[];
   onTag: (tag: string) => void;
   onTreeChanged: () => Promise<void>;
+  liveCursors: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const editorRef = useRef<DocEditor | null>(null);
@@ -252,15 +259,16 @@ function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTree
 
   useEffect(() => editorRef.current?.setEditable(canEdit), [canEdit]);
 
-  usePresence(session, editorRef);
+  usePresence(session, editorRef, liveCursors);
 
   if (mode === "read") return <Reading orgId={orgId} session={session} tree={tree} onTag={onTag} openLink={openLink} />;
   return <div ref={host} className="doc-editor min-h-[50vh]" />;
 }
 
 /** Others' pointers and the avatar pill, drawn with the same layer as live cursors on web pages. */
-function usePresence(session: DocSession, editorRef: React.RefObject<DocEditor | null>) {
+function usePresence(session: DocSession, editorRef: React.RefObject<DocEditor | null>, enabled: boolean) {
   useEffect(() => {
+    if (!enabled) return;
     const layer = new PresenceLayer(document);
     const sync = () => {
       layer.setStatus(session.status === "live" ? "live" : session.status === "connecting" ? "connecting" : "offline", session.error);
@@ -298,7 +306,7 @@ function usePresence(session: DocSession, editorRef: React.RefObject<DocEditor |
       cancelAnimationFrame(frame);
       layer.destroy();
     };
-  }, [session, editorRef]);
+  }, [session, editorRef, enabled]);
 }
 
 function Reading({ orgId, session, tree, onTag, openLink }: {

@@ -35,7 +35,9 @@ export function App() {
   if (path === "/" || path === "") page = <HomePage />;
   else if (path === "/admin") page = <AdminPage />;
   else if ((params = match("/orgs/:orgId", path))) page = <OrganizationPage orgId={params.orgId!} />;
-  else if ((params = match("/orgs/:orgId/docs", path))) page = <DocsPage orgId={params.orgId!} />;
+  else if ((params = match("/orgs/:orgId/docs", path) ?? match("/orgs/:orgId/graph", path) ?? match("/orgs/:orgId/docs/:docId", path)) && !me.features.docs) {
+    page = <TurnedOff what="Docs are" />;
+  } else if ((params = match("/orgs/:orgId/docs", path))) page = <DocsPage orgId={params.orgId!} />;
   else if ((params = match("/orgs/:orgId/graph", path))) page = <GraphPage orgId={params.orgId!} />;
   else if ((params = match("/orgs/:orgId/docs/:docId", path))) page = <DocsPage key={params.orgId} orgId={params.orgId!} docId={params.docId!} />;
   else if ((params = match("/comments/:commentId", path))) page = <CommentPage commentId={params.commentId!} />;
@@ -48,6 +50,10 @@ export function App() {
       </Layout>
     </MeContext.Provider>
   );
+}
+
+function TurnedOff({ what }: { what: string }) {
+  return <Page><PageTitle>{what} turned off</PageTitle><p className="text-muted-foreground">An administrator has turned this off on this server.</p></Page>;
 }
 
 function NotFound() {

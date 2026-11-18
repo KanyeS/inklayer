@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Inklayer.Api.Access;
+using Inklayer.Api.Hosting;
 using Inklayer.Api.Features.Live;
 using Inklayer.Domain.Auditing;
 using Inklayer.Domain.Authorization;
@@ -55,7 +56,8 @@ internal static class ActivityEndpoints
         return app;
     }
 
-    internal static async Task<IResult> ListAsync(string? kind, string? site, DateTime? before, int? limit, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> ListAsync(
+        string? kind, string? site, DateTime? before, int? limit, CurrentUser currentUser, InklayerDbContext db, FeatureSwitches features, CancellationToken ct)
     {
         var user = await currentUser.GetAsync(ct);
         if (user is null || user.IsDisabled || await LiveEndpoints.VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
@@ -67,7 +69,7 @@ internal static class ActivityEndpoints
         var adminOrgIds = user.IsSystemAdmin
             ? []
             : await db.OrganizationMembers.Where(m => m.UserId == user.Id && (m.Role == Role.Admin || m.Role == Role.Owner)).Select(m => m.OrganizationId).ToListAsync(ct);
-        List<string> allowed = [ActivityKinds.Comments, ActivityKinds.Docs];
+        List<string> allowed = await features.IsEnabledAsync(Feature.Docs, ct) ? [ActivityKinds.Comments, ActivityKinds.Docs] : [ActivityKinds.Comments];
         if (user.IsSystemAdmin || adminOrgIds.Count > 0)
         {
             allowed.Add(ActivityKinds.SignIns);

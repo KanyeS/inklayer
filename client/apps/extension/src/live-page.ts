@@ -506,6 +506,11 @@ class LiveSession {
   /** Text from a comment or one of its replies, with its [[doc]] links. */
   #linkedText(text: string, a: PageAnnotation): HTMLParagraphElement {
     const p = h("p", { className: "body" });
+    // With docs turned off, [[links]] are just text.
+    if (!this.#init.features.docs) {
+      p.append(text);
+      return p;
+    }
     for (const part of commentParts(text, a.docLinks ?? [])) {
       if ("text" in part) p.append(part.text);
       else if (part.docId) {
@@ -660,7 +665,7 @@ class LiveSession {
       this.#replyInputs.set(key, box);
       input = box;
     }
-    return withDocSuggestions(input, () => this.#projects.get(a.projectId)?.organizationId ?? null);
+    return withDocSuggestions(input, () => (this.#init.features.docs ? this.#projects.get(a.projectId)?.organizationId ?? null : null));
   }
 
   #setBubblesOpen(open: boolean): void {
@@ -731,7 +736,7 @@ class LiveSession {
         if (e.key === "Escape") this.#cancelDraft();
       };
       parts.push(h("div", { className: "draft" },
-        h("strong", { textContent: "New comment" }), withDocSuggestions(this.#draftInput, () => this.#target?.organizationId ?? null), this.#scopeChooser(),
+        h("strong", { textContent: "New comment" }), withDocSuggestions(this.#draftInput, () => (this.#init.features.docs ? this.#target?.organizationId ?? null : null)), this.#scopeChooser(),
         h("div", { className: "row" },
           h("button", { className: "primary", textContent: this.#busy ? "Saving…" : "Save", disabled: this.#busy, onclick: () => void this.#saveDraft() }),
           h("button", { textContent: "Cancel", onclick: () => this.#cancelDraft() }))));
@@ -775,7 +780,7 @@ class LiveSession {
 
     if (this.#editing?.id === a.id) {
       const input = this.#editing.input;
-      item.append(withDocSuggestions(input, () => this.#projects.get(a.projectId)?.organizationId ?? null), h("div", { className: "row" },
+      item.append(withDocSuggestions(input, () => (this.#init.features.docs ? this.#projects.get(a.projectId)?.organizationId ?? null : null)), h("div", { className: "row" },
         h("button", { className: "primary", textContent: "Save", disabled: this.#busy, onclick: (e: Event) => {
           e.stopPropagation();
           const body = input.value;
@@ -787,7 +792,7 @@ class LiveSession {
     }
 
     if (a.body) item.append(this.#bodyOf(a));
-    if (a.mentionedIn?.length) {
+    if (this.#init.features.docs && a.mentionedIn?.length) {
       const mentions = h("p", { className: "muted mentions" }, "Mentioned in ");
       a.mentionedIn.forEach((d, i) => {
         if (i > 0) mentions.append(", ");

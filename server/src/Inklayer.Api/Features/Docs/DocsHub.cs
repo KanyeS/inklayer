@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using Inklayer.Api.Features.Presence;
+using Inklayer.Api.Hosting;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Docs;
 using Inklayer.Infrastructure.Persistence;
@@ -88,7 +89,8 @@ internal sealed class DocsRegistry(IOptions<PresenceOptions> options)
 /// <c>peerLeave(docId, peerId, clientId)</c>, <c>compact(docId)</c>, <c>access(docId, canEdit)</c>, <c>closed(docId, reason)</c>.
 /// </summary>
 [Authorize(AuthenticationSchemes = PresenceTicketHandler.SchemeName)]
-internal sealed partial class DocsHub(DocsRegistry registry, InklayerDbContext db, DocIndexer indexer, IOptions<PresenceOptions> options, TimeProvider clock) : Hub
+internal sealed partial class DocsHub(
+    DocsRegistry registry, InklayerDbContext db, DocIndexer indexer, IOptions<PresenceOptions> options, TimeProvider clock, FeatureSwitches features) : Hub
 {
     /// <summary>Ask an editor for a snapshot once this many updates are waiting, and again every <see cref="CompactEvery"/> after.</summary>
     public const int CompactAfter = 100;
@@ -199,11 +201,14 @@ internal sealed partial class DocsHub(DocsRegistry registry, InklayerDbContext d
         return seq;
     }
 
-    /// <summary>Relays carets, selections and pointers (Yjs awareness) to everyone else on the doc.</summary>
-    public Task Awareness(Guid docId, byte[] update)
+    /// <summary>Relays carets, selections and pointers (Yjs awareness) to everyone else on the doc, unless live cursors are off.</summary>
+    public async Task Awareness(Guid docId, byte[] update)
     {
         var me = Me();
-        return me.Docs.ContainsKey(docId) ? Clients.OthersInGroup(Group(docId)).SendAsync("awareness", docId, update) : Task.CompletedTask;
+        if (me.Docs.ContainsKey(docId) && await features.IsEnabledAsync(Feature.LiveCursors, Context.ConnectionAborted))
+        {
+            await Clients.OthersInGroup(Group(docId)).SendAsync("awareness", docId, update);
+        }
     }
 
     /// <summary>

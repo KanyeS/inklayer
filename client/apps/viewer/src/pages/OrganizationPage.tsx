@@ -19,6 +19,7 @@ import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 
 export function OrganizationPage({ orgId }: { orgId: string }) {
+  const { me } = useMe();
   const org = useAsync(() => get<Organization>(`/api/orgs/${orgId}`), [orgId]);
   const projects = useAsync(() => get<Project[]>(`/api/orgs/${orgId}/projects`), [orgId]);
 
@@ -37,7 +38,7 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
       </Breadcrumb>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageTitle badge={<Badge variant="secondary">{org.data.myRole}</Badge>}>{org.data.name}</PageTitle>
-        <Button variant="outline" nativeButton={false} render={<Link to={`/orgs/${orgId}/docs`} />}><BookText data-icon="inline-start" />Docs</Button>
+        {me.features.docs && <Button variant="outline" nativeButton={false} render={<Link to={`/orgs/${orgId}/docs`} />}><BookText data-icon="inline-start" />Docs</Button>}
       </div>
       <Tabs defaultValue="projects">
         <TabsList variant="line" className="mb-4">

@@ -37,6 +37,7 @@ internal static class HostingExtensions
     {
         app.UseForwardedHeaders();
         app.UseInklayerNetworkAccess();
+        app.UseInklayerFeatureSwitches();
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseSerilogRequestLogging(o =>

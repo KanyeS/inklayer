@@ -46,4 +46,5 @@ public static class AuditActions
     public const string UserDisabled = "user.disabled";
     public const string UserEnabled = "user.enabled";
     public const string NetworkAccessChanged = "network.changed";
+    public const string FeaturesChanged = "features.changed";
 }

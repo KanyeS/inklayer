@@ -1,5 +1,6 @@
 using System.Net;
 using Inklayer.Api.Features.Docs;
+using Inklayer.Api.Hosting;
 using Inklayer.Api.Network;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Network;
@@ -24,6 +25,7 @@ internal sealed partial class PresenceRevalidator(
     DocsRegistry docs,
     IHubContext<DocsHub> docsHub,
     NetworkAccess network,
+    FeatureSwitches features,
     IServiceScopeFactory scopes,
     IOptions<PresenceOptions> options,
     TimeProvider clock,
@@ -32,6 +34,7 @@ internal sealed partial class PresenceRevalidator(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         network.Changed += CloseOutsideNetwork;
+        features.Changed += CloseTurnedOff;
         try
         {
             using var timer = new PeriodicTimer(options.Value.RevalidateEvery, clock);
@@ -53,6 +56,7 @@ internal sealed partial class PresenceRevalidator(
         finally
         {
             network.Changed -= CloseOutsideNetwork;
+            features.Changed -= CloseTurnedOff;
         }
     }
 
@@ -126,6 +130,26 @@ internal sealed partial class PresenceRevalidator(
                 }
 
                 await registry.SetOrganizationsAsync(connection, organizations);
+            }
+        }
+    }
+
+    /// <summary>A feature was turned off: close its live connections now (they can't reconnect while it's off).</summary>
+    private void CloseTurnedOff(IReadOnlyDictionary<Feature, bool> changed)
+    {
+        if (changed.TryGetValue(Feature.LiveCursors, out var cursors) && !cursors)
+        {
+            foreach (var connection in registry.All())
+            {
+                connection.Context.Abort();
+            }
+        }
+
+        if (changed.TryGetValue(Feature.Docs, out var docsOn) && !docsOn)
+        {
+            foreach (var connection in docs.All())
+            {
+                connection.Context.Abort();
             }
         }
     }

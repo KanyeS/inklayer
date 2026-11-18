@@ -45,4 +45,12 @@ export interface Me {
   email: string;
   displayName: string;
   organizations: { id: string; name: string; role: string }[];
+  /** Which major features are on for this server. */
+  features: Features;
+}
+
+export interface Features {
+  docs: boolean;
+  liveCursors: boolean;
+  mcp: boolean;
 }

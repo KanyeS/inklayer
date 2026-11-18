@@ -64,6 +64,9 @@ services:
       # Optional: only answer requests from these networks (e.g. the VPN). Admins can change it later on the Admin page.
       Inklayer__Network__AllowedNetworks: ${INKLAYER_ALLOWED_NETWORKS:-}
       Inklayer__Network__RestrictionDisabled: ${INKLAYER_NETWORK_RESTRICTION_DISABLED:-false}
+      Inklayer__Features__Docs: ${INKLAYER_FEATURE_DOCS:-true}
+      Inklayer__Features__LiveCursors: ${INKLAYER_FEATURE_LIVE_CURSORS:-true}
+      Inklayer__Features__Mcp: ${INKLAYER_FEATURE_MCP:-true}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     volumes:
       - inklayer-data:/data

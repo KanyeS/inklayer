@@ -45,6 +45,14 @@ export interface Me {
   avatarUrl: string | null;
   isSystemAdmin: boolean;
   organizations: { id: string; name: string; role: Role }[];
+  /** Which major features are on for this server. */
+  features: Features;
+}
+
+export interface Features {
+  docs: boolean;
+  liveCursors: boolean;
+  mcp: boolean;
 }
 
 export interface Organization {

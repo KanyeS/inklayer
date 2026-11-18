@@ -1,4 +1,5 @@
 using Inklayer.Api.Access;
+using Inklayer.Api.Hosting;
 using Inklayer.Api.Auditing;
 using Inklayer.Api.Auth;
 using Inklayer.Domain.Auditing;
@@ -23,7 +24,7 @@ internal static class MeEndpoints
         return app;
     }
 
-    internal static async Task<IResult> MeAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> MeAsync(CurrentUser currentUser, InklayerDbContext db, FeatureSwitches features, CancellationToken ct)
     {
         var user = await currentUser.GetAsync(ct);
         if (user is null)
@@ -39,7 +40,8 @@ internal static class MeEndpoints
                 .Select(x => new MyOrganization(x.Id, x.Name, x.Role))
                 .ToListAsync(ct);
 
-        return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.AvatarUrl, user.IsSystemAdmin, organizations));
+        return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.AvatarUrl, user.IsSystemAdmin, organizations,
+            FeaturesResponse.From(await features.StatesAsync(ct))));
     }
 
     internal static async Task RevokeUserAccessAsync(Guid userId, InklayerDbContext db, IServiceProvider services, CancellationToken ct)
@@ -75,4 +77,5 @@ internal static class MeEndpoints
 
 internal sealed record MyOrganization(Guid Id, string Name, Role Role);
 
-internal sealed record MeResponse(Guid Id, string Email, string DisplayName, string? AvatarUrl, bool IsSystemAdmin, IReadOnlyList<MyOrganization> Organizations);
+/// <param name="Features">Which major features are on (docs, live cursors, AI assistants).</param>
+internal sealed record MeResponse(Guid Id, string Email, string DisplayName, string? AvatarUrl, bool IsSystemAdmin, IReadOnlyList<MyOrganization> Organizations, FeaturesResponse Features);

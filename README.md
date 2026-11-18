@@ -146,6 +146,31 @@ People with the extension can see and add comments **directly on any website**.
   - **Always allowed:** health checks (`/health/*`) and the server itself (loopback).
   - **Behind a reverse proxy:** the proxy's network must be in `ForwardedHeaders:KnownNetworks` (the Lightsail compose file sets it), or every request appears to come from the proxy. The Admin page shows "Your address" as the server sees it, so you can check.
 
+### Turning features on and off
+Instance administrators can turn these features off for everyone under **Admin → Features**:
+- **Docs:** the knowledge base, the graph, live doc editing, and `[[links]]` between comments and docs.
+- **Live cursors:** cursors, selections and avatars on web pages and in docs.
+- **AI assistants (MCP):** the MCP endpoint and app sign-in.
+
+Page comments are always on.
+
+Turning a feature off takes effect straight away:
+- The web app and the extension hide it.
+- Its addresses answer 404 "turned off".
+- Its live connections are closed.
+
+Nothing is deleted, and turning it back on brings everything back.
+
+To start with features off, set them when the server starts. These are starting values: an administrator's choice in the Admin panel wins.
+
+| Feature | Docker Compose (`.env`) | Configuration / command line |
+|---|---|---|
+| Docs | `INKLAYER_FEATURE_DOCS=false` | `Inklayer:Features:Docs=false` |
+| Live cursors | `INKLAYER_FEATURE_LIVE_CURSORS=false` | `Inklayer:Features:LiveCursors=false` |
+| AI assistants | `INKLAYER_FEATURE_MCP=false` | `Inklayer:Features:Mcp=false` |
+
+For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the environment variable `Inklayer__Features__Mcp=false`.
+
 ### Using Inklayer from Claude (MCP)
 Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs in as you and can do what your role allows:
 - **Read:** comments and replies on a page, pages with comments, docs (search, read, links and backlinks), tags, history and activity.
