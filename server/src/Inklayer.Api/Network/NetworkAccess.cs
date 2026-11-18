@@ -76,8 +76,15 @@ public sealed class NetworkAccess(IOptions<NetworkOptions> options, IServiceScop
 
     public void Dispose() => _loadLock.Dispose();
 
+    /// <summary>Raised after an administrator saves a new list, so long-lived connections can be checked against it.</summary>
+    public event Action<IpAllowList>? Changed;
+
     /// <summary>Call after saving the setting, so requests use the new list straight away.</summary>
-    public void Save(IpAllowList list) => _current = (list, NetworkListSource.Admin);
+    public void Save(IpAllowList list)
+    {
+        _current = (list, NetworkListSource.Admin);
+        Changed?.Invoke(list);
+    }
 
     /// <summary>Health checks and the machine itself are always allowed, so container health checks and local tools keep working.</summary>
     public static bool IsAlwaysAllowed(HttpContext context) =>

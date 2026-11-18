@@ -4,6 +4,7 @@ import {
 import type { ActivityItem, ActivityPage, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
+import { PresenceClient } from "./presence-page";
 
 type View = "comments" | "activity";
 
@@ -665,6 +666,19 @@ if (!globalThis.__inklayerLive && window.top === window) {
 
   // Automatically, only if this site has comments (the background checks the origin before asking about this page).
   void startSession(() => call<LiveInit | null>({ type: "live.check", url: location.href }), false).catch(() => undefined);
+
+  // Live cursors: only in tabs where the user turned it on in the toolbar popup. The flag lasts until the tab closes.
+  const presence = new PresenceClient(() => Array.from(document.querySelectorAll("inklayer-live")));
+  chrome.runtime.onMessage.addListener((message: { type?: string; on?: boolean }, sender) => {
+    if (sender.id !== chrome.runtime.id || message?.type !== "inklayer.presence") return;
+    if (message.on) presence.start();
+    else presence.stop();
+  });
+  void chrome.runtime.sendMessage({ type: "presence.status" })
+    .then((response: Response<boolean> | undefined) => {
+      if (response?.ok && response.value) presence.start();
+    })
+    .catch(() => undefined);
 }
 
 /** The shared colour tokens, scoped to the panel's shadow root. */

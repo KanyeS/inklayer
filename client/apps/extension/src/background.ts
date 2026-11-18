@@ -3,6 +3,7 @@ import { NotSignedInError, redirectUri, signIn, signOut } from "./lib/auth";
 import type { Request, Response, StateResponse } from "./lib/messages";
 import { handleLive, isLiveRequest, openLiveInTab, stopLive, syncLiveScript, type LiveRequest } from "./lib/live";
 import { getSettings } from "./lib/settings";
+import { PRESENCE_PORT, acceptPort, forgetTab, isPresenceOn, setPresence, stopPresence } from "./lib/presence";
 
 // Keep the live content script registered while signed in with site access.
 chrome.runtime.onStartup.addListener(() => void syncLiveScript());
@@ -10,18 +11,30 @@ chrome.runtime.onInstalled.addListener(() => void syncLiveScript());
 chrome.permissions.onAdded.addListener(() => void syncLiveScript());
 chrome.permissions.onRemoved.addListener(() => void syncLiveScript());
 
-chrome.runtime.onMessage.addListener((request: Request | LiveRequest, sender, sendResponse) => {
+// Live presence: a port from each tab where the user turned it on.
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === PRESENCE_PORT) void acceptPort(port);
+  else port.disconnect();
+});
+chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId));
+
+chrome.runtime.onMessage.addListener((request: Request | LiveRequest | { type: "presence.status" }, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
 
   // From the live content script on a web page: only live requests, checked against the page's real origin.
   if (sender.tab) {
+    // After a reload: was presence on in this tab?
+    if (request.type === "presence.status") {
+      respond(isPresenceOn(sender.tab.id ?? -1), sendResponse);
+      return true;
+    }
     if (!isLiveRequest(request)) return false;
     respond(handleLive(request, sender.url), sendResponse);
     return true;
   }
 
   // From the extension's own pages (the popup).
-  if (isLiveRequest(request)) return false;
+  if (isLiveRequest(request) || request.type === "presence.status") return false;
   respond(handle(request), sendResponse);
   return true; // respond asynchronously
 });
@@ -49,10 +62,16 @@ async function handle(request: Request): Promise<unknown> {
     }
     case "signOut":
       await signOut();
+      await stopPresence();
       await stopLive();
       return null;
     case "openLive":
       await openLiveInTab(request.tabId, request.view);
+      return null;
+    case "presenceState":
+      return isPresenceOn(request.tabId);
+    case "setPresence":
+      await setPresence(request.tabId, request.on);
       return null;
   }
 }

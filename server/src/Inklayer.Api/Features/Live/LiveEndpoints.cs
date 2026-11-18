@@ -3,6 +3,7 @@ using Inklayer.Api.Features.Annotations;
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Projects;
+using Inklayer.Domain.Users;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,11 +48,12 @@ internal static class LiveEndpoints
     internal static async Task<List<(Project Project, Role Role, string OrganizationName)>?> VisibleProjectsAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var user = await currentUser.GetAsync(ct);
-        if (user is null || user.IsDisabled)
-        {
-            return null;
-        }
+        return user is null || user.IsDisabled ? null : await VisibleProjectsAsync(user, db, ct);
+    }
 
+    /// <summary>Every non-archived project <paramref name="user"/> can view, with their effective role.</summary>
+    internal static async Task<List<(Project Project, Role Role, string OrganizationName)>> VisibleProjectsAsync(User user, InklayerDbContext db, CancellationToken ct)
+    {
         var orgRoles = user.IsSystemAdmin
             ? await db.Organizations.ToDictionaryAsync(o => o.Id, _ => Role.Owner, ct)
             : await db.OrganizationMembers.Where(m => m.UserId == user.Id).ToDictionaryAsync(m => m.OrganizationId, m => m.Role, ct);

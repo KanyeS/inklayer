@@ -5,3 +5,6 @@ export {
   xpathFor, isStableId, normaliseText, cssEscape,
 } from "./anchoring";
 export { toFraction, fromFraction } from "./geometry";
+export {
+  PresenceLayer, cursorPositionAt, selectionAnchor, placeCursor, findCursorElement, initials, type CursorPosition, type PresencePeerView,
+} from "./presence";

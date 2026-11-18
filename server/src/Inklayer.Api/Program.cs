@@ -7,6 +7,7 @@ using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Live;
 using Inklayer.Api.Features.Me;
 using Inklayer.Api.Features.Organizations;
+using Inklayer.Api.Features.Presence;
 using Inklayer.Api.Features.Projects;
 using Inklayer.Api.Hosting;
 using Inklayer.Api.Network;
@@ -26,6 +27,7 @@ try
     builder.Services.AddInklayerHosting(builder.Configuration);
     builder.Services.AddInklayerNetworkAccess(builder.Configuration);
     builder.Services.AddInklayerAuth(builder.Configuration, builder.Environment);
+    builder.Services.AddInklayerPresence(builder.Configuration);
     builder.Services.AddValidation();
     builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -45,6 +47,7 @@ try
     app.MapAdminEndpoints();
     app.MapAnnotationEndpoints();
     app.MapLiveEndpoints();
+    app.MapPresenceEndpoints();
     app.MapActivityEndpoints();
     app.MapViewerFallback();
 

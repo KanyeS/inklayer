@@ -5,7 +5,9 @@ export type Request =
   | { type: "state" }
   | { type: "signIn" }
   | { type: "signOut" }
-  | { type: "openLive"; tabId: number; view?: "comments" | "activity" };
+  | { type: "openLive"; tabId: number; view?: "comments" | "activity" }
+  | { type: "presenceState"; tabId: number }
+  | { type: "setPresence"; tabId: number; on: boolean };
 
 export interface StateResponse {
   serverUrl: string | null;
@@ -21,6 +23,8 @@ export interface ResponseMap {
   signIn: null;
   signOut: null;
   openLive: null;
+  presenceState: boolean;
+  setPresence: null;
 }
 
 export async function send<K extends Request["type"]>(request: Extract<Request, { type: K }>): Promise<ResponseMap[K]> {

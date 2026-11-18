@@ -117,6 +117,13 @@ function SignIn({ state, onDone, onChangeServer }: { state: StateResponse; onDon
 
 function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; onSettings: () => void; onSignedOut: () => Promise<void> }) {
   const [error, setError] = useState("");
+  const [live, setLive] = useState<boolean | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id !== undefined) setLive(await send({ type: "presenceState", tabId: tab.id }).catch(() => false));
+    })();
+  }, []);
   const footer = (
     <div className="mt-1 flex items-center justify-between border-t pt-3">
       <Button variant="ghost" size="sm" onClick={onSettings}>Settings</Button>
@@ -146,10 +153,37 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
     }
   };
 
+  /** Turns live cursors on or off for the current tab only. */
+  const toggleLive = async () => {
+    // As above: the permission request has to come first, inside the click.
+    if (!live && !(await chrome.permissions.request(SITE_ACCESS))) {
+      setError("Site access is needed to show live cursors on pages.");
+      return;
+    }
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id === undefined) return;
+    try {
+      await send({ type: "setPresence", tabId: tab.id, on: !live });
+      setLive(!live);
+      setError("");
+    } catch {
+      setError("Live cursors can't run on this page (browser pages and extension stores are off limits).");
+    }
+  };
+
   return (
     <>
       <Button size="lg" onClick={() => void open("comments")}>Comment on this page</Button>
       <p className="text-xs text-muted-foreground">Comments appear on the page for everyone in your projects who has the extension.</p>
+      <Button variant={live ? "secondary" : "outline"} disabled={live === null} onClick={() => void toggleLive()}>
+        {live && <span aria-hidden className="size-2 rounded-full bg-[#0ACF83] shadow-[0_0_0_3px_rgb(10_207_131/0.2)]" />}
+        {live ? "Stop live cursors on this tab" : "Live cursors on this tab"}
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        {live
+          ? "People in your organisations who are on this page with live cursors on see your pointer and selections. Only this tab shares."
+          : "See the pointers and selections of people in your organisations on the same page, and share yours. Only this tab, until you close it."}
+      </p>
       <Button variant="outline" title="Who commented where; admins also see sign-ins and errors" onClick={() => void open("activity")}>Activity log</Button>
       <ErrorText>{error}</ErrorText>
       {footer}
