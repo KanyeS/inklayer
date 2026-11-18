@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { Suspense, createContext, lazy, useContext } from "react";
 import { ApiError, get, type Me } from "./lib/api";
 import { match, usePath } from "./lib/router";
 import { useAsync } from "./lib/useAsync";
@@ -8,6 +8,9 @@ import { HomePage } from "./pages/HomePage";
 import { OrganizationPage } from "./pages/OrganizationPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { SignInPage } from "./pages/SignInPage";
+
+// The docs app (editor, live editing, graph) loads only when someone opens docs.
+const DocsPage = lazy(() => import("./docs/DocsPage").then((m) => ({ default: m.DocsPage })));
 
 const MeContext = createContext<{ me: Me; reloadMe: () => Promise<void> } | null>(null);
 
@@ -30,11 +33,15 @@ export function App() {
   if (path === "/" || path === "") page = <HomePage />;
   else if (path === "/admin") page = <AdminPage />;
   else if ((params = match("/orgs/:orgId", path))) page = <OrganizationPage orgId={params.orgId!} />;
+  else if ((params = match("/orgs/:orgId/docs", path))) page = <DocsPage orgId={params.orgId!} />;
+  else if ((params = match("/orgs/:orgId/docs/:docId", path))) page = <DocsPage key={params.orgId} orgId={params.orgId!} docId={params.docId!} />;
   else if ((params = match("/projects/:projectId", path))) page = <ProjectPage projectId={params.projectId!} />;
 
   return (
     <MeContext.Provider value={{ me, reloadMe: reload }}>
-      <Layout>{page}</Layout>
+      <Layout wide={path.startsWith("/orgs/") && /\/(docs|graph)(\/|$)/.test(path)}>
+        <Suspense fallback={<Loading />}>{page}</Suspense>
+      </Layout>
     </MeContext.Provider>
   );
 }

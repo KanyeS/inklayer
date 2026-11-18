@@ -10,7 +10,7 @@
     "build": "npm run build -w @inklayer/extension && npm run build -w @inklayer/viewer",
     "test": "vitest run",
     "typecheck": "tsc -p packages/overlay && tsc -p packages/ui && tsc -p apps/extension && tsc -p apps/viewer",
-    "licenses": "license-checker-rseidelsohn --excludePrivatePackages --onlyAllow \"MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;BlueOak-1.0.0;CC0-1.0;MPL-2.0;CC-BY-3.0;OFL-1.1\" --excludePackages fetch-cookie@2.2.0 --summary"
+    "licenses": "license-checker-rseidelsohn --excludePrivatePackages --onlyAllow \"MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;BlueOak-1.0.0;CC0-1.0;MPL-2.0;CC-BY-3.0;OFL-1.1\" --excludePackages \"fetch-cookie@2.2.0;argparse@3.0.4\" --summary"
   },
   "devDependencies": {
     "@types/chrome": "0.3.7",

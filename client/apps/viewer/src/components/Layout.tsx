@@ -7,7 +7,8 @@ import { Spinner } from "@inklayer/ui/components/spinner";
 import { post } from "@/lib/api";
 import { Link } from "@/lib/router";
 
-export function Layout({ children }: { children: ReactNode }) {
+/** @param wide Full-width pages (docs) use the whole window; others sit in a centred column. */
+export function Layout({ children, wide }: { children: ReactNode; wide?: boolean }) {
   const { me } = useMe();
   const signOut = async () => {
     await post("/auth/logout");
@@ -16,7 +17,7 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col">
       <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-5">
+        <div className={cn("mx-auto flex h-14 items-center justify-between gap-4 px-5", !wide && "max-w-6xl")}>
           <Link to="/" className="font-heading text-lg font-bold tracking-tight">Inklayer</Link>
           <nav className="flex items-center gap-2">
             {me.isSystemAdmin && (

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { BookText } from "lucide-react";
 import { useMe } from "@/App";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText, Loading, Page, PageTitle, SectionTitle } from "@/components/Layout";
@@ -34,7 +35,10 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
           <BreadcrumbItem><BreadcrumbPage>{org.data.name}</BreadcrumbPage></BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <PageTitle badge={<Badge variant="secondary">{org.data.myRole}</Badge>}>{org.data.name}</PageTitle>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <PageTitle badge={<Badge variant="secondary">{org.data.myRole}</Badge>}>{org.data.name}</PageTitle>
+        <Button variant="outline" nativeButton={false} render={<Link to={`/orgs/${orgId}/docs`} />}><BookText data-icon="inline-start" />Docs</Button>
+      </div>
       <Tabs defaultValue="projects">
         <TabsList variant="line" className="mb-4">
           <TabsTrigger value="projects">Projects</TabsTrigger>

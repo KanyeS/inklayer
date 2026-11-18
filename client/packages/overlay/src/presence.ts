@@ -72,6 +72,8 @@ interface PeerState {
   label: HTMLSpanElement;
   selection: HTMLDivElement;
   target: CursorPosition | null;
+  /** A position given directly, in document coordinates (see placeAt); wins over target. */
+  point: { x: number; y: number } | null;
   /** Where the cursor is drawn, in document coordinates; null until the first move. */
   at: { x: number; y: number } | null;
   /** The resolved target, cached until the page changes. */
@@ -152,7 +154,7 @@ export class PresenceLayer {
     selection.style.setProperty("--c", safeColor(peer.color));
     this.#selections.append(selection);
     this.#peers.set(peer.id, {
-      peer, cursor, label, selection, target: null, at: null, element: null, elementKey: "", range: null, lastMove: 0, idle: true,
+      peer, cursor, label, selection, target: null, point: null, at: null, element: null, elementKey: "", range: null, lastMove: 0, idle: true,
     });
     this.#renderAvatars();
   }
@@ -170,13 +172,31 @@ export class PresenceLayer {
     const state = this.#peers.get(id);
     if (!state || !isCursorPosition(position)) return;
     state.target = position;
+    this.#touch(state);
+    this.#schedule();
+  }
+
+  #touch(state: PeerState): void {
     state.lastMove = Date.now();
     state.idle = false;
-    this.#schedule();
     // Check again once the cursor has been still long enough to fade.
     const win = this.#doc.defaultView!;
     win.clearTimeout(this.#fadeTimer);
     this.#fadeTimer = win.setTimeout(() => this.#schedule(), IDLE_AFTER_MS + 50);
+  }
+
+  /**
+   * Puts someone's cursor at a point in document coordinates, for pages that know where people are themselves (such as
+   * the docs editor, which positions by text). Null hides it.
+   */
+  placeAt(id: string, point: { x: number; y: number } | null): void {
+    const state = this.#peers.get(id);
+    if (!state) return;
+    const moved = point !== null && (!state.point || state.point.x !== point.x || state.point.y !== point.y);
+    state.point = point;
+    if (point === null) state.idle = true;
+    else if (moved) this.#touch(state);
+    this.#schedule();
   }
 
   setIdle(id: string): void {
@@ -236,7 +256,7 @@ export class PresenceLayer {
     // Read layout for everyone first, then write, so the page is laid out once per frame.
     const frames = [...this.#peers.values()].map((state) => ({
       state,
-      target: state.target ? this.#targetOf(state) : null,
+      target: state.point ?? (state.target ? this.#targetOf(state) : null),
       rects: state.range ? Array.from(state.range.getClientRects()).filter((r) => r.width > 0 && r.height > 0) : [],
     }));
 
