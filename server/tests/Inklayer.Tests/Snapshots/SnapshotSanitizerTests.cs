@@ -108,6 +108,17 @@ public sealed class SnapshotSanitizerTests
     }
 
     [Fact]
+    public void Removes_names_that_would_clobber_document_properties()
+    {
+        var output = SnapshotSanitizer.Sanitize(
+            "<html><body><img name=\"querySelector\" src=\"data:image/png;base64,AA==\"><form name=\"createElement\"></form><input name=\"email\"></body></html>");
+
+        Assert.DoesNotContain("querySelector", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("createElement", output, StringComparison.Ordinal);
+        Assert.Contains("name=\"email\"", output, StringComparison.Ordinal); // inputs don't clobber document
+    }
+
+    [Fact]
     public void Allows_inline_image_data_urls()
     {
         var output = SnapshotSanitizer.Sanitize("<html><body><img src=\"data:image/png;base64,iVBORw0KGgo=\"></body></html>");

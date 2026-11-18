@@ -157,7 +157,12 @@ public static partial class SnapshotSanitizer
         foreach (var attribute in element.Attributes.ToList())
         {
             var name = attribute.Name;
-            if (name.StartsWith("on", StringComparison.OrdinalIgnoreCase) || RemovedAttributes.Contains(name))
+            // <img name> and <form name> become properties of `document` and could shadow the DOM APIs that the
+            // overlay script relies on ("DOM clobbering"). Frames, embeds and objects, the other cases, are removed already.
+            var clobbers = name.Equals("name", StringComparison.OrdinalIgnoreCase)
+                && (element.LocalName.Equals("img", StringComparison.OrdinalIgnoreCase) || element.LocalName.Equals("form", StringComparison.OrdinalIgnoreCase));
+
+            if (name.StartsWith("on", StringComparison.OrdinalIgnoreCase) || RemovedAttributes.Contains(name) || clobbers)
             {
                 element.RemoveAttribute(attribute.NamespaceUri, attribute.LocalName);
                 continue;
