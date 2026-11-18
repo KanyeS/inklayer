@@ -32,10 +32,23 @@ public sealed record CreateLiveAnnotationRequest(
     bool IncludeQuery = false,
     bool IncludeHash = false);
 
+/// <param name="DocLinks">The <c>[[doc]]</c> links in the body, with the doc each one opens (null if it doesn't exist yet).</param>
+/// <param name="MentionedIn">Docs that link this comment.</param>
 public sealed record AnnotationResponse(
     Guid Id, Guid ProjectId, string PageUrl, AnnotationKind Kind, AnnotationStatus Status, string Body, string Color,
     JsonElement Anchor, JsonElement Geometry, int ViewportWidth, int Version,
     AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ResolvedAt, Guid? ResolvedByUserId,
-    bool CanEdit, bool CanDelete);
+    bool CanEdit, bool CanDelete, Guid OrganizationId = default,
+    IReadOnlyList<AnnotationDocLink>? DocLinks = null, IReadOnlyList<AnnotationMention>? MentionedIn = null);
+
+/// <param name="Text">The link as written (lowercase target is matched; this keeps the original).</param>
+public sealed record AnnotationDocLink(string Text, Guid? DocId, string? Title);
+
+public sealed record AnnotationMention(Guid DocId, string Title);
+
+/// <summary>One comment on its own, for links from docs: where it is and which docs mention it.</summary>
+public sealed record AnnotationDetailResponse(
+    Guid Id, Guid OrganizationId, Guid ProjectId, string ProjectName, string PageUrl, string Body, AnnotationStatus Status, AuthorSummary Author,
+    DateTime CreatedAt, IReadOnlyList<AnnotationDocLink> DocLinks, IReadOnlyList<AnnotationMention> MentionedIn);
 
 public sealed record AnnotationRevisionResponse(int Version, string Action, AuthorSummary Actor, DateTime OccurredAt, JsonElement State);

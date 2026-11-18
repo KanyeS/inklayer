@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { PresenceLayer, cursorPositionAt, initials, placeCursor, selectionAnchor } from "../src";
+import { PresenceLayer, commentParts, commentToOpen, cursorPositionAt, initials, openOnPageUrl, placeCursor, selectionAnchor } from "../src";
 
 const HTML = `<main id="article"><p>One</p><p>Two, the paragraph under the pointer.</p><p>Three</p></main>`;
 const page = () => new JSDOM(`<!DOCTYPE html><html><body>${HTML}</body></html>`, { pretendToBeVisual: true }).window.document;
@@ -85,5 +85,28 @@ describe("presence layer", () => {
     expect(initials("Ada Lovelace")).toBe("AL");
     expect(initials("grace.hopper@example.com")).toBe("GH");
     expect(initials("Linus")).toBe("LI");
+  });
+});
+
+
+describe("comment links", () => {
+  it("splits a body into text and doc links", () => {
+    const parts = commentParts("See [[Spec#Errors|the spec]] and [[Missing]].", [{ text: "Spec", docId: "d1" }, { text: "Missing", docId: null }]);
+    expect(parts).toEqual([
+      { text: "See " },
+      { link: "Spec", shown: "the spec", docId: "d1" },
+      { text: " and " },
+      { link: "Missing", shown: "Missing", docId: null },
+      { text: "." },
+    ]);
+  });
+
+  it("opens a comment on its page without touching the page's own #hash", () => {
+    const id = "0193a6b2-1111-7222-8333-944455556666";
+    expect(openOnPageUrl("https://x.test/a", id)).toBe(`https://x.test/a#:~:inklayer=comment:${id}`);
+    expect(openOnPageUrl("https://x.test/a#tab=2", id)).toBe(`https://x.test/a#tab=2:~:inklayer=comment:${id}`);
+    expect(commentToOpen("https://x.test/a", `https://x.test/a#:~:inklayer=comment:${id}`)).toBe(id);
+    expect(commentToOpen(`https://x.test/a#tab=2:~:inklayer=comment:${id}`, undefined)).toBe(id);
+    expect(commentToOpen("https://x.test/a#:~:text=hello", undefined)).toBeNull();
   });
 });

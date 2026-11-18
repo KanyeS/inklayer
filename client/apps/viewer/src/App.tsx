@@ -4,6 +4,7 @@ import { match, usePath } from "./lib/router";
 import { useAsync } from "./lib/useAsync";
 import { Layout, Loading, Page, PageTitle } from "./components/Layout";
 import { AdminPage } from "./pages/AdminPage";
+import { CommentPage } from "./pages/CommentPage";
 import { HomePage } from "./pages/HomePage";
 import { OrganizationPage } from "./pages/OrganizationPage";
 import { ProjectPage } from "./pages/ProjectPage";
@@ -37,6 +38,7 @@ export function App() {
   else if ((params = match("/orgs/:orgId/docs", path))) page = <DocsPage orgId={params.orgId!} />;
   else if ((params = match("/orgs/:orgId/graph", path))) page = <GraphPage orgId={params.orgId!} />;
   else if ((params = match("/orgs/:orgId/docs/:docId", path))) page = <DocsPage key={params.orgId} orgId={params.orgId!} docId={params.docId!} />;
+  else if ((params = match("/comments/:commentId", path))) page = <CommentPage commentId={params.commentId!} />;
   else if ((params = match("/projects/:projectId", path))) page = <ProjectPage projectId={params.projectId!} />;
 
   return (

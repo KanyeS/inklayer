@@ -1,7 +1,7 @@
 import {
-  Overlay, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
+  Overlay, commentParts, commentToOpen, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
-import type { ActivityItem, ActivityPage, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
+import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveRequest } from "./lib/live";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { PresenceClient } from "./presence-page";
@@ -182,6 +182,24 @@ class LiveSession {
 
     this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { ignoreEventsFrom: [this.#host] });
     document.documentElement.append(this.#host);
+  }
+
+  /** Opens the panel on one comment, e.g. from "Open on the page" in the web viewer. */
+  focusComment(id: string): void {
+    this.#open = true;
+    this.#view = "comments";
+    const annotation = this.#annotations.find((a) => a.id === id);
+    if (!annotation) {
+      this.#error = "That comment isn't on this version of the page, or was deleted.";
+      this.#render();
+      return;
+    }
+    if (annotation.status === "Resolved") this.#showResolved = true;
+    this.#selected = id;
+    this.#syncOverlay();
+    this.#overlay.handle({ type: "select", id, scroll: true });
+    this.#render();
+    this.#root.querySelector(`[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
   }
 
   /** Expands the panel, e.g. when the user picks "Comment on this page" in the toolbar. */
@@ -428,6 +446,25 @@ class LiveSession {
     return parts;
   }
 
+  #docUrl(organizationId: string, docId: string): string {
+    return `${this.#init.serverUrl}/orgs/${encodeURIComponent(organizationId)}/docs/${encodeURIComponent(docId)}`;
+  }
+
+  /** The comment's text, with [[doc]] links that open the doc. Built with text nodes only. */
+  #bodyOf(a: PageAnnotation): HTMLParagraphElement {
+    const p = h("p", { className: "body" });
+    for (const part of commentParts(a.body, a.docLinks ?? [])) {
+      if ("text" in part) p.append(part.text);
+      else if (part.docId) {
+        p.append(h("a", { className: "doclink", href: this.#docUrl(a.organizationId, part.docId), target: "_blank", rel: "noopener", textContent: part.shown,
+          title: `Open the doc "${part.link}"`, onclick: (e: Event) => e.stopPropagation() }));
+      } else {
+        p.append(h("span", { className: "doclink missing", textContent: part.shown, title: `There's no doc called "${part.link}" yet` }));
+      }
+    }
+    return p;
+  }
+
   #activityItem(item: ActivityItem): HTMLLIElement {
     const who = item.actor?.displayName || item.actor?.email || "";
     const verb = (item.kind === "docs" ? DOC_VERBS[item.action] : ACTIVITY_VERBS[item.action]) ?? item.action;
@@ -436,6 +473,10 @@ class LiveSession {
       h("span", { className: "muted grow-left", textContent: timeAgo(item.occurredAt), title: new Date(item.occurredAt).toLocaleString() }));
     const li = h("li", { className: `item activity-${item.kind}` }, line);
     if (item.detail) li.append(h("p", { className: item.kind === "errors" ? "body error-detail" : "body", textContent: item.detail }));
+    if (item.kind === "docs" && item.docId && item.organizationId && item.action !== "deleted") {
+      li.append(h("div", { className: "muted where" },
+        h("a", { href: this.#docUrl(item.organizationId, item.docId), target: "_blank", rel: "noopener", textContent: "Open doc", onclick: (e: Event) => e.stopPropagation() })));
+    }
     if (item.pageUrl && /^https?:\/\//.test(item.pageUrl)) {
       const url = new URL(item.pageUrl);
       li.append(h("div", { className: "muted where" },
@@ -532,7 +573,7 @@ class LiveSession {
         if (e.key === "Escape") this.#cancelDraft();
       };
       parts.push(h("div", { className: "draft" },
-        h("strong", { textContent: "New comment" }), this.#draftInput, this.#scopeChooser(),
+        h("strong", { textContent: "New comment" }), withDocSuggestions(this.#draftInput, () => this.#target?.organizationId ?? null), this.#scopeChooser(),
         h("div", { className: "row" },
           h("button", { className: "primary", textContent: this.#busy ? "Saving…" : "Save", disabled: this.#busy, onclick: () => void this.#saveDraft() }),
           h("button", { textContent: "Cancel", onclick: () => this.#cancelDraft() }))));
@@ -576,7 +617,7 @@ class LiveSession {
 
     if (this.#editing?.id === a.id) {
       const input = this.#editing.input;
-      item.append(input, h("div", { className: "row" },
+      item.append(withDocSuggestions(input, () => this.#projects.get(a.projectId)?.organizationId ?? null), h("div", { className: "row" },
         h("button", { className: "primary", textContent: "Save", disabled: this.#busy, onclick: (e: Event) => {
           e.stopPropagation();
           const body = input.value;
@@ -587,7 +628,15 @@ class LiveSession {
       return item;
     }
 
-    if (a.body) item.append(h("p", { className: "body", textContent: a.body }));
+    if (a.body) item.append(this.#bodyOf(a));
+    if (a.mentionedIn?.length) {
+      const mentions = h("p", { className: "muted mentions" }, "Mentioned in ");
+      a.mentionedIn.forEach((d, i) => {
+        if (i > 0) mentions.append(", ");
+        mentions.append(h("a", { href: this.#docUrl(a.organizationId, d.docId), target: "_blank", rel: "noopener", textContent: d.title, onclick: (e: Event) => e.stopPropagation() }));
+      });
+      item.append(mentions);
+    }
     const actions = h("div", { className: "row actions" });
     const act = (label: string, run: () => Promise<unknown>) => h("button", { className: "link", textContent: label, disabled: this.#busy, onclick: (e: Event) => { e.stopPropagation(); void this.#mutate(run); } });
     if (this.#canCommentIn(a.projectId)) {
@@ -601,6 +650,15 @@ class LiveSession {
         this.#editing.input.focus();
       } }));
     }
+    // To paste into a doc, which links the comment there.
+    actions.append(h("button", { className: "link", textContent: "Copy link", title: "Copy a link to this comment, to paste into a doc", onclick: (e: Event) => {
+      e.stopPropagation();
+      const button = e.currentTarget as HTMLButtonElement;
+      void copyText(`${this.#init.serverUrl}/comments/${a.id}`).then((ok) => {
+        button.textContent = ok ? "Copied" : "Couldn't copy";
+        window.setTimeout(() => (button.textContent = "Copy link"), 1500);
+      });
+    } }));
     if (a.canDelete) {
       actions.append(h("button", { className: "link danger", textContent: "Delete", disabled: this.#busy, onclick: (e: Event) => {
         e.stopPropagation();
@@ -645,6 +703,104 @@ let session: LiveSession | null = null;
 let starting: Promise<void> | null = null;
 
 /** Starts the session with comments already loaded, or opens it (on <code>view</code>) if it's running. */
+/** The suggestion list for each comment box, kept with the box across re-renders. */
+const suggestionLists = new WeakMap<HTMLTextAreaElement, HTMLUListElement>();
+
+/**
+ * Typing [[ in a comment box suggests docs from the project's organisation; picking one completes the link.
+ * Returns the box wrapped with its suggestion list.
+ */
+function withDocSuggestions(input: HTMLTextAreaElement, organizationId: () => string | null): HTMLElement {
+  let list = suggestionLists.get(input);
+  if (!list) {
+    const ul = h("ul", { className: "suggest" });
+    ul.hidden = true;
+    let docs: DocLookup[] = [];
+    let active = 0;
+    let timer = 0;
+    const typed = () => /\[\[([^[\]\n|#]*)$/.exec(input.value.slice(0, input.selectionStart))?.[1] ?? null;
+    const show = () => {
+      ul.replaceChildren(...docs.map((d, i) => h("li", {
+        className: i === active ? "active" : "",
+        onmousedown: (e: Event) => {
+          e.preventDefault();
+          pick(d);
+        },
+      }, h("span", { textContent: d.title }), d.folder ? h("span", { className: "muted", textContent: ` ${d.folder}` }) : "")));
+      ul.hidden = docs.length === 0;
+    };
+    const pick = (d: DocLookup) => {
+      const caret = input.selectionStart;
+      const start = input.value.slice(0, caret).lastIndexOf("[[");
+      const after = input.value.slice(caret);
+      const closed = after.startsWith("]]");
+      input.value = `${input.value.slice(0, start)}[[${d.title}${closed ? "" : "]]"}${after}`;
+      const end = start + 2 + d.title.length + 2;
+      input.setSelectionRange(end, end);
+      docs = [];
+      show();
+      input.focus();
+    };
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      const q = typed();
+      const org = organizationId();
+      if (q === null || !org) {
+        docs = [];
+        show();
+        return;
+      }
+      timer = window.setTimeout(() => {
+        call<DocLookup[]>({ type: "live.docs", orgId: org, q }).then((found) => {
+          docs = typed() === null ? [] : found;
+          active = 0;
+          show();
+        }).catch(() => undefined);
+      }, 150);
+    });
+    // Before the box's own keys (Ctrl+Enter saves, Escape cancels).
+    input.addEventListener("keydown", (e) => {
+      if (ul.hidden) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        active = (active + (e.key === "ArrowDown" ? 1 : docs.length - 1)) % docs.length;
+        show();
+      } else if ((e.key === "Enter" && !e.ctrlKey && !e.metaKey) || e.key === "Tab") {
+        pick(docs[active]!);
+      } else if (e.key === "Escape") {
+        docs = [];
+        show();
+      } else {
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+    input.addEventListener("blur", () => window.setTimeout(() => {
+      docs = [];
+      show();
+    }, 150));
+    suggestionLists.set(input, ul);
+    list = ul;
+  }
+  return h("div", { className: "suggest-wrap" }, input, list);
+}
+
+/** Copies text; pages without a secure context can't use the clipboard API, so fall back to the old way. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = h("textarea", { value: text });
+    area.style.cssText = "position:fixed;opacity:0;";
+    document.body.append(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  }
+}
+
 function startSession(load: () => Promise<LiveInit | null>, open: boolean, view: View = "comments"): Promise<void> {
   if (session) {
     if (open) session.open(view);
@@ -671,8 +827,22 @@ if (!globalThis.__inklayerLive && window.top === window) {
     startSession(() => call<LiveInit>({ type: "live.open", url: location.href }), true, view).catch((e: unknown) => window.alert(`Inklayer: ${(e as Error).message}`));
   });
 
-  // Automatically, only if this site has comments (the background checks the origin before asking about this page).
-  void startSession(() => call<LiveInit | null>({ type: "live.check", url: location.href }), false).catch(() => undefined);
+  // "Open on the page" from the web viewer: the address carries a hidden directive naming the comment.
+  const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  const wanted = commentToOpen(location.href, navigation?.name);
+  if (wanted && location.href.includes(":~:inklayer=")) {
+    // This browser left the directive in the address: take it out, so the site never sees it.
+    history.replaceState(history.state, "", location.href.replace(/:~:inklayer=comment:[^&#]*/, "").replace(/#$/, ""));
+  }
+
+  if (wanted) {
+    void startSession(() => call<LiveInit>({ type: "live.open", url: location.href }), true)
+      .then(() => session?.focusComment(wanted))
+      .catch(() => undefined);
+  } else {
+    // Automatically, only if this site has comments (the background checks the origin before asking about this page).
+    void startSession(() => call<LiveInit | null>({ type: "live.check", url: location.href }), false).catch(() => undefined);
+  }
 
   // Live cursors: only in tabs where the user turned it on in the toolbar popup. The flag lasts until the tab closes.
   const presence = new PresenceClient(() => Array.from(document.querySelectorAll("inklayer-live")));
@@ -767,4 +937,13 @@ const STYLES = `
   .scope input { accent-color: var(--primary); margin: 2px 0 0; }
   .scope-text { display: grid; gap: 1px; min-width: 0; }
   .actions { gap: 2px; }
+  .doclink { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+  .doclink.missing { color: var(--muted-foreground); text-decoration-style: dashed; }
+  .mentions { margin: 0; font-size: 12px; }
+  .mentions a { color: var(--primary); }
+  .suggest-wrap { position: relative; }
+  .suggest { position: absolute; left: 0; right: 0; top: 100%; z-index: 1; margin: 4px 0 0; padding: 4px; list-style: none;
+    background: var(--popover, var(--background)); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 6px 20px rgb(0 0 0 / .12); }
+  .suggest li { padding: 6px 8px; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+  .suggest li.active, .suggest li:hover { background: var(--muted); }
 `;

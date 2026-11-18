@@ -215,6 +215,7 @@ internal static class DocEndpoints
         }
 
         await indexer.IndexDocAsync(doc, ct);
+        await RewriteCommentsAsync(db, indexer, [new DocMove(doc.Id, oldPathKey, oldTitleKey, doc.Folder, doc.Title)], userId, now, ct);
         await indexer.RelinkAsync(doc.OrganizationId, [oldPathKey, oldTitleKey, doc.PathKey, doc.TitleKey], ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -353,6 +354,7 @@ internal static class DocEndpoints
         var userId = currentUser.Id!.Value;
         var now = clock.GetUtcNow().UtcDateTime;
         var keys = new List<string>();
+        var moves = new List<DocMove>();
         var relink = new HashSet<Guid>();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         foreach (var doc in moving)
@@ -360,7 +362,9 @@ internal static class DocEndpoints
             keys.Add(doc.PathKey);
             relink.UnionWith(await db.DocLinks.Where(l => l.TargetDocId == doc.Id && l.SourceDocId != null && !movingIds.Contains(l.SourceDocId.Value))
                 .Select(l => l.SourceDocId!.Value).ToListAsync(ct));
+            var oldPathKey = doc.PathKey;
             doc.Place(renamedFolder(doc.Folder), doc.Title);
+            moves.Add(new DocMove(doc.Id, oldPathKey, doc.TitleKey, doc.Folder, doc.Title));
             doc.Version++;
             doc.UpdatedAt = now;
             doc.UpdatedByUserId = userId;
@@ -387,6 +391,7 @@ internal static class DocEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        await RewriteCommentsAsync(db, indexer, moves, userId, now, ct);
         await indexer.RelinkAsync(orgId, keys, ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -504,6 +509,51 @@ internal static class DocEndpoints
     }
 
     /* ------------------------------------------------------------------ helpers */
+
+    private sealed record DocMove(Guid DocId, string OldPathKey, string OldTitleKey, string NewFolder, string NewTitle);
+
+    /// <summary>
+    /// After docs were renamed or moved: rewrites the [[links]] in page comments that pointed at them, so they still do.
+    /// (Links in docs are rewritten by the client, through live editing.) Call before the links are resolved again.
+    /// </summary>
+    private static async Task RewriteCommentsAsync(InklayerDbContext db, DocIndexer indexer, IReadOnlyList<DocMove> moves, Guid userId, DateTime now, CancellationToken ct)
+    {
+        var docIds = moves.Select(m => m.DocId).ToList();
+        var annotationIds = await db.DocLinks
+            .Where(l => l.SourceAnnotationId != null && l.TargetDocId != null && docIds.Contains(l.TargetDocId.Value))
+            .Select(l => l.SourceAnnotationId!.Value).Distinct().ToListAsync(ct);
+        if (annotationIds.Count == 0)
+        {
+            return;
+        }
+
+        var byPath = moves.ToDictionary(m => m.OldPathKey, StringComparer.Ordinal);
+        var byTitle = moves.Where(m => !string.Equals(m.OldTitleKey, m.NewTitle, StringComparison.OrdinalIgnoreCase)).GroupBy(m => m.OldTitleKey).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var annotations = await db.Annotations.Where(a => annotationIds.Contains(a.Id) && a.DeletedAt == null).ToListAsync(ct);
+        var changed = new List<Domain.Annotations.Annotation>();
+        foreach (var annotation in annotations)
+        {
+            var body = DocMarkdown.RewriteLinks(annotation.Body, link => link.Key!.Contains('/', StringComparison.Ordinal)
+                ? byPath.TryGetValue(link.Key, out var moved) ? (moved.NewFolder.Length > 0 ? $"{moved.NewFolder}/{moved.NewTitle}" : moved.NewTitle) : null
+                : byTitle.TryGetValue(link.Key, out var renamed) ? renamed.NewTitle : null);
+            if (body == annotation.Body)
+            {
+                continue;
+            }
+
+            annotation.Body = body;
+            annotation.Version++;
+            annotation.UpdatedAt = now;
+            db.AnnotationRevisions.Add(Annotations.AnnotationEndpoints.Revision(annotation, Domain.Annotations.AnnotationActions.Updated, userId, now));
+            changed.Add(annotation);
+        }
+
+        await db.SaveChangesAsync(ct);
+        foreach (var annotation in changed)
+        {
+            await indexer.IndexCommentAsync(annotation, ct);
+        }
+    }
 
     internal static async Task<DocResponse> ResponseAsync(Doc doc, Role role, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {

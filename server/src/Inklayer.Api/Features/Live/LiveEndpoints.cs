@@ -125,14 +125,16 @@ internal static class LiveEndpoints
         var authors = await AnnotationEndpoints.AuthorsAsync(db, annotations.Select(a => a.AuthorUserId), ct);
         var userId = currentUser.Id!.Value;
         var roles = visible.ToDictionary(v => v.Project.Id, v => v.Role);
+        var responses = (await AnnotationEndpoints.WithDocLinksAsync(db, [.. annotations.Select(a => AnnotationEndpoints.ToResponse(a, authors, roles[a.ProjectId], userId))], ct))
+            .ToDictionary(r => r.Id);
         return TypedResults.Ok(annotations
             .GroupBy(a => (a.ProjectId, a.PageUrl))
-            .Select(g => new LivePageAnnotationsResponse(g.Key.ProjectId, g.Key.PageUrl, g.Select(a => AnnotationEndpoints.ToResponse(a, authors, roles[g.Key.ProjectId], userId)).ToList()))
+            .Select(g => new LivePageAnnotationsResponse(g.Key.ProjectId, g.Key.PageUrl, g.Select(a => responses[a.Id]).ToList()))
             .ToList());
     }
 
     private static async Task<IResult> CreateAsync(
-        Guid projectId, CreateLiveAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
+        Guid projectId, CreateLiveAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, Docs.DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var check = await access.CheckProjectAsync(projectId, Permission.Comment, ct);
         if (!check.IsAllowed)
@@ -153,7 +155,7 @@ internal static class LiveEndpoints
 
         var target = new AnnotationEndpoints.AnnotationTarget(projectId, project.OrganizationId, key);
         return await AnnotationEndpoints.CreateCoreAsync(
-            target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, clock, ct);
+            target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, indexer, clock, ct);
     }
 
     private static async Task<IResult> PagesAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)

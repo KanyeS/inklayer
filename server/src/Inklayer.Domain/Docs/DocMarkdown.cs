@@ -53,6 +53,22 @@ public static partial class DocMarkdown
         return (links, [.. tags]);
     }
 
+    /// <summary>
+    /// Rewrites the doc links in plain text (a comment body) whose target <paramref name="newTarget"/> returns a new name for,
+    /// keeping headings, aliases and embeds. Used when a linked doc is renamed or moved.
+    /// </summary>
+    public static string RewriteLinks(string text, Func<WikiLink, string?> newTarget) =>
+        LinkPattern().Replace(text, m =>
+        {
+            var link = Parse(m.Groups["inner"].Value, m.Groups["embed"].Success);
+            if (link?.Target is null || newTarget(link) is not { } target)
+            {
+                return m.Value;
+            }
+
+            return $"{(link.Embed ? "!" : "")}[[{target}{(link.Heading is null ? "" : "#" + link.Heading)}{(link.Alias is null ? "" : "|" + link.Alias)}]]";
+        });
+
     /// <summary>The links in plain text, such as a comment body. Comments have no code blocks, but backticks still exclude.</summary>
     public static IReadOnlyList<WikiLink> Links(string? text) => Extract(text).Links;
 

@@ -37,6 +37,18 @@ export interface LiveAnnotation {
   createdAt: string;
   canEdit: boolean;
   canDelete: boolean;
+  organizationId: string;
+  /** The [[doc]] links in the body, with the doc each one opens (null if it doesn't exist yet). */
+  docLinks?: { text: string; docId: string | null; title: string | null }[];
+  /** Docs that link this comment. */
+  mentionedIn?: { docId: string; title: string }[];
+}
+
+/** A doc suggested while typing [[ in a comment. */
+export interface DocLookup {
+  id: string;
+  folder: string;
+  title: string;
 }
 
 /** One project's comments on the page. */
@@ -74,6 +86,8 @@ export interface LiveInit {
   pages: LivePage[];
   /** The project new comments went into last time, if the user can still comment there. */
   lastProjectId: string | null;
+  /** The Inklayer server, for links to docs and comments. */
+  serverUrl: string;
 }
 
 const SCRIPT_ID = "inklayer-live";
@@ -138,7 +152,8 @@ export type LiveRequest =
   | { type: "live.update"; id: string; version: number; status?: "Open" | "Resolved"; body?: string }
   | { type: "live.delete"; id: string; version: number }
   | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string }
-  | { type: "live.font" };
+  | { type: "live.font" }
+  | { type: "live.docs"; orgId: string; q: string };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -188,6 +203,11 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
     }
     case "live.font":
       return panelFont();
+    case "live.docs": {
+      // Only organisations the user has projects in, so a page can't make the extension probe others.
+      if (!(await getProjects()).some((p) => p.organizationId === request.orgId)) throw new Error("Unknown organisation.");
+      return api<DocLookup[]>(`/api/orgs/${encodeURIComponent(request.orgId)}/docs/lookup?q=${encodeURIComponent(request.q.slice(0, 200))}`);
+    }
   }
 }
 
@@ -213,13 +233,17 @@ function panelFont(): Promise<string> {
 }
 
 async function init(url: string): Promise<LiveInit> {
-  const [all, pages, stored] = await Promise.all([
+  const [all, pages, stored, settings] = await Promise.all([
     getProjects(),
     api<LivePage[]>(`/api/live/annotations?url=${encodeURIComponent(url)}`),
     chrome.storage.local.get("lastLiveProjectId"),
+    getSettings(),
   ]);
   const last = stored.lastLiveProjectId as string | undefined;
-  return { projects: all, pages, lastProjectId: all.some((p) => p.id === last && p.canComment) ? last! : null };
+  return {
+    projects: all, pages, lastProjectId: all.some((p) => p.id === last && p.canComment) ? last! : null,
+    serverUrl: new URL(settings.serverUrl!).origin,
+  };
 }
 
 function safeOrigin(url: string): string | null {

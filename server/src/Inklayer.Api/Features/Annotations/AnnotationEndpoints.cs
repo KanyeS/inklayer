@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Inklayer.Api.Access;
+using Inklayer.Api.Features.Docs;
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Infrastructure.Persistence;
@@ -25,6 +26,7 @@ internal static partial class AnnotationEndpoints
     public static IEndpointRouteBuilder MapAnnotationEndpoints(this IEndpointRouteBuilder app)
     {
         var annotations = app.MapGroup("/api/annotations").WithTags("Annotations").RequireAuthorization();
+        annotations.MapGet("/{annotationId:guid}", GetAsync).WithSummary("One comment, with its project, page and the docs that mention it");
         annotations.MapPatch("/{annotationId:guid}", UpdateAsync);
         annotations.MapDelete("/{annotationId:guid}", DeleteAsync).WithSummary("Soft-delete; send ?version= to guard against deleting a changed annotation");
         annotations.MapGet("/{annotationId:guid}/history", HistoryAsync).WithSummary("Every revision, oldest first");
@@ -38,7 +40,7 @@ internal static partial class AnnotationEndpoints
     /// <summary>Validates and saves a new annotation. The caller has already checked <see cref="Permission.Comment"/>.</summary>
     internal static async Task<IResult> CreateCoreAsync(
         AnnotationTarget target, AnnotationKind kind, string? body, string? requestedColor, JsonElement anchorJson, JsonElement geometryJson, int viewportWidth,
-        Role role, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
+        Role role, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
         var anchor = ValidateJson(anchorJson, "anchor", MaxAnchorBytes, errors);
@@ -74,12 +76,15 @@ internal static partial class AnnotationEndpoints
         db.Annotations.Add(annotation);
         db.AnnotationRevisions.Add(Revision(annotation, AnnotationActions.Created, userId, now));
         await db.SaveChangesAsync(ct);
+        await indexer.IndexCommentAsync(annotation, ct);
+        await db.SaveChangesAsync(ct);
 
         var authors = await AuthorsAsync(db, [userId], ct);
-        return TypedResults.Created($"/api/annotations/{annotation.Id}", ToResponse(annotation, authors, role, userId));
+        return TypedResults.Created($"/api/annotations/{annotation.Id}", (await WithDocLinksAsync(db, [ToResponse(annotation, authors, role, userId)], ct))[0]);
     }
 
-    private static async Task<IResult> UpdateAsync(Guid annotationId, UpdateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
+    private static async Task<IResult> UpdateAsync(
+        Guid annotationId, UpdateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -129,6 +134,7 @@ internal static partial class AnnotationEndpoints
             action = editsContent ? AnnotationActions.Updated : status == AnnotationStatus.Resolved ? AnnotationActions.Resolved : AnnotationActions.Reopened;
         }
 
+        var bodyChanged = request.Body is not null && request.Body.Trim() != annotation.Body;
         annotation.Body = request.Body?.Trim() ?? annotation.Body;
         annotation.Color = request.Color?.ToLowerInvariant() ?? annotation.Color;
         annotation.Anchor = anchor ?? annotation.Anchor;
@@ -150,10 +156,17 @@ internal static partial class AnnotationEndpoints
             return Conflict(current, authors, check.Role, userId);
         }
 
-        return TypedResults.Ok(ToResponse(annotation, authors, check.Role, userId));
+        if (bodyChanged)
+        {
+            await indexer.IndexCommentAsync(annotation, ct);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return TypedResults.Ok((await WithDocLinksAsync(db, [ToResponse(annotation, authors, check.Role, userId)], ct))[0]);
     }
 
-    private static async Task<IResult> DeleteAsync(Guid annotationId, int? version, AccessService access, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
+    private static async Task<IResult> DeleteAsync(
+        Guid annotationId, int? version, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -184,7 +197,62 @@ internal static partial class AnnotationEndpoints
         annotation.UpdatedAt = now;
         db.AnnotationRevisions.Add(Revision(annotation, AnnotationActions.Deleted, userId, now));
         await db.SaveChangesAsync(ct);
+        await indexer.IndexCommentAsync(annotation, ct); // a deleted comment links nothing
+        await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    private static async Task<IResult> GetAsync(Guid annotationId, AccessService access, InklayerDbContext db, CancellationToken ct)
+    {
+        var annotation = await db.Annotations.AsNoTracking().SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
+        if (annotation is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var check = await access.CheckProjectAsync(annotation.ProjectId, Permission.View, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        var projectName = await db.Projects.Where(p => p.Id == annotation.ProjectId).Select(p => p.Name).SingleAsync(ct);
+        var authors = await AuthorsAsync(db, [annotation.AuthorUserId], ct);
+        var (links, mentions) = await DocLinksAsync(db, new() { [annotation.Id] = annotation.Body }, ct);
+        return TypedResults.Ok(new AnnotationDetailResponse(
+            annotation.Id, annotation.OrganizationId, annotation.ProjectId, projectName, annotation.PageUrl, annotation.Body, annotation.Status,
+            authors.GetValueOrDefault(annotation.AuthorUserId) ?? new AuthorSummary(annotation.AuthorUserId, "", null), annotation.CreatedAt,
+            links.GetValueOrDefault(annotation.Id, []), mentions.GetValueOrDefault(annotation.Id, [])));
+    }
+
+    /// <summary>Adds each comment's doc links and the docs that mention it.</summary>
+    internal static async Task<List<AnnotationResponse>> WithDocLinksAsync(InklayerDbContext db, IReadOnlyList<AnnotationResponse> responses, CancellationToken ct)
+    {
+        var (links, mentions) = await DocLinksAsync(db, responses.ToDictionary(r => r.Id, r => r.Body), ct);
+        return [.. responses.Select(r => r with { DocLinks = links.GetValueOrDefault(r.Id, []), MentionedIn = mentions.GetValueOrDefault(r.Id, []) })];
+    }
+
+    private static async Task<(Dictionary<Guid, List<AnnotationDocLink>> Links, Dictionary<Guid, List<AnnotationMention>> Mentions)> DocLinksAsync(
+        InklayerDbContext db, Dictionary<Guid, string> bodies, CancellationToken ct)
+    {
+        var ids = bodies.Keys.ToList();
+        var outgoing = await (from l in db.DocLinks.AsNoTracking()
+                              where l.SourceAnnotationId != null && ids.Contains(l.SourceAnnotationId.Value)
+                              join d in db.Docs.Where(d => d.DeletedAt == null) on l.TargetDocId equals d.Id into target
+                              from d in target.DefaultIfEmpty()
+                              select new { AnnotationId = l.SourceAnnotationId!.Value, l.Text, DocId = d == null ? (Guid?)null : d.Id, Title = d == null ? null : d.Title })
+            .ToListAsync(ct);
+        var incoming = await (from l in db.DocLinks.AsNoTracking()
+                              where l.TargetAnnotationId != null && ids.Contains(l.TargetAnnotationId.Value) && l.SourceDocId != null
+                              join d in db.Docs.Where(d => d.DeletedAt == null) on l.SourceDocId equals d.Id
+                              select new { AnnotationId = l.TargetAnnotationId!.Value, DocId = d.Id, d.Title })
+            .ToListAsync(ct);
+        return (
+            // In the order they appear in the comment.
+            outgoing.GroupBy(l => l.AnnotationId).ToDictionary(g => g.Key, g => g
+                .OrderBy(l => bodies[g.Key].IndexOf(l.Text, StringComparison.OrdinalIgnoreCase) is var at and >= 0 ? at : int.MaxValue)
+                .Select(l => new AnnotationDocLink(l.Text, l.DocId, l.Title)).ToList()),
+            incoming.GroupBy(l => l.AnnotationId).ToDictionary(g => g.Key, g => g.DistinctBy(l => l.DocId).OrderBy(l => l.Title).Select(l => new AnnotationMention(l.DocId, l.Title)).ToList()));
     }
 
     private static async Task<IResult> HistoryAsync(Guid annotationId, AccessService access, InklayerDbContext db, CancellationToken ct)
@@ -234,7 +302,7 @@ internal static partial class AnnotationEndpoints
         return raw;
     }
 
-    private static AnnotationRevision Revision(Annotation a, string action, Guid actorUserId, DateTime now) => new()
+    internal static AnnotationRevision Revision(Annotation a, string action, Guid actorUserId, DateTime now) => new()
     {
         AnnotationId = a.Id,
         Version = a.Version,
@@ -258,7 +326,7 @@ internal static partial class AnnotationEndpoints
         a.Id, a.ProjectId, a.PageUrl, a.Kind, a.Status, a.Body, a.Color, Parse(a.Anchor), Parse(a.Geometry), a.ViewportWidth, a.Version,
         authors.GetValueOrDefault(a.AuthorUserId) ?? new AuthorSummary(a.AuthorUserId, "", null),
         a.CreatedAt, a.UpdatedAt, a.ResolvedAt, a.ResolvedByUserId,
-        CanEdit(a, role, userId), CanEdit(a, role, userId));
+        CanEdit(a, role, userId), CanEdit(a, role, userId), a.OrganizationId);
 
     private static JsonElement Parse(string json)
     {
