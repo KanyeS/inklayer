@@ -94,6 +94,63 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("Annotations");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationContext", b =>
+                {
+                    b.Property<Guid>("AnnotationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Browser")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CapturedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Console")
+                        .IsRequired()
+                        .HasMaxLength(16384)
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("DevicePixelRatio")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("ElementHtml")
+                        .IsRequired()
+                        .HasMaxLength(8192)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(16384)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Os")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Selector")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserAgent")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ViewportHeight")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ViewportWidth")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("AnnotationId");
+
+                    b.ToTable("AnnotationContexts");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationReply", b =>
                 {
                     b.Property<Guid>("Id")
@@ -166,6 +223,34 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("AnnotationRevisions");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationScreenshot", b =>
+                {
+                    b.Property<Guid>("AnnotationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Bytes")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("AnnotationId");
+
+                    b.ToTable("AnnotationScreenshots");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Auditing.AuditEvent", b =>
@@ -958,6 +1043,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationContext", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
+                        .WithOne()
+                        .HasForeignKey("Inklayer.Domain.Annotations.AnnotationContext", "AnnotationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationReply", b =>
                 {
                     b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
@@ -972,6 +1066,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
                         .WithMany()
                         .HasForeignKey("AnnotationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationScreenshot", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
+                        .WithOne()
+                        .HasForeignKey("Inklayer.Domain.Annotations.AnnotationScreenshot", "AnnotationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

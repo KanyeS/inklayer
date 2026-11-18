@@ -26,6 +26,20 @@ interface CommentDetail {
   mentionedIn: { docId: string; title: string }[];
   replies: Reply[];
   canReply: boolean;
+  context?: PageContext | null;
+  hasScreenshot: boolean;
+}
+
+interface PageContext {
+  browser: string;
+  os: string;
+  viewportWidth: number;
+  viewportHeight: number;
+  devicePixelRatio: number;
+  selector: string;
+  elementHtml: string;
+  console: { level: string; message: string; at: string | null }[];
+  network: { method: string; url: string; status: number; ms: number | null }[];
 }
 
 interface Reply {
@@ -80,6 +94,12 @@ export function CommentPage({ commentId }: { commentId: string }) {
           <span className="font-medium text-foreground" title={personTitle(c.author)}>{c.author.displayName}</span> · <span title={dateTime(c.createdAt)}>{timeAgo(c.createdAt)}</span>
         </p>
         <p className="text-lg whitespace-pre-wrap">{linked(c.body)}</p>
+        {me.features.bugContext && c.hasScreenshot && (
+          <a href={`/api/annotations/${c.id}/screenshot`} target="_blank" rel="noopener noreferrer" className="mt-4 block">
+            <img src={`/api/annotations/${c.id}/screenshot`} alt="Screenshot when this was commented" className="max-h-96 rounded-xl border object-contain" />
+          </a>
+        )}
+        {me.features.bugContext && c.context && <PageDetails context={c.context} />}
         <p className="mt-4 truncate text-sm text-muted-foreground" title={c.pageUrl}>{hostOf(c.pageUrl)}{safePath(c.pageUrl)}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Button nativeButton={false} render={<a href={openOnPageUrl(c.pageUrl, c.id)} target="_blank" rel="noopener noreferrer" />}>
@@ -170,5 +190,30 @@ function ReplyForm({ commentId, onSent }: { commentId: string; onSent: () => Pro
         <ErrorText error={error} />
       </div>
     </form>
+  );
+}
+
+/** Browser, window size, the element, and the page's console errors and failed requests when this was commented. */
+function PageDetails({ context: c }: { context: PageContext }) {
+  return (
+    <details className="mt-4 rounded-xl border px-4 py-3 text-sm">
+      <summary className="cursor-pointer text-muted-foreground">
+        Page details: {c.browser} · {c.os} · {c.viewportWidth}×{c.viewportHeight} @{c.devicePixelRatio}x
+        {c.console.length > 0 && ` · ${c.console.length} console message${c.console.length === 1 ? "" : "s"}`}
+        {c.network.length > 0 && ` · ${c.network.length} failed request${c.network.length === 1 ? "" : "s"}`}
+      </summary>
+      {c.selector && <p className="mt-3"><span className="text-muted-foreground">Element:</span> <code className="break-all">{c.selector}</code></p>}
+      {c.elementHtml && <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-muted p-2 text-xs whitespace-pre-wrap">{c.elementHtml}</pre>}
+      {c.console.length > 0 && (
+        <ul className="mt-3 space-y-1">
+          {c.console.map((e, i) => <li key={i} className={e.level === "error" ? "text-destructive" : ""}><code>{e.level}</code> {e.message}</li>)}
+        </ul>
+      )}
+      {c.network.length > 0 && (
+        <ul className="mt-3 space-y-1">
+          {c.network.map((n, i) => <li key={i}><code>{n.method}</code> <span className="break-all">{n.url}</span> → {n.status || "failed"}{n.ms ? ` (${n.ms} ms)` : ""}</li>)}
+        </ul>
+      )}
+    </details>
   );
 }

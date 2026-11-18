@@ -128,3 +128,59 @@ public sealed class AnnotationReply
 
     public DateTime? DeletedAt { get; set; }
 }
+
+/// <summary>
+/// What the page looked like when a comment was made, captured by the extension (if the commenter left it on): browser,
+/// viewport, the element, and recent console errors and failed requests. One per comment; only its author can add it.
+/// </summary>
+public sealed class AnnotationContext
+{
+    public const int MaxHtmlLength = 8 * 1024;
+    public const int MaxLogLength = 16 * 1024;
+
+    public required Guid AnnotationId { get; init; }
+
+    public string Browser { get; init; } = "";
+
+    public string Os { get; init; } = "";
+
+    public string UserAgent { get; init; } = "";
+
+    public int ViewportWidth { get; init; }
+
+    public int ViewportHeight { get; init; }
+
+    public double DevicePixelRatio { get; init; }
+
+    /// <summary>The element's CSS selector path.</summary>
+    public string Selector { get; init; } = "";
+
+    /// <summary>The element's HTML, with form values removed, trimmed to <see cref="MaxHtmlLength"/>.</summary>
+    public string ElementHtml { get; init; } = "";
+
+    /// <summary>JSON array of recent console errors and warnings: <c>{level, message, at}</c>.</summary>
+    public string Console { get; init; } = "[]";
+
+    /// <summary>JSON array of recent failed requests: <c>{method, url, status, ms, at}</c> (URLs without query strings).</summary>
+    public string Network { get; init; } = "[]";
+
+    public DateTime CapturedAt { get; init; }
+}
+
+/// <summary>A screenshot of the area around a comment, taken when it was made. Stored in the database, so backups include it.</summary>
+public sealed class AnnotationScreenshot
+{
+    public const int MaxBytes = 600 * 1024;
+
+    public required Guid AnnotationId { get; init; }
+
+    public required string ContentType { get; set; }
+
+    public required byte[] Bytes { get; set; }
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+}

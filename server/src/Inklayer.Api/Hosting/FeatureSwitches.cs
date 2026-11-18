@@ -18,6 +18,15 @@ public enum Feature
 
     /// <summary>AI assistants: the MCP endpoint, app registration and consent.</summary>
     Mcp,
+
+    /// <summary>Screenshots and page details (browser, console errors, failed requests) captured with each comment.</summary>
+    BugContext,
+
+    /// <summary>Linking comments to GitHub, Jira and Linear issues.</summary>
+    IssueTrackers,
+
+    /// <summary>Read-only share links for comments and public docs, reachable from outside the network allow list.</summary>
+    Sharing,
 }
 
 /// <summary>
@@ -35,11 +44,20 @@ public sealed class FeatureOptions
 
     public bool Mcp { get; set; } = true;
 
+    public bool BugContext { get; set; } = true;
+
+    public bool IssueTrackers { get; set; } = true;
+
+    public bool Sharing { get; set; } = true;
+
     public bool this[Feature feature] => feature switch
     {
         Feature.Docs => Docs,
         Feature.LiveCursors => LiveCursors,
         Feature.Mcp => Mcp,
+        Feature.BugContext => BugContext,
+        Feature.IssueTrackers => IssueTrackers,
+        Feature.Sharing => Sharing,
         _ => true,
     };
 }
@@ -139,10 +157,11 @@ public sealed class FeatureSwitches(IOptions<FeatureOptions> options, IServiceSc
 }
 
 /// <summary>What the apps need to know: which features to show.</summary>
-public sealed record FeaturesResponse(bool Docs, bool LiveCursors, bool Mcp)
+public sealed record FeaturesResponse(bool Docs, bool LiveCursors, bool Mcp, bool BugContext, bool IssueTrackers, bool Sharing)
 {
     public static FeaturesResponse From(IReadOnlyDictionary<Feature, FeatureState> states) =>
-        new(states[Feature.Docs].Enabled, states[Feature.LiveCursors].Enabled, states[Feature.Mcp].Enabled);
+        new(states[Feature.Docs].Enabled, states[Feature.LiveCursors].Enabled, states[Feature.Mcp].Enabled,
+            states[Feature.BugContext].Enabled, states[Feature.IssueTrackers].Enabled, states[Feature.Sharing].Enabled);
 }
 
 internal static class FeatureSwitchExtensions
@@ -167,6 +186,7 @@ internal static class FeatureSwitchExtensions
                 path.StartsWithSegments("/api/docs", StringComparison.OrdinalIgnoreCase) || IsOrgDocs(path) ? [Feature.Docs]
                 : path.StartsWithSegments(Features.Presence.PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors]
                 : path.StartsWithSegments("/api/presence/ticket", StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors, Feature.Docs]
+                : IsCommentPart(path, "context") || IsCommentPart(path, "screenshot") ? [Feature.BugContext]
                 : path.StartsWithSegments(McpResource.Path, StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/connect/register", StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/.well-known/oauth-protected-resource", StringComparison.OrdinalIgnoreCase) ? [Feature.Mcp]
@@ -192,8 +212,19 @@ internal static class FeatureSwitchExtensions
         Feature.Docs => "Docs",
         Feature.LiveCursors => "Live cursors",
         Feature.Mcp => "AI assistants (MCP)",
+        Feature.BugContext => "Bug context",
+        Feature.IssueTrackers => "Issue trackers",
+        Feature.Sharing => "Sharing",
         _ => feature.ToString(),
     };
+
+    /// <summary>/api/annotations/{id}/{part}.</summary>
+    private static bool IsCommentPart(PathString path, string part)
+    {
+        var parts = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 4 && parts[0].Equals("api", StringComparison.OrdinalIgnoreCase)
+            && parts[1].Equals("annotations", StringComparison.OrdinalIgnoreCase) && parts[3].Equals(part, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>/api/orgs/{id}/docs and below.</summary>
     private static bool IsOrgDocs(PathString path)

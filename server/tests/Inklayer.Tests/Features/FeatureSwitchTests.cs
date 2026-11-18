@@ -27,7 +27,7 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
         return await response.ReadAsync<List<FeatureSettingDto>>();
     }
 
-    private static Task AllOnAsync(HttpClient admin) => SaveAsync(admin, new { docs = true, liveCursors = true, mcp = true });
+    private static Task AllOnAsync(HttpClient admin) => SaveAsync(admin, new { docs = true, liveCursors = true, mcp = true, bugContext = true, issueTrackers = true, sharing = true });
 
     [Fact]
     public async Task Turning_docs_off_hides_them_everywhere_until_turned_back_on()
@@ -127,6 +127,26 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
     }
 
     [Fact]
+    public async Task Turning_bug_context_off_refuses_screenshots_and_page_details()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var (_, _, author, _, _, _, commentId) = await Annotations.BugContextTests.SetUpAsync(factory);
+        try
+        {
+            await SaveAsync(admin, new { bugContext = false });
+            await author.PutJsonAsync($"/api/annotations/{commentId}/context", Annotations.BugContextTests.Context).ExpectAsync(HttpStatusCode.NotFound);
+            await author.GetAsync(new Uri($"/api/annotations/{commentId}/screenshot", UriKind.Relative)).ExpectAsync(HttpStatusCode.NotFound);
+        }
+        finally
+        {
+            await SaveAsync(admin, new { bugContext = true });
+        }
+
+        await author.PutJsonAsync($"/api/annotations/{commentId}/context", Annotations.BugContextTests.Context).ExpectAsync(HttpStatusCode.NoContent);
+        author.Dispose();
+    }
+
+    [Fact]
     public async Task Only_instance_administrators_change_features()
     {
         using var admin = await factory.SignInAsAdminAsync();
@@ -136,7 +156,7 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
         await owner.GetAsync(new Uri("/api/admin/features", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
         await owner.PutJsonAsync("/api/admin/features", new { docs = false }).ExpectAsync(HttpStatusCode.Forbidden);
         using var features = await owner.GetAsync(new Uri("/api/features", UriKind.Relative));
-        Assert.Equal(new FeaturesDto(true, true, true), await features.ReadAsync<FeaturesDto>());
+        Assert.Equal(new FeaturesDto(true, true, true), await features.ReadAsync<FeaturesDto>()); // and the newer switches, not listed in this DTO
         owner.Dispose();
     }
 

@@ -239,6 +239,28 @@ public sealed partial class McpTests(InklayerApiFactory factory)
     }
 
     [Fact]
+    public async Task Assistants_see_open_comments_with_their_page_details_and_screenshot()
+    {
+        var (admin, projectId, author, other, viewer, url, commentId) = await Annotations.BugContextTests.SetUpAsync(factory);
+        await author.PutJsonAsync($"/api/annotations/{commentId}/context", Annotations.BugContextTests.Context).ExpectAsync(HttpStatusCode.NoContent);
+        var content = new ByteArrayContent(Annotations.BugContextTests.WebP);
+        content.Headers.ContentType = new MediaTypeHeaderValue("image/webp");
+        await author.PutAsync(new Uri($"/api/annotations/{commentId}/screenshot", UriKind.Relative), content).ExpectAsync(HttpStatusCode.NoContent);
+
+        await using var mcp = await ConnectAsync((await SignInAppAsync(viewer)).AccessToken);
+        var open = Text(await mcp.CallToolAsync("list_open_comments", new Dictionary<string, object?> { ["projectId"] = projectId, ["url"] = url }));
+        Assert.Contains("TypeError: price is undefined", open, StringComparison.Ordinal);
+        Assert.Contains("\"hasScreenshot\":true", open, StringComparison.Ordinal);
+
+        var image = Assert.IsType<ImageContentBlock>(Assert.Single((await mcp.CallToolAsync("get_comment_screenshot", new Dictionary<string, object?> { ["commentId"] = commentId })).Content));
+        Assert.Equal("image/webp", image.MimeType);
+        foreach (var c in new[] { admin, author, other, viewer })
+        {
+            c.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task Renaming_a_doc_rewrites_links_to_it_in_other_docs()
     {
         var (admin, orgId, commenter) = await MemberAsync("Commenter");

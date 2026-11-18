@@ -9,7 +9,7 @@ namespace Inklayer.Api.Hosting;
 public sealed record FeatureSettingResponse(string Feature, string Name, string Description, bool Enabled, FeatureSource Source, bool Configured);
 
 /// <summary>Only the features given change.</summary>
-public sealed record UpdateFeaturesRequest(bool? Docs, bool? LiveCursors, bool? Mcp);
+public sealed record UpdateFeaturesRequest(bool? Docs, bool? LiveCursors, bool? Mcp, bool? BugContext = null, bool? IssueTrackers = null, bool? Sharing = null);
 
 /// <summary>Which major features are on: everyone signed in can see; instance administrators change them (Admin panel).</summary>
 internal static class FeatureEndpoints
@@ -47,6 +47,21 @@ internal static class FeatureEndpoints
                 choices[Feature.Mcp] = mcp;
             }
 
+            if (request.BugContext is { } bugContext)
+            {
+                choices[Feature.BugContext] = bugContext;
+            }
+
+            if (request.IssueTrackers is { } issueTrackers)
+            {
+                choices[Feature.IssueTrackers] = issueTrackers;
+            }
+
+            if (request.Sharing is { } sharing)
+            {
+                choices[Feature.Sharing] = sharing;
+            }
+
             audit.Record(AuditActions.FeaturesChanged, null, "instance", (string?)null, choices.ToDictionary(c => c.Key.ToString(), c => c.Value));
             await switches.SaveAsync(choices, db, currentUser.Id, clock.GetUtcNow().UtcDateTime, ct);
             return TypedResults.Ok(Settings(await switches.StatesAsync(ct), options.Value));
@@ -66,6 +81,9 @@ internal static class FeatureEndpoints
         Feature.Docs => "The organisation knowledge base: docs, the graph, live doc editing, and [[links]] between comments and docs.",
         Feature.LiveCursors => "See each other's cursors, selections and avatars on web pages and in docs.",
         Feature.Mcp => "Let AI assistants such as Claude use Inklayer as the person who signs them in (MCP). Connected apps keep their access but can't use it while this is off.",
+        Feature.BugContext => "Capture a screenshot and page details (browser, window size, the element, console errors, failed requests) with each comment. People can still opt out per comment.",
+        Feature.IssueTrackers => "Create GitHub, Jira or Linear issues from comments, and keep their status in step.",
+        Feature.Sharing => "Read-only share links for a page's or project's comments, and public docs. Share links work from outside the network allow list; nothing else does.",
         _ => "",
     };
 }

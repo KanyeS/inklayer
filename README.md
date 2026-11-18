@@ -146,6 +146,23 @@ People with the extension can see and add comments **directly on any website**.
   - **Always allowed:** health checks (`/health/*`) and the server itself (loopback).
   - **Behind a reverse proxy:** the proxy's network must be in `ForwardedHeaders:KnownNetworks` (the Lightsail compose file sets it), or every request appears to come from the proxy. The Admin page shows "Your address" as the server sees it, so you can check.
 
+### Bug context
+When someone saves a comment, the extension attaches what a developer needs to reproduce the problem:
+- a screenshot of the area around the comment (the page and its marks, not the Inklayer panel);
+- the browser, OS, window size and pixel ratio;
+- the element's selector and HTML, with anything typed into forms left out;
+- the page's last console errors and warnings, and its failed requests. Addresses are kept without their query strings.
+
+How the console and network details are kept:
+- A small script in each page keeps only the last 20 errors and failed requests.
+- They stay in the page's memory, and are sent only when someone saves a comment.
+
+People can untick "Attach screenshot and page details" for a comment, and administrators can turn the feature off.
+
+The details show in the extension, in the web app, and to AI assistants through MCP:
+- `list_open_comments` lists the open comments in a project, optionally on one page, with their details.
+- `get_comment_screenshot` returns the screenshot as an image, so an assistant can see the problem it's fixing.
+
 ### Turning features on and off
 Instance administrators can turn these features off for everyone under **Admin → Features**:
 - **Docs:** the knowledge base, the graph, live doc editing, and `[[links]]` between comments and docs.
@@ -168,6 +185,9 @@ To start with features off, set them when the server starts. These are starting 
 | Docs | `INKLAYER_FEATURE_DOCS=false` | `Inklayer:Features:Docs=false` |
 | Live cursors | `INKLAYER_FEATURE_LIVE_CURSORS=false` | `Inklayer:Features:LiveCursors=false` |
 | AI assistants | `INKLAYER_FEATURE_MCP=false` | `Inklayer:Features:Mcp=false` |
+| Bug context | `INKLAYER_FEATURE_BUG_CONTEXT=false` | `Inklayer:Features:BugContext=false` |
+| Issue trackers | `INKLAYER_FEATURE_ISSUE_TRACKERS=false` | `Inklayer:Features:IssueTrackers=false` |
+| Sharing | `INKLAYER_FEATURE_SHARING=false` | `Inklayer:Features:Sharing=false` |
 
 For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the environment variable `Inklayer__Features__Mcp=false`.
 

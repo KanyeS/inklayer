@@ -52,6 +52,7 @@ try
     app.MapProjectEndpoints();
     app.MapAdminEndpoints();
     app.MapAnnotationEndpoints();
+    app.MapContextEndpoints();
     app.MapLiveEndpoints();
     app.MapPresenceEndpoints();
     app.MapDocEndpoints();

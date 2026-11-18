@@ -1,7 +1,8 @@
 import {
-  Overlay, commentParts, commentToOpen, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
+  Overlay, commentParts, commentToOpen, resolveElement, resolveRange, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
-import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest } from "./lib/live";
+import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext } from "./lib/live";
+import { browserOf, elementHtml, osOf, screenshotArea, type Rect } from "./lib/pageDetails";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { BubbleLayer } from "./bubbles";
@@ -158,6 +159,8 @@ class LiveSession {
   #view: View = "comments";
   #activity: ActivityState | null = null;
   #marksVisible = true;
+  /** Attach a screenshot and page details to new comments (remembered; on unless turned off). */
+  #attachContext = true;
   readonly #bubbles: BubbleLayer;
   /** The comment whose mark the pointer is on, shown in a bubble until it leaves. */
   #hoverId: string | null = null;
@@ -205,8 +208,9 @@ class LiveSession {
     });
     followColorScheme(this.#bubbles.host);
     this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { ignoreEventsFrom: [this.#host, this.#bubbles.host] });
-    void chrome.storage.local.get("bubblesOpen").then((stored) => {
+    void chrome.storage.local.get(["bubblesOpen", "attachContext"]).then((stored) => {
       this.#bubblesOpen = stored.bubblesOpen === true;
+      this.#attachContext = stored.attachContext !== false;
       this.#renderBubbles();
     }).catch(() => undefined);
     document.documentElement.append(this.#host);
@@ -425,12 +429,95 @@ class LiveSession {
         ...this.#chosenScope(),
         kind: draft.kind, body, color: this.#color, anchor: draft.anchor, geometry: draft.geometry, viewportWidth: draft.viewportWidth,
       });
+      if (this.#init.features.bugContext && this.#attachContext) await this.#attachPageDetails(created.id, draft);
       this.#draft = null;
       this.#draftInput = null;
       this.#selected = created.id;
       this.#overlay.handle({ type: "clearDraft" });
       this.#setTool("select");
     });
+  }
+
+  /* ------------------------------------------------------------------ bug context */
+
+  /**
+   * Adds a screenshot of the commented area and the page details to a new comment. Best effort: the comment is saved
+   * whatever happens here.
+   */
+  async #attachPageDetails(annotationId: string, draft: Draft): Promise<void> {
+    const element = resolveElement(document, draft.anchor.element).element;
+    const range = element && draft.anchor.text ? resolveRange(element, draft.anchor.text).range : null;
+    const box = range?.getBoundingClientRect() ?? element?.getBoundingClientRect() ?? null;
+    const target: Rect = box ? { x: box.left, y: box.top, width: box.width, height: box.height } : { x: innerWidth / 2, y: innerHeight / 2, width: 0, height: 0 };
+
+    const context: PageContext = {
+      browser: browserOf(navigator.userAgent),
+      os: osOf(navigator.userAgent),
+      userAgent: navigator.userAgent,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      devicePixelRatio: devicePixelRatio,
+      selector: draft.anchor.element.path.join(" >>> "),
+      elementHtml: element ? elementHtml(element) : "",
+      ...(await pageLogs()),
+    };
+    await call({ type: "live.context", annotationId, context }).catch(() => undefined);
+
+    // The screenshot shows the page and the marks, not the panel or bubbles.
+    const hidden = [this.#host, this.#bubbles.host];
+    for (const el of hidden) el.style.visibility = "hidden";
+    try {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await call({ type: "live.capture", annotationId, area: screenshotArea(target, { width: innerWidth, height: innerHeight }), viewportWidth: innerWidth });
+    } catch {
+      // No screenshot (e.g. the tab isn't the active one); the comment and its details are saved.
+    } finally {
+      for (const el of hidden) el.style.visibility = "";
+    }
+  }
+
+  /** The screenshot, drawn on a canvas (images from the extension can't be blocked by the page's content policy). Click to enlarge. */
+  #screenshotOf(a: PageAnnotation): Node {
+    if (!this.#init.features.bugContext || !a.hasScreenshot) return document.createTextNode("");
+    const canvas = h("canvas", { className: "shot", title: "Screenshot when this was commented: click to enlarge" });
+    void loadScreenshot(a.id).then((bitmap) => {
+      if (!bitmap) return canvas.remove();
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    });
+    canvas.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void loadScreenshot(a.id).then((bitmap) => bitmap && this.#enlarge(bitmap));
+    });
+    return canvas;
+  }
+
+  #enlarge(bitmap: ImageBitmap): void {
+    const canvas = h("canvas", { className: "shot-large" });
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    const box = h("div", { className: "lightbox", title: "Click to close", onclick: () => box.remove() }, canvas);
+    this.#shadow.append(box);
+  }
+
+  /** Browser, window size, the element, console errors and failed requests, folded away. */
+  #detailsOf(a: PageAnnotation): Node {
+    const c = a.context;
+    if (!this.#init.features.bugContext || !c) return document.createTextNode("");
+    const errors = c.console.filter((e) => e.level === "error").length;
+    const summary = [`${c.browser} · ${c.os} · ${c.viewportWidth}×${c.viewportHeight}`, errors ? `${errors} console error${errors === 1 ? "" : "s"}` : "",
+      c.network.length ? `${c.network.length} failed request${c.network.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+    const details = h("details", { className: "context", onclick: (e: Event) => e.stopPropagation() }, h("summary", { textContent: summary }));
+    if (c.selector) details.append(h("p", { className: "muted", textContent: `Element: ${c.selector}` }));
+    if (c.console.length) {
+      details.append(h("ul", {}, ...c.console.map((e) => h("li", { className: e.level === "error" ? "error" : "", textContent: `${e.level}: ${e.message}` }))));
+    }
+    if (c.network.length) {
+      details.append(h("ul", {}, ...c.network.map((n) => h("li", { textContent: `${n.method} ${n.url} → ${n.status || "failed"}${n.ms ? ` (${n.ms} ms)` : ""}` }))));
+    }
+    return details;
   }
 
   /* ------------------------------------------------------------------ activity */
@@ -619,6 +706,7 @@ class LiveSession {
         h("span", { className: "grow" }), pin),
     ];
     if (a.body) nodes.push(this.#bodyOf(a));
+    nodes.push(this.#screenshotOf(a), this.#detailsOf(a));
     if (a.replies?.length) nodes.push(this.#repliesOf(a));
     if (this.#canCommentIn(a.projectId)) {
       nodes.push(this.#replyBox(a, "bubble"));
@@ -739,6 +827,11 @@ class LiveSession {
       };
       parts.push(h("div", { className: "draft" },
         h("strong", { textContent: "New comment" }), withDocSuggestions(this.#draftInput, () => (this.#init.features.docs ? this.#target?.organizationId ?? null : null)), this.#scopeChooser(),
+        this.#init.features.bugContext ? h("label", { className: "attach", title: "A screenshot of this area, your browser and window size, the element, and the page's recent console errors and failed requests (addresses without query strings)" },
+          h("input", { type: "checkbox", checked: this.#attachContext, onchange: (e: Event) => {
+            this.#attachContext = (e.target as HTMLInputElement).checked;
+            void chrome.storage.local.set({ attachContext: this.#attachContext });
+          } }), "Attach screenshot and page details") : "",
         h("div", { className: "row" },
           h("button", { className: "primary", textContent: this.#busy ? "Saving…" : "Save", disabled: this.#busy, onclick: () => void this.#saveDraft() }),
           h("button", { textContent: "Cancel", onclick: () => this.#cancelDraft() }))));
@@ -794,6 +887,7 @@ class LiveSession {
     }
 
     if (a.body) item.append(this.#bodyOf(a));
+    if (a.id === this.#selected) item.append(this.#screenshotOf(a), this.#detailsOf(a));
     if (this.#init.features.docs && a.mentionedIn?.length) {
       const mentions = h("p", { className: "muted mentions" }, "Mentioned in ");
       a.mentionedIn.forEach((d, i) => {
@@ -874,6 +968,46 @@ let session: LiveSession | null = null;
 let starting: Promise<void> | null = null;
 
 /** Starts the session with comments already loaded, or opens it (on <code>view</code>) if it's running. */
+/** Screenshots fetched through the background, decoded once per page. */
+const screenshots = new Map<string, Promise<ImageBitmap | null>>();
+
+function loadScreenshot(annotationId: string): Promise<ImageBitmap | null> {
+  let entry = screenshots.get(annotationId);
+  if (!entry) {
+    entry = call<{ type: string; base64: string } | null>({ type: "live.screenshot", annotationId })
+      .then((image) => (image ? createImageBitmap(new Blob([Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0))], { type: image.type })) : null))
+      .catch(() => null);
+    screenshots.set(annotationId, entry);
+  }
+  return entry;
+}
+
+/**
+ * The page's recent console errors and failed requests, kept by capture.js in the page's own world. Empty if that
+ * script isn't there (e.g. the page loaded before the extension was set up).
+ */
+function pageLogs(): Promise<Pick<PageContext, "console" | "network">> {
+  return new Promise((resolve) => {
+    const nonce = `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`; // randomUUID needs https
+    const done = (value: Pick<PageContext, "console" | "network">) => {
+      document.removeEventListener("inklayer:context-response", onResponse);
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const onResponse = (e: Event) => {
+      try {
+        const data = JSON.parse(String((e as CustomEvent<unknown>).detail)) as { nonce: string } & Pick<PageContext, "console" | "network">;
+        if (data.nonce === nonce) done({ console: data.console ?? [], network: data.network ?? [] });
+      } catch {
+        // Not ours.
+      }
+    };
+    const timer = window.setTimeout(() => done({ console: [], network: [] }), 300);
+    document.addEventListener("inklayer:context-response", onResponse);
+    document.dispatchEvent(new CustomEvent("inklayer:context-request", { detail: nonce }));
+  });
+}
+
 /** The suggestion list for each comment box, kept with the box across re-renders. */
 const suggestionLists = new WeakMap<HTMLTextAreaElement, HTMLUListElement>();
 
@@ -1149,6 +1283,14 @@ const STYLES = `
   .scope input { accent-color: var(--primary); margin: 2px 0 0; }
   .scope-text { display: grid; gap: 1px; min-width: 0; }
   .actions { gap: 2px; }
+  .attach { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
+  canvas.shot { display: block; width: 100%; max-height: 180px; object-fit: contain; object-position: left; border-radius: 10px; border: 1px solid var(--border); cursor: zoom-in; }
+  .lightbox { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgb(0 0 0 / .7); cursor: zoom-out; }
+  .shot-large { max-width: 92vw; max-height: 88vh; border-radius: 12px; box-shadow: 0 10px 40px rgb(0 0 0 / .5); }
+  details.context { font-size: 12px; }
+  details.context summary { cursor: pointer; color: var(--muted-foreground); }
+  details.context ul { margin: 4px 0 0; padding-left: 16px; max-height: 140px; overflow: auto; overflow-wrap: anywhere; }
+  details.context li.error { color: var(--destructive); }
   .icon.on { color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
   .replies-count { margin: 0; font-size: 12px; }
   .doclink { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }

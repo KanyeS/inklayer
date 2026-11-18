@@ -7,7 +7,7 @@ import { get, put } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 
 interface FeatureSetting {
-  feature: "docs" | "liveCursors" | "mcp";
+  feature: "docs" | "liveCursors" | "mcp" | "bugContext" | "issueTrackers" | "sharing";
   name: string;
   description: string;
   enabled: boolean;
@@ -21,6 +21,9 @@ const ENV_NAMES: Record<FeatureSetting["feature"], string> = {
   docs: "INKLAYER_FEATURE_DOCS",
   liveCursors: "INKLAYER_FEATURE_LIVE_CURSORS",
   mcp: "INKLAYER_FEATURE_MCP",
+  bugContext: "INKLAYER_FEATURE_BUG_CONTEXT",
+  issueTrackers: "INKLAYER_FEATURE_ISSUE_TRACKERS",
+  sharing: "INKLAYER_FEATURE_SHARING",
 };
 
 /** Instance admins turn major features on or off for everyone. Changes apply straight away. */

@@ -56,6 +56,9 @@ export interface Features {
   docs: boolean;
   liveCursors: boolean;
   mcp: boolean;
+  bugContext: boolean;
+  issueTrackers: boolean;
+  sharing: boolean;
 }
 
 export interface Organization {

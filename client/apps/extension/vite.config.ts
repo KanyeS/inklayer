@@ -10,6 +10,8 @@ import { defineConfig } from "vite";
 //    registered with chrome.scripting can't use ES module imports
 const SCRIPTS: Record<string, { entry: string; name: string; file: string }> = {
   live: { entry: "src/live-page.ts", name: "InklayerLive", file: "live.js" },
+  // Runs in the page's own world from the start of loading, to see console errors and failed requests (capture-main.ts).
+  capture: { entry: "src/capture-main.ts", name: "InklayerCapture", file: "capture.js" },
 };
 
 const resolve = { alias: { "@": path.resolve(import.meta.dirname, "src") } };

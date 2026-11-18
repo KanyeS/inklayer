@@ -224,12 +224,13 @@ internal static partial class AnnotationEndpoints
         var projectName = await db.Projects.Where(p => p.Id == annotation.ProjectId).Select(p => p.Name).SingleAsync(ct);
         var authors = await AuthorsAsync(db, [annotation.AuthorUserId], ct);
         var (links, mentions) = await DocLinksAsync(db, new() { [annotation.Id] = annotation.Body }, ct);
+        var (contexts, screenshots) = await ContextEndpoints.ForAsync(db, [annotation.Id], ct);
         return TypedResults.Ok(new AnnotationDetailResponse(
             annotation.Id, annotation.OrganizationId, annotation.ProjectId, projectName, annotation.PageUrl, annotation.Body, annotation.Status,
             authors.GetValueOrDefault(annotation.AuthorUserId) ?? new AuthorSummary(annotation.AuthorUserId, "", null), annotation.CreatedAt,
             links.GetValueOrDefault(annotation.Id, []), mentions.GetValueOrDefault(annotation.Id, []),
             (await RepliesAsync(db, [annotation.Id], _ => check.Role, currentUser.Id!.Value, ct)).GetValueOrDefault(annotation.Id, []),
-            check.Role.Grants(Permission.Comment)));
+            check.Role.Grants(Permission.Comment), contexts.GetValueOrDefault(annotation.Id), screenshots.Contains(annotation.Id)));
     }
 
     /* ---------------------------------------------------------------- replies */
@@ -392,7 +393,11 @@ internal static partial class AnnotationEndpoints
             var orgId = responses.First(r => r.Id == kv.Key).OrganizationId;
             return kv.Value.Select(x => x with { Author = WithRole(x.Author, orgId) }).ToList();
         });
-        responses = [.. responses.Select(r => r with { Author = WithRole(r.Author, r.OrganizationId) })];
+        var (contexts, screenshots) = await ContextEndpoints.ForAsync(db, [.. responses.Select(r => r.Id)], ct);
+        responses = [.. responses.Select(r => r with
+        {
+            Author = WithRole(r.Author, r.OrganizationId), Context = contexts.GetValueOrDefault(r.Id), HasScreenshot = screenshots.Contains(r.Id),
+        })];
         // Links are matched against the comment and its replies together.
         var texts = responses.ToDictionary(r => r.Id, r => string.Join('\n', [r.Body, .. replies.GetValueOrDefault(r.Id, []).Select(x => x.Body)]));
         var (links, mentions) = await DocLinksAsync(db, texts, ct);

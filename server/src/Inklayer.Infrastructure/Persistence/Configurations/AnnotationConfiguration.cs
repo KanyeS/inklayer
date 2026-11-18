@@ -34,6 +34,32 @@ internal sealed class AnnotationReplyConfiguration : IEntityTypeConfiguration<An
     }
 }
 
+internal sealed class AnnotationContextConfiguration : IEntityTypeConfiguration<AnnotationContext>
+{
+    public void Configure(EntityTypeBuilder<AnnotationContext> builder)
+    {
+        builder.HasKey(c => c.AnnotationId);
+        builder.Property(c => c.Browser).HasMaxLength(100);
+        builder.Property(c => c.Os).HasMaxLength(100);
+        builder.Property(c => c.UserAgent).HasMaxLength(512);
+        builder.Property(c => c.Selector).HasMaxLength(2000);
+        builder.Property(c => c.ElementHtml).HasMaxLength(AnnotationContext.MaxHtmlLength);
+        builder.Property(c => c.Console).HasMaxLength(AnnotationContext.MaxLogLength);
+        builder.Property(c => c.Network).HasMaxLength(AnnotationContext.MaxLogLength);
+        builder.HasOne<Annotation>().WithOne().HasForeignKey<AnnotationContext>(c => c.AnnotationId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class AnnotationScreenshotConfiguration : IEntityTypeConfiguration<AnnotationScreenshot>
+{
+    public void Configure(EntityTypeBuilder<AnnotationScreenshot> builder)
+    {
+        builder.HasKey(s => s.AnnotationId);
+        builder.Property(s => s.ContentType).HasMaxLength(32);
+        builder.HasOne<Annotation>().WithOne().HasForeignKey<AnnotationScreenshot>(s => s.AnnotationId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class AnnotationRevisionConfiguration : IEntityTypeConfiguration<AnnotationRevision>
 {
     public void Configure(EntityTypeBuilder<AnnotationRevision> builder)

@@ -44,7 +44,8 @@ public sealed record AnnotationResponse(
     AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ResolvedAt, Guid? ResolvedByUserId,
     bool CanEdit, bool CanDelete, Guid OrganizationId = default,
     IReadOnlyList<AnnotationDocLink>? DocLinks = null, IReadOnlyList<AnnotationMention>? MentionedIn = null,
-    IReadOnlyList<ReplyResponse>? Replies = null);
+    IReadOnlyList<ReplyResponse>? Replies = null,
+    AnnotationContextResponse? Context = null, bool HasScreenshot = false);
 
 /// <summary>A reply in a comment's thread, oldest first.</summary>
 public sealed record ReplyResponse(Guid Id, string Body, AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, int Version, bool CanEdit, bool CanDelete);
@@ -62,6 +63,7 @@ public sealed record AnnotationMention(Guid DocId, string Title);
 public sealed record AnnotationDetailResponse(
     Guid Id, Guid OrganizationId, Guid ProjectId, string ProjectName, string PageUrl, string Body, AnnotationStatus Status, AuthorSummary Author,
     DateTime CreatedAt, IReadOnlyList<AnnotationDocLink> DocLinks, IReadOnlyList<AnnotationMention> MentionedIn,
-    IReadOnlyList<ReplyResponse> Replies, bool CanReply);
+    IReadOnlyList<ReplyResponse> Replies, bool CanReply,
+    AnnotationContextResponse? Context = null, bool HasScreenshot = false);
 
 public sealed record AnnotationRevisionResponse(int Version, string Action, AuthorSummary Actor, DateTime OccurredAt, JsonElement State);

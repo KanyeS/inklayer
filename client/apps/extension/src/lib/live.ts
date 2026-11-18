@@ -1,6 +1,7 @@
 import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url";
 import { NotSignedInError } from "./auth";
-import { api, postJson, type Features } from "./api";
+import { api, apiBytes, postJson, putJson, type Features } from "./api";
+import type { Rect } from "./pageDetails";
 import type { Person } from "./people";
 import { getSettings } from "./settings";
 
@@ -45,6 +46,9 @@ export interface LiveAnnotation {
   mentionedIn?: { docId: string; title: string }[];
   /** The thread, oldest first. */
   replies?: LiveReply[];
+  /** Page details captured with the comment, if the commenter attached them. */
+  context?: PageContext | null;
+  hasScreenshot?: boolean;
 }
 
 export interface LiveReply {
@@ -107,6 +111,7 @@ export interface LiveInit {
 }
 
 const SCRIPT_ID = "inklayer-live";
+const CAPTURE_SCRIPT_ID = "inklayer-capture";
 const ALL_SITES = ["https://*/*", "http://*/*"];
 const CACHE_MS = 5 * 60 * 1000;
 
@@ -123,16 +128,20 @@ async function getFeatures(): Promise<Features> {
 export async function syncLiveScript(): Promise<void> {
   const { serverUrl, tokens } = await getSettings();
   const allowed = Boolean(serverUrl && tokens) && await chrome.permissions.contains({ origins: ALL_SITES });
-  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID] });
+  const existing = (await chrome.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID, CAPTURE_SCRIPT_ID] })).map((s) => s.id);
   if (!allowed) {
-    if (existing.length > 0) await chrome.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] });
+    if (existing.length > 0) await chrome.scripting.unregisterContentScripts({ ids: existing });
     return;
   }
-  if (existing.length === 0) {
-    await chrome.scripting.registerContentScripts([
-      { id: SCRIPT_ID, matches: ALL_SITES, js: ["live.js"], runAt: "document_idle", allFrames: false, persistAcrossSessions: true },
-    ]);
+  const missing: chrome.scripting.RegisteredContentScript[] = [];
+  if (!existing.includes(SCRIPT_ID)) {
+    missing.push({ id: SCRIPT_ID, matches: ALL_SITES, js: ["live.js"], runAt: "document_idle", allFrames: false, persistAcrossSessions: true });
   }
+  // Keeps the page's last few console errors and failed requests, in the page, for bug reports (capture-main.ts).
+  if (!existing.includes(CAPTURE_SCRIPT_ID)) {
+    missing.push({ id: CAPTURE_SCRIPT_ID, matches: ALL_SITES, js: ["capture.js"], runAt: "document_start", allFrames: false, persistAcrossSessions: true, world: "MAIN" });
+  }
+  if (missing.length > 0) await chrome.scripting.registerContentScripts(missing);
 }
 
 export async function stopLive(): Promise<void> {
@@ -177,13 +186,16 @@ export type LiveRequest =
   | { type: "live.activity"; thisSite: boolean; kind?: ActivityItem["kind"]; before?: string }
   | { type: "live.font" }
   | { type: "live.docs"; orgId: string; q: string }
+  | { type: "live.context"; annotationId: string; context: PageContext }
+  | { type: "live.capture"; annotationId: string; area: Rect; viewportWidth: number }
+  | { type: "live.screenshot"; annotationId: string }
   | { type: "live.reply"; annotationId: string; body: string }
   | { type: "live.replyDelete"; id: string; version: number };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
 
-export async function handleLive(request: LiveRequest, senderUrl: string | undefined): Promise<unknown> {
+export async function handleLive(request: LiveRequest, senderUrl: string | undefined, senderWindowId?: number): Promise<unknown> {
   const senderOrigin = senderUrl ? safeOrigin(senderUrl) : null;
   if (!senderOrigin) throw new Error("Unknown page.");
   if ("url" in request && safeOrigin(request.url) !== senderOrigin) throw new Error("Wrong page.");
@@ -228,6 +240,25 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
     }
     case "live.font":
       return panelFont();
+    case "live.context":
+      return putJson<null>(`/api/annotations/${encodeURIComponent(request.annotationId)}/context`, request.context);
+    case "live.capture":
+      // Taken now, while the page shows the comment; cropped and uploaded in the background so the panel reappears at once.
+      if (senderWindowId === undefined) throw new Error("Unknown window.");
+      {
+        const shot = await chrome.tabs.captureVisibleTab(senderWindowId, { format: "png" });
+        void uploadScreenshot(request.annotationId, shot, request.area, request.viewportWidth).catch(() => undefined);
+      }
+      return null;
+    case "live.screenshot": {
+      // Sent to the page as base64: the panel draws it on a canvas, which the page's content policy can't block.
+      const image = await apiBytes(`/api/annotations/${encodeURIComponent(request.annotationId)}/screenshot`);
+      if (!image) return null;
+      let binary = "";
+      const bytes = new Uint8Array(image.bytes);
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return { type: image.type, base64: btoa(binary) };
+    }
     case "live.reply":
       return postJson<LiveReply>(`/api/annotations/${encodeURIComponent(request.annotationId)}/replies`, { body: request.body });
     case "live.replyDelete":
@@ -238,6 +269,45 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
       return api<DocLookup[]>(`/api/orgs/${encodeURIComponent(request.orgId)}/docs/lookup?q=${encodeURIComponent(request.q.slice(0, 200))}`);
     }
   }
+}
+
+/** What the page looked like when a comment was made: see capture-main.ts and pageDetails.ts. */
+export interface PageContext {
+  browser: string;
+  os: string;
+  userAgent: string;
+  viewportWidth: number;
+  viewportHeight: number;
+  devicePixelRatio: number;
+  selector: string;
+  elementHtml: string;
+  console: { level: string; message: string; at: string }[];
+  network: { method: string; url: string; status: number; ms: number; at: string }[];
+}
+
+const MAX_SCREENSHOT_WIDTH = 1600;
+const MAX_SCREENSHOT_BYTES = 600 * 1024;
+
+/** Crops the captured window to the commented area, shrinks it if wide, and uploads it as WebP (JPEG if that's smaller or WebP isn't available). */
+async function uploadScreenshot(annotationId: string, dataUrl: string, area: Rect, viewportWidth: number): Promise<void> {
+  const full = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const scale = full.width / Math.max(1, viewportWidth); // the captured image's pixels per CSS pixel (pixel ratio and zoom)
+  const sx = Math.round(area.x * scale);
+  const sy = Math.round(area.y * scale);
+  const sw = Math.min(full.width - sx, Math.round(area.width * scale));
+  const sh = Math.min(full.height - sy, Math.round(area.height * scale));
+  const shrink = Math.min(1, MAX_SCREENSHOT_WIDTH / sw);
+  const canvas = new OffscreenCanvas(Math.round(sw * shrink), Math.round(sh * shrink));
+  canvas.getContext("2d")!.drawImage(full, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  full.close();
+
+  let blob = await canvas.convertToBlob({ type: "image/webp", quality: 0.82 });
+  if (blob.type !== "image/webp" || blob.size > MAX_SCREENSHOT_BYTES) blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.72 });
+  if (blob.size > MAX_SCREENSHOT_BYTES) blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.5 });
+  if (blob.size > MAX_SCREENSHOT_BYTES) return;
+  await api<null>(`/api/annotations/${encodeURIComponent(annotationId)}/screenshot?width=${canvas.width}&height=${canvas.height}`, {
+    method: "PUT", headers: { "Content-Type": blob.type }, body: blob,
+  });
 }
 
 let panelFontData: Promise<string> | null = null;

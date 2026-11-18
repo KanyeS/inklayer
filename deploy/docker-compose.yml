@@ -35,6 +35,9 @@ services:
       Inklayer__Features__Docs: ${INKLAYER_FEATURE_DOCS:-true}
       Inklayer__Features__LiveCursors: ${INKLAYER_FEATURE_LIVE_CURSORS:-true}
       Inklayer__Features__Mcp: ${INKLAYER_FEATURE_MCP:-true}
+      Inklayer__Features__BugContext: ${INKLAYER_FEATURE_BUG_CONTEXT:-true}
+      Inklayer__Features__IssueTrackers: ${INKLAYER_FEATURE_ISSUE_TRACKERS:-true}
+      Inklayer__Features__Sharing: ${INKLAYER_FEATURE_SHARING:-true}
       # Plain-HTTP local trial only. Remove when serving through HTTPS.
       Inklayer__Auth__AllowInsecureHttp: ${INKLAYER_ALLOW_INSECURE_HTTP:-false}
     ports:

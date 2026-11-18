@@ -13,6 +13,7 @@ using Inklayer.Domain.Docs;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace Inklayer.Api.Features.Mcp;
@@ -62,6 +63,54 @@ internal static class InklayerTools
     [McpServerTool(Name = "get_comment", ReadOnly = true), Description("One page comment: its text, page, project, replies, and the docs that link it.")]
     public static async Task<string> GetComment([Description("Comment id")] Guid commentId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct) =>
         ToolResults.ToJson(ToolResults.Value<AnnotationDetailResponse>(await AnnotationEndpoints.GetAsync(commentId, access, currentUser, db, ct)));
+
+    [McpServerTool(Name = "list_open_comments", ReadOnly = true), Description(
+        "Open (unresolved) comments in a project, newest first, optionally on one page, with replies, the page details captured with each " +
+        "(browser, window size, element selector, console errors, failed requests) and whether it has a screenshot. Use this to find what to fix.")]
+    public static async Task<string> ListOpenComments(
+        [Description("Project id")] Guid projectId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct,
+        [Description("Only comments on this page address (optional)")] string? url = null)
+    {
+        var check = await access.CheckProjectAsync(projectId, Permission.View, ct);
+        if (!check.IsAllowed)
+        {
+            ToolResults.Ok(check.Denied!);
+        }
+
+        var query = db.Annotations.AsNoTracking().Where(a => a.ProjectId == projectId && a.DeletedAt == null && a.Status == AnnotationStatus.Open);
+        if (url is not null)
+        {
+            var keys = Domain.Projects.LivePageUrl.Candidates(url);
+            query = query.Where(a => keys.Contains(a.PageUrl));
+        }
+
+        var annotations = await query.OrderByDescending(a => a.CreatedAt).Take(100).ToListAsync(ct);
+        var userId = currentUser.Id!.Value;
+        var authors = await AnnotationEndpoints.AuthorsAsync(db, annotations.Select(a => a.AuthorUserId), ct);
+        var responses = await AnnotationEndpoints.EnrichAsync(db, [.. annotations.Select(a => AnnotationEndpoints.ToResponse(a, authors, check.Role, userId))], _ => check.Role, userId, ct);
+        return ToolResults.ToJson(responses.Select(Summary));
+    }
+
+    [McpServerTool(Name = "get_comment_screenshot", ReadOnly = true), Description("The screenshot taken when a comment was made, around the commented element, as an image.")]
+    public static async Task<IEnumerable<ContentBlock>> GetCommentScreenshot(
+        [Description("Comment id")] Guid commentId, AccessService access, InklayerDbContext db, FeatureSwitches features, CancellationToken ct)
+    {
+        if (!await features.IsEnabledAsync(Feature.BugContext, ct))
+        {
+            throw new McpException("Bug context (screenshots) is turned off on this server.");
+        }
+
+        var projectId = await db.Annotations.Where(a => a.Id == commentId && a.DeletedAt == null).Select(a => (Guid?)a.ProjectId).SingleOrDefaultAsync(ct);
+        var check = projectId is null ? AccessResult.NotFound() : await access.CheckProjectAsync(projectId.Value, Permission.View, ct);
+        if (!check.IsAllowed)
+        {
+            ToolResults.Ok(check.Denied!);
+        }
+
+        var screenshot = await db.AnnotationScreenshots.AsNoTracking().SingleOrDefaultAsync(s => s.AnnotationId == commentId, ct)
+            ?? throw new McpException("This comment has no screenshot.");
+        return [ImageContentBlock.FromBytes(screenshot.Bytes, screenshot.ContentType)];
+    }
 
     [McpServerTool(Name = "reply_to_comment", OpenWorld = false), Description("Reply in a comment's thread, as the signed-in person. [[Doc title]] links a doc.")]
     public static async Task<string> ReplyToComment(
@@ -229,6 +278,12 @@ internal static class InklayerTools
         a.CreatedAt, a.CanEdit,
         Replies = a.Replies?.Select(r => new { r.Id, Author = r.Author.DisplayName, AuthorFullName = r.Author.FullName, r.Body, r.CreatedAt, r.CanDelete }),
         DocLinks = a.DocLinks, MentionedIn = a.MentionedIn,
+        a.HasScreenshot,
+        Context = a.Context is { } c ? new
+        {
+            c.Browser, c.Os, Viewport = $"{c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x", c.Selector, c.ElementHtml,
+            ConsoleErrors = c.Console, FailedRequests = c.Network,
+        } : null,
     };
 
     private static async Task<int> VersionOfCommentAsync(InklayerDbContext db, Guid commentId, CancellationToken ct) =>
