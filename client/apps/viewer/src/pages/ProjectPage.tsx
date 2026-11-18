@@ -3,6 +3,7 @@ import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { Badge } from "@inklayer/ui/components/badge";
 import { useMe } from "@/App";
 import { IssueTrackersSection } from "@/components/Issues";
+import { ProjectSharesSection } from "@/components/Shares";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@inklayer/ui/components/breadcrumb";
 import { Button } from "@inklayer/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
@@ -22,6 +23,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   if (project.error) return <Page><ErrorText error={project.error} /></Page>;
   if (!project.data) return <Page><Loading /></Page>;
   const isAdmin = atLeast(project.data.myRole, "Admin");
+  const canShare = me.features.sharing && atLeast(project.data.myRole, "Commenter");
   const orgName = me.organizations.find((o) => o.id === project.data!.organizationId)?.name ?? "Organisation";
 
   return (
@@ -39,9 +41,11 @@ export function ProjectPage({ projectId }: { projectId: string }) {
       <Tabs defaultValue="pages">
         <TabsList variant="line" className="mb-4">
           <TabsTrigger value="pages">Pages</TabsTrigger>
+          {canShare && <TabsTrigger value="sharing">Sharing</TabsTrigger>}
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
         <TabsContent value="pages"><Pages project={project.data} /></TabsContent>
+        {canShare && <TabsContent value="sharing"><ProjectSharesSection projectId={project.data.id} /></TabsContent>}
         {isAdmin && (
           <TabsContent value="settings">
             <Settings project={project.data} onSaved={project.reload} />

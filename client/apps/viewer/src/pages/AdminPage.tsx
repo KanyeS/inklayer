@@ -9,6 +9,7 @@ import { Input } from "@inklayer/ui/components/input";
 import { EmailSetupSection } from "@/components/EmailSetupSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { NetworkAccessSection } from "@/components/NetworkAccessSection";
+import { AdminSharesSection } from "@/components/Shares";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
 import { get, post, type AdminUser, type Organization } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
@@ -65,6 +66,12 @@ export function AdminPage() {
       <FeaturesSection />
       <EmailSetupSection />
       <NetworkAccessSection />
+      {me.features.sharing && (
+        <>
+          <SectionTitle>Shared links</SectionTitle>
+          <AdminSharesSection />
+        </>
+      )}
       <SectionTitle>Users</SectionTitle>
       <Table>
         <TableHeader>

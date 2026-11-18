@@ -14,6 +14,8 @@ import { SignInPage } from "./pages/SignInPage";
 // The docs app (editor, live editing, graph) loads only when someone opens docs.
 const DocsPage = lazy(() => import("./docs/DocsPage").then((m) => ({ default: m.DocsPage })));
 const GraphPage = lazy(() => import("./docs/GraphPage").then((m) => ({ default: m.GraphPage })));
+// Share links: for guests, with nothing of the signed-in app.
+const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
 
 const MeContext = createContext<{ me: Me; reloadMe: () => Promise<void> } | null>(null);
 
@@ -25,6 +27,12 @@ export function useMe() {
 
 export function App() {
   const path = usePath();
+  const share = match("/s/:token", path);
+  if (share) return <Suspense fallback={null}><SharePage token={share.token!} /></Suspense>;
+  return <SignedInApp path={path} />;
+}
+
+function SignedInApp({ path }: { path: string }) {
   const { data: me, error, loading, reload } = useAsync(() => get<Me>("/api/me"), []);
 
   if (loading && !me) return <div className="grid min-h-svh place-items-center"><Loading /></div>;

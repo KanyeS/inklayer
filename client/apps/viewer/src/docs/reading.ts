@@ -14,6 +14,8 @@ export interface LinkResolver {
   doc(link: WikiLink): { href: string } | null;
   /** The name (and real name) of a mentioned person. */
   person?(id: string): { displayName: string; fullName: string } | undefined;
+  /** For guests on a share link: links to docs they can't open, comment embeds and #tags are shown as plain text. */
+  guest?: boolean;
 }
 
 let currentResolver: LinkResolver | null = null;
@@ -79,6 +81,7 @@ md.renderer.rules.image = (tokens, idx) => {
 
 md.renderer.rules.doctag = (tokens, idx) => {
   const { tag, raw } = tokens[idx]!.meta as { tag: string; raw: string };
+  if (currentResolver?.guest) return escapeHtml(raw);
   return `<a class="doc-tag" href="#" data-tag="${escapeHtml(tag)}">${escapeHtml(raw)}</a>`;
 };
 
@@ -87,10 +90,12 @@ export function renderMarkdown(text: string, resolver: LinkResolver): string {
   md.renderer.rules.wikilink = (tokens, idx) => {
     const { link } = tokens[idx]!.meta as { link: WikiLink };
     if (link.commentId) {
+      if (resolver.guest) return "";
       return `<span class="doc-comment-embed" data-comment-id="${escapeHtml(link.commentId)}">${escapeHtml(link.alias ?? "Comment")}</span>`;
     }
     const shown = link.alias ?? (link.heading ? `${link.target} › ${link.heading}` : link.target!);
     const target = resolver.doc(link);
+    if (!target && resolver.guest) return `<span class="doc-wikilink-text">${escapeHtml(shown)}</span>`;
     return target
       ? `<a class="doc-wikilink" href="${escapeHtml(target.href)}">${escapeHtml(shown)}</a>`
       : `<a class="doc-wikilink unresolved" href="#" data-create="${escapeHtml(link.target!)}" title="Create this doc">${escapeHtml(shown)}</a>`;

@@ -13,6 +13,7 @@ using Inklayer.Api.Features.Me;
 using Inklayer.Api.Features.Organizations;
 using Inklayer.Api.Features.Presence;
 using Inklayer.Api.Features.Projects;
+using Inklayer.Api.Features.Sharing;
 using Inklayer.Api.Hosting;
 using Inklayer.Api.Network;
 using Inklayer.Infrastructure;
@@ -36,6 +37,7 @@ try
     builder.Services.AddInklayerMcp();
     builder.Services.AddInklayerNotifications(builder.Configuration);
     builder.Services.AddInklayerIssues();
+    builder.Services.AddInklayerSharing(builder.Configuration);
     builder.Services.AddValidation();
     builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -59,6 +61,8 @@ try
     app.MapContextEndpoints();
     app.MapNotificationEndpoints();
     app.MapIssueEndpoints();
+    app.MapShareEndpoints();
+    app.MapPublicShareEndpoints();
     app.MapLiveEndpoints();
     app.MapPresenceEndpoints();
     app.MapDocEndpoints();

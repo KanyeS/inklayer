@@ -168,6 +168,8 @@ class LiveSession {
   readonly #pinned = new Set<string>();
   /** Every comment's bubble open, not just on hover (the user's choice, remembered). */
   #bubblesOpen = false;
+  /** What happened to the last "Share this page", shown under the header. */
+  #shareNote = "";
   #inBubble = false;
   /** Which marks have positions; cards are rebuilt only when this changes, not on every move. */
   #markIds = "";
@@ -794,6 +796,21 @@ class LiveSession {
     return withSuggestions(input, () => this.#projects.get(a.projectId)?.organizationId ?? null, this.#init.features.docs);
   }
 
+  async #sharePage(): Promise<void> {
+    const target = this.#target;
+    if (!target) return;
+    try {
+      const share = await call<{ url: string }>({ type: "live.share", projectId: target.id, url: location.href });
+      this.#shareNote = (await copyText(share.url))
+        ? `Link copied. Anyone with it can read this page's open comments in ${target.name} for 30 days. Turn it off from the project's Sharing tab.`
+        : `Share link: ${share.url}`;
+    } catch (e) {
+      this.#shareNote = `Couldn't share: ${(e as Error).message}`;
+    }
+    this.#render();
+    window.setTimeout(() => { this.#shareNote = ""; this.#render(); }, 12000);
+  }
+
   #setBubblesOpen(open: boolean): void {
     this.#bubblesOpen = open;
     void chrome.storage.local.set({ bubblesOpen: open }).catch(() => undefined);
@@ -815,12 +832,16 @@ class LiveSession {
       h("button", { className: this.#bubblesOpen ? "icon svg on" : "icon svg", ariaPressed: String(this.#bubblesOpen),
         title: this.#bubblesOpen ? "Comments are open next to their marks. Click to show them only on hover." : "Open every comment next to its mark (otherwise they show on hover)",
         onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }, pinIcon()),
+      this.#init.features.sharing && this.#target ? h("button", { className: "icon svg", disabled: this.#busy,
+        title: `Share this page: copy a read-only link to its open comments in ${this.#target.name}, for people without an account (works for 30 days)`,
+        onclick: () => void this.#sharePage() }, linkIcon()) : "",
       h("button", { className: "icon svg", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page",
         onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } },
         this.#marksVisible ? eyeIcon() : eyeOffIcon()),
       h("button", { className: "icon", title: "Minimise", textContent: "–", onclick: () => { this.#open = false; this.#render(); } }));
 
     const parts: Node[] = [header];
+    if (this.#shareNote) parts.push(h("p", { className: "hint", textContent: this.#shareNote }));
     if (this.#view === "activity") {
       this.#root.replaceChildren(h("div", { className: "panel" }, ...parts, ...this.#activityParts()));
       return;
@@ -1179,6 +1200,11 @@ function icon(paths: string[]): SVGSVGElement {
 /** A pushpin, for keeping comment bubbles open. */
 function pinIcon(): SVGSVGElement {
   return icon(["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"]);
+}
+
+/** A chain link: share this page. */
+function linkIcon(): SVGSVGElement {
+  return icon(["M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71", "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"]);
 }
 
 /** An open eye: marks are showing on the page. */

@@ -125,6 +125,14 @@ internal static class NetworkAccessExtensions
                 return;
             }
 
+            // Share links work from anywhere while sharing is on; nothing else does.
+            if (Features.Sharing.SharingSetup.IsPublicPath(context.Request.Path)
+                && await context.RequestServices.GetRequiredService<Hosting.FeatureSwitches>().IsEnabledAsync(Hosting.Feature.Sharing, context.RequestAborted))
+            {
+                await next(context);
+                return;
+            }
+
             await RefuseAsync(context, address);
         });
         return app;

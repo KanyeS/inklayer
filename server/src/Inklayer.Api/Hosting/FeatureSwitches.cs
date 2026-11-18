@@ -188,6 +188,9 @@ internal static class FeatureSwitchExtensions
                 : path.StartsWithSegments("/api/presence/ticket", StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors, Feature.Docs]
                 : IsCommentPart(path, "context") || IsCommentPart(path, "screenshot") ? [Feature.BugContext]
                 : IsCommentPart(path, "issues") || IsProjectPart(path, "issue-trackers") ? [Feature.IssueTrackers]
+                : path.StartsWithSegments("/api/shares", StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWithSegments("/api/public", StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWithSegments("/api/admin/shares", StringComparison.OrdinalIgnoreCase) ? [Feature.Sharing]
                 : path.StartsWithSegments(McpResource.Path, StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/connect/register", StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/.well-known/oauth-protected-resource", StringComparison.OrdinalIgnoreCase) ? [Feature.Mcp]

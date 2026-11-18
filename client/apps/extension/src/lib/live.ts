@@ -219,7 +219,8 @@ export type LiveRequest =
   | { type: "live.reply"; annotationId: string; body: string }
   | { type: "live.replyDelete"; id: string; version: number }
   | { type: "live.trackers"; projectId: string }
-  | { type: "live.issue"; annotationId: string; connectionId: string };
+  | { type: "live.issue"; annotationId: string; connectionId: string }
+  | { type: "live.share"; projectId: string; url: string };
 
 export const isLiveRequest = (request: { type?: unknown }): request is LiveRequest =>
   typeof request.type === "string" && request.type.startsWith("live.");
@@ -298,6 +299,9 @@ export async function handleLive(request: LiveRequest, senderUrl: string | undef
       return api<TrackerChoice[]>(`/api/projects/${encodeURIComponent(request.projectId)}/issue-trackers/choices`);
     case "live.issue":
       return postJson<LinkedIssue>(`/api/annotations/${encodeURIComponent(request.annotationId)}/issues`, { connectionId: request.connectionId });
+    case "live.share":
+      // A read-only link to this page's open comments in one project. The page address is the sender's own (checked above).
+      return postJson<{ url: string }>("/api/shares", { kind: "page", projectId: request.projectId, pageUrl: request.url, expiresInDays: 30 });
     case "live.people": {
       // Only organisations the user has projects in.
       if (!(await getProjects()).some((p) => p.organizationId === request.orgId)) throw new Error("Unknown organisation.");

@@ -7,6 +7,7 @@ using Inklayer.Domain.Notifications;
 using Inklayer.Domain.Organizations;
 using Inklayer.Domain.Projects;
 using Inklayer.Domain.Settings;
+using Inklayer.Domain.Sharing;
 using Inklayer.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -58,6 +59,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
     public DbSet<IssueTrackerConnection> IssueTrackerConnections => Set<IssueTrackerConnection>();
 
     public DbSet<AnnotationIssue> AnnotationIssues => Set<AnnotationIssue>();
+
+    public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
 
     public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();
 

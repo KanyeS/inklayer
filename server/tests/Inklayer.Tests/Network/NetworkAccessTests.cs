@@ -82,6 +82,39 @@ public sealed class NetworkAccessTests(InklayerApiFactory factory)
     }
 
     [Fact]
+    public async Task Share_links_work_from_anywhere_only_while_sharing_is_on()
+    {
+        var admin = From(await factory.SignInAsAdminAsync(), Vpn);
+        var org = await Scenario.CreateOrganizationAsync(admin);
+        var project = await Scenario.CreateProjectAsync(admin, org.Id);
+        using var created = await admin.PostJsonAsync("/api/shares", new { kind = "project", projectId = project.Id });
+        var token = Features.SharingTests.TokenOf(await created.ReadAsync<Features.ShareDto>(HttpStatusCode.Created));
+        using var guest = From(factory.CreateClient(new() { HandleCookies = false }), Home);
+        try
+        {
+            await SaveAsync(admin, "10.8.0.0/16");
+            await guest.GetAsync(new Uri($"/api/public/shares/{token}", UriKind.Relative)).ExpectAsync(HttpStatusCode.OK);
+            await guest.GetAsync(new Uri($"/s/{token}", UriKind.Relative)).ExpectAsync(HttpStatusCode.OK);
+            await guest.GetAsync(new Uri("/api/me", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
+            await guest.GetAsync(new Uri($"/api/shares?projectId={project.Id}", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
+            await guest.GetAsync(new Uri($"/orgs/{org.Id}", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
+
+            // Sharing off: the links stop working, and the way in through them closes.
+            await admin.PutJsonAsync("/api/admin/features", new { sharing = false }).ExpectAsync(HttpStatusCode.OK);
+            await guest.GetAsync(new Uri($"/api/public/shares/{token}", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
+            await guest.GetAsync(new Uri($"/s/{token}", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
+            await From(guest, Vpn).GetAsync(new Uri($"/api/public/shares/{token}", UriKind.Relative)).ExpectAsync(HttpStatusCode.NotFound);
+        }
+        finally
+        {
+            await admin.PutJsonAsync("/api/admin/features", new { sharing = true }).ExpectAsync(HttpStatusCode.OK);
+            await SaveAsync(admin);
+        }
+
+        admin.Dispose();
+    }
+
+    [Fact]
     public async Task A_list_that_would_lock_out_the_admin_saving_it_is_refused()
     {
         var admin = From(await factory.SignInAsAdminAsync(), Vpn);

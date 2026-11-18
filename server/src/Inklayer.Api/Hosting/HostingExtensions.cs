@@ -1,4 +1,5 @@
 using Inklayer.Api.Endpoints;
+using Inklayer.Api.Features.Sharing;
 using Inklayer.Api.Network;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -38,6 +39,7 @@ internal static class HostingExtensions
         app.UseForwardedHeaders();
         app.UseInklayerNetworkAccess();
         app.UseInklayerFeatureSwitches();
+        app.UseInklayerShareHeaders();
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseSerilogRequestLogging(o =>

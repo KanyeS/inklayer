@@ -197,6 +197,25 @@ How it works:
 - **Closing:** resolving a comment closes its issues, unless the connection is set to leave them open.
 - **Keeping in step:** trackers can't reach a server behind the VPN, so Inklayer asks them every 5 minutes instead. An issue closed in the tracker resolves its comment, with a reply saying so, and notifies the comment's author and the person who created the issue. An issue reopened there reopens the comment.
 
+### Sharing read-only links
+People without an account can read comments and docs through a link, even from outside your network:
+
+| What | Who can share | Where |
+|---|---|---|
+| **A page's comments** | Commenters and above in the project | **Share this page** (link icon) in the extension's panel. Open comments only; the link lasts 30 days. |
+| **A project's comments** | Commenters and above in the project | The project's **Sharing** tab. Choose whether to include resolved comments, and when the link expires. |
+| **A doc** | Commenters and above in the organisation | **Make public** in the doc's header. One link per doc; **Make private** turns it off. |
+
+What guests see:
+- **Comments:** names, comments, replies and screenshots. No email addresses, roles, page details, issues or links into the app.
+- **Docs:** the text, with mentions as names. `[[Links]]` lead to other public docs and are plain text otherwise; comment embeds and tags aren't shown.
+
+Safety:
+- **Links:** long random tokens, stored hashed (and encrypted, so people who can see a link can copy it again). Turning a link off stops it at once, and every view is counted.
+- **Who manages them:** the project's Sharing tab lists its links; whoever made a link, or a project Admin, can turn it off. Instance administrators see every working link under **Admin → Shared links**.
+- **Requests:** share pages and their API aren't indexed by search engines, send no referrer, and are limited to 60 requests a minute per address (`Inklayer:Sharing:PublicRequestsPerMinute`).
+- **Network:** with the network allow list on, only `/s/…` (share pages), `/api/public/…` (their API) and `/assets/…` (the app's scripts and styles) are reachable from outside it, and only while Sharing is on. Turning **Sharing** off under **Admin → Features** stops every link and closes that way in.
+
 ### Turning features on and off
 Instance administrators can turn these features off for everyone under **Admin → Features**:
 - **Docs:** the knowledge base, the graph, live doc editing, and `[[links]]` between comments and docs.

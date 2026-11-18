@@ -50,6 +50,7 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("Inklayer:Auth:ExtensionRedirectUris", ExtensionRedirectUri);
         builder.UseSetting("Inklayer:Auth:AllowInsecureHttp", "true");
         builder.UseSetting("Inklayer:Auth:AuthRequestsPerMinute", "100000");
+        builder.UseSetting("Inklayer:Sharing:PublicRequestsPerMinute", "100000");
 
         // Two providers, so sign-in shows a chooser. Google's metadata is only fetched on a challenge, which tests don't follow.
         builder.UseSetting("Inklayer:Auth:Google:ClientId", "google-client");

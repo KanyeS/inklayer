@@ -13,6 +13,7 @@ import { useAsync } from "@/lib/useAsync";
 import { get } from "@/lib/api";
 import { personTitle } from "@/lib/people";
 import { useMe } from "@/App";
+import { DocShareButton } from "@/components/Shares";
 import { DocSession, type AwarenessUser } from "./collab";
 import { headings } from "./docMarkdown";
 import { docPath, docsApi, type CommentInfo, type DocInfo, type DocRevision, type DocTree } from "./docsApi";
@@ -122,6 +123,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
   onRenamed: () => Promise<void>;
   onHistory: () => void;
 }) {
+  const { me } = useMe();
   const [title, setTitle] = useState(info.title);
   const [error, setError] = useState<Error | null>(null);
   const state = useSessionState(session);
@@ -169,6 +171,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={onHistory}><History data-icon="inline-start" />History</Button>
+          {me.features.sharing && <DocShareButton docId={info.id} canEdit={canEdit} />}
           {canEdit && (
             <ConfirmButton title={`Delete "${info.title}"?`} description="Links to it will show as missing. Its history is kept." confirmLabel="Delete doc" onConfirm={() => void remove()}>
               <Trash2 />

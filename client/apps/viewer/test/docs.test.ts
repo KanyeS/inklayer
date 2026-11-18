@@ -73,6 +73,27 @@ describe("reading view", () => {
   });
 });
 
+describe("public docs (guests on a share link)", () => {
+  const render = (text: string) =>
+    renderMarkdown(text, { guest: true, doc: (l) => (l.target?.toLowerCase() === "style guide" ? { href: "/s/abc" } : null) });
+
+  it("links only to other public docs; the rest is plain text", () => {
+    const html = render("See [[Style guide]], [[Secrets]] and #launch. [[comment:0190a1b2-0000-7000-8000-000000000000|the bug]]");
+    expect(html).toContain('<a class="doc-wikilink" href="/s/abc">Style guide</a>');
+    expect(html).toContain('<span class="doc-wikilink-text">Secrets</span>');
+    expect(html).not.toContain("data-create");
+    expect(html).not.toContain("doc-tag");
+    expect(html).toContain("#launch");
+    expect(html).not.toContain("the bug");
+  });
+
+  it("leaves the signed-in reading view as it was", () => {
+    const html = renderMarkdown("[[Secrets]] #launch", { doc: () => null });
+    expect(html).toContain('data-create="Secrets"');
+    expect(html).toContain('class="doc-tag"');
+  });
+});
+
 describe("quick switcher", () => {
   it("ranks prefixes, then substrings, then scattered letters", () => {
     expect(fuzzyScore("road", "Roadmap")!).toBeGreaterThan(fuzzyScore("map", "Roadmap")!);
