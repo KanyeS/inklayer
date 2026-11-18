@@ -98,7 +98,7 @@ internal static class LiveEndpoints
             v.Project.Id, v.Project.Name, v.Project.OrganizationId, v.OrganizationName, v.Role, v.Role.Grants(Permission.Comment))).ToList());
     }
 
-    private static async Task<IResult> ListAsync(string? url, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> ListAsync(string? url, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         if (await VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
         {
@@ -159,7 +159,7 @@ internal static class LiveEndpoints
             target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, indexer, clock, ct);
     }
 
-    private static async Task<IResult> PagesAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> PagesAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
         var check = await access.CheckProjectAsync(projectId, Permission.View, ct);
         if (!check.IsAllowed)

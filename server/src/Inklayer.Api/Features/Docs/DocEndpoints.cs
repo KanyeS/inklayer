@@ -85,7 +85,7 @@ internal static class DocEndpoints
 
     /* ------------------------------------------------------------------ the tree */
 
-    private static async Task<IResult> TreeAsync(Guid orgId, AccessService access, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> TreeAsync(Guid orgId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
         var check = await access.CheckOrganizationAsync(orgId, Permission.View, ct);
         if (!check.IsAllowed)
@@ -104,7 +104,7 @@ internal static class DocEndpoints
             check.Role.Grants(Permission.Comment)));
     }
 
-    private static async Task<IResult> CreateAsync(
+    internal static async Task<IResult> CreateAsync(
         Guid orgId, CreateDocRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var check = await access.CheckOrganizationAsync(orgId, Permission.Comment, ct);
@@ -141,7 +141,7 @@ internal static class DocEndpoints
 
     /* ------------------------------------------------------------------ one doc */
 
-    private static async Task<IResult> GetAsync(Guid docId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> GetAsync(Guid docId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var doc = await db.Docs.AsNoTracking().SingleOrDefaultAsync(d => d.Id == docId && d.DeletedAt == null, ct);
         if (doc is null)
@@ -153,7 +153,7 @@ internal static class DocEndpoints
         return check.IsAllowed ? TypedResults.Ok(await ResponseAsync(doc, check.Role, currentUser, db, ct)) : check.Denied!;
     }
 
-    private static async Task<IResult> UpdateAsync(
+    internal static async Task<IResult> UpdateAsync(
         Guid docId, UpdateDocRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var doc = await db.Docs.SingleOrDefaultAsync(d => d.Id == docId && d.DeletedAt == null, ct);
@@ -222,7 +222,7 @@ internal static class DocEndpoints
         return TypedResults.Ok(new DocChangedResponse(await ResponseAsync(doc, check.Role, currentUser, db, ct), relink));
     }
 
-    private static async Task<IResult> DeleteAsync(
+    internal static async Task<IResult> DeleteAsync(
         Guid docId, int version, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var doc = await db.Docs.SingleOrDefaultAsync(d => d.Id == docId && d.DeletedAt == null, ct);
@@ -260,7 +260,7 @@ internal static class DocEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<IResult> HistoryAsync(Guid docId, AccessService access, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> HistoryAsync(Guid docId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
         if (await ReadableDocAsync(docId, access, db, ct) is { } denied)
         {
@@ -425,7 +425,7 @@ internal static class DocEndpoints
 
     /* ------------------------------------------------------------------ finding docs */
 
-    private static async Task<IResult> SearchAsync(Guid orgId, string? q, AccessService access, InklayerDbContext db, DocIndexer indexer, CancellationToken ct)
+    internal static async Task<IResult> SearchAsync(Guid orgId, string? q, AccessService access, InklayerDbContext db, DocIndexer indexer, CancellationToken ct)
     {
         var check = await access.CheckOrganizationAsync(orgId, Permission.View, ct);
         if (!check.IsAllowed)
@@ -461,7 +461,7 @@ internal static class DocEndpoints
             .ToList());
     }
 
-    private static async Task<IResult> TagsAsync(Guid orgId, AccessService access, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> TagsAsync(Guid orgId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
         var check = await access.CheckOrganizationAsync(orgId, Permission.View, ct);
         if (!check.IsAllowed)

@@ -88,7 +88,7 @@ internal static partial class AnnotationEndpoints
         return TypedResults.Created($"/api/annotations/{annotation.Id}", (await EnrichAsync(db, [ToResponse(annotation, authors, role, userId)], _ => role, userId, ct))[0]);
     }
 
-    private static async Task<IResult> UpdateAsync(
+    internal static async Task<IResult> UpdateAsync(
         Guid annotationId, UpdateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
@@ -207,7 +207,7 @@ internal static partial class AnnotationEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<IResult> GetAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> GetAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var annotation = await db.Annotations.AsNoTracking().SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -234,7 +234,7 @@ internal static partial class AnnotationEndpoints
 
     /* ---------------------------------------------------------------- replies */
 
-    private static async Task<IResult> CreateReplyAsync(
+    internal static async Task<IResult> CreateReplyAsync(
         Guid annotationId, CreateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var annotation = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
@@ -271,7 +271,7 @@ internal static partial class AnnotationEndpoints
         return TypedResults.Created($"/api/replies/{reply.Id}", ToReply(reply, authors, check.Role, userId));
     }
 
-    private static async Task<IResult> UpdateReplyAsync(
+    internal static async Task<IResult> UpdateReplyAsync(
         Guid replyId, UpdateReplyRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var (reply, annotation, role, denied) = await ReplyForChangeAsync(replyId, access, currentUser, db, ct);
@@ -308,7 +308,7 @@ internal static partial class AnnotationEndpoints
         return TypedResults.Ok(ToReply(reply, await AuthorsAsync(db, [reply.AuthorUserId], ct), role, userId));
     }
 
-    private static async Task<IResult> DeleteReplyAsync(
+    internal static async Task<IResult> DeleteReplyAsync(
         Guid replyId, int? version, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var (reply, annotation, _, denied) = await ReplyForChangeAsync(replyId, access, currentUser, db, ct);

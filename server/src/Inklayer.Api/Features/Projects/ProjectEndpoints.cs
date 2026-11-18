@@ -42,7 +42,7 @@ internal static class ProjectEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListAsync(Guid orgId, bool? includeArchived, AccessService access, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> ListAsync(Guid orgId, bool? includeArchived, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
         var check = await access.CheckOrganizationAsync(orgId, Permission.View, ct);
         if (!check.IsAllowed)

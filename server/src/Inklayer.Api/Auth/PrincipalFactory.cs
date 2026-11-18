@@ -19,7 +19,7 @@ internal static class PrincipalFactory
         return new ClaimsPrincipal(identity);
     }
 
-    private static readonly string[] SupportedScopes = [Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.OfflineAccess];
+    private static readonly string[] SupportedScopes = [Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.OfflineAccess, McpResource.Scope];
 
     /// <summary>The principal OpenIddict turns into authorization codes, refresh tokens and access tokens for the extension.</summary>
     public static ClaimsPrincipal CreateTokenPrincipal(User user, IEnumerable<string> requestedScopes)

@@ -55,7 +55,7 @@ internal static class ActivityEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListAsync(string? kind, string? site, DateTime? before, int? limit, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> ListAsync(string? kind, string? site, DateTime? before, int? limit, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var user = await currentUser.GetAsync(ct);
         if (user is null || user.IsDisabled || await LiveEndpoints.VisibleProjectsAsync(currentUser, db, ct) is not { } visible)

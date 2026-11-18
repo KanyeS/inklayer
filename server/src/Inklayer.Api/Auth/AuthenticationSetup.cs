@@ -10,6 +10,9 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.IdentityModel.Tokens;
+using OpenIddict.Abstractions;
+using ModelContextProtocol.AspNetCore.Authentication;
+using ModelContextProtocol.Authentication;
 using OpenIddict.Server;
 using OpenIddict.Validation.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -140,17 +143,64 @@ internal static partial class AuthenticationSetup
             });
         }
 
-        services.AddAuthorization();
+        // MCP: bearer tokens like the extension's, but challenges point clients at the protected-resource metadata
+        // (/.well-known/oauth-protected-resource/api/mcp), which says where to sign in. Tokens must be issued for the MCP endpoint.
+        authentication
+            .AddPolicyScheme(AuthSchemes.Mcp, displayName: null, o =>
+            {
+                o.ForwardAuthenticate = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+                o.ForwardChallenge = McpAuthenticationDefaults.AuthenticationScheme;
+                o.ForwardForbid = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme;
+            })
+            .AddMcp(o =>
+            {
+                o.ResourceMetadata = new ProtectedResourceMetadata { ResourceName = "Inklayer" };
+                o.Events.OnResourceMetadataRequest = context =>
+                {
+                    var origin = McpResource.Origin(context.HttpContext.Request);
+                    context.ResourceMetadata = new ProtectedResourceMetadata
+                    {
+                        Resource = McpResource.Uri(context.HttpContext.Request),
+                        AuthorizationServers = [origin + "/"],
+                        ScopesSupported = [McpResource.Scope, Scopes.OfflineAccess],
+                        BearerMethodsSupported = ["header"],
+                        ResourceName = "Inklayer",
+                    };
+                    return Task.CompletedTask;
+                };
+            });
+
+        services.AddAuthorization(o => o.AddPolicy(McpResource.Policy, policy => policy
+            .AddAuthenticationSchemes(AuthSchemes.Mcp)
+            .RequireAuthenticatedUser()
+            .RequireAssertion(context => context.Resource is HttpContext http
+                && context.User.GetAudiences().Contains(McpResource.Uri(http.Request), StringComparer.Ordinal))));
+        services.AddAntiforgery(o => o.Cookie.Name = "inklayer.consent");
 
         services.AddOpenIddict()
             .AddCore(o => o.UseEntityFrameworkCore().UseDbContext<InklayerDbContext>())
             .AddServer(o =>
             {
                 o.SetAuthorizationEndpointUris("connect/authorize")
-                    .SetTokenEndpointUris("connect/token");
+                    .SetTokenEndpointUris("connect/token")
+                    // MCP clients look for RFC 8414 metadata; OpenID Connect clients for the usual document. Same content.
+                    .SetConfigurationEndpointUris(".well-known/openid-configuration", ".well-known/oauth-authorization-server");
                 o.AllowAuthorizationCodeFlow().AllowRefreshTokenFlow();
                 o.RequireProofKeyForCodeExchange();
-                o.RegisterScopes(Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.OfflineAccess);
+                // S256 only: "plain" PKCE protects nothing if the request is seen (OAuth 2.1, MCP authorization spec).
+                o.Configure(options => options.CodeChallengeMethods.Remove(CodeChallengeMethods.Plain));
+                o.RegisterScopes(Scopes.OpenId, Scopes.Email, Scopes.Profile, Scopes.OfflineAccess, McpResource.Scope);
+
+                // The one resource (RFC 8707) is the MCP endpoint, whose address depends on how the server is reached, so the
+                // authorization endpoint checks it rather than a fixed list (see AuthEndpoints.AuthorizeAsync).
+                o.DisableResourceValidation();
+
+                // Apps such as Claude register themselves (RFC 7591) at /connect/register.
+                o.AddEventHandler<OpenIddictServerEvents.HandleConfigurationRequestContext>(builder => builder.UseInlineHandler(context =>
+                {
+                    context.Metadata["registration_endpoint"] = new Uri(context.BaseUri!, "connect/register").AbsoluteUri;
+                    return default;
+                }));
                 o.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
                 o.SetRefreshTokenLifetime(TimeSpan.FromDays(30));
 
@@ -197,6 +247,20 @@ internal static partial class AuthenticationSetup
     {
         app.UseRateLimiter();
         app.UseAuthentication();
+
+        // A token issued for the MCP endpoint is only good there: it can't be passed along to the rest of the API.
+        app.Use((context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+                && !context.Request.Path.StartsWithSegments(McpResource.Path, StringComparison.OrdinalIgnoreCase)
+                && context.User.GetAudiences().Any(a => a.EndsWith(McpResource.Path, StringComparison.Ordinal)))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+
+            return next(context);
+        });
         app.UseAuthorization();
         app.UseMiddleware<CsrfMiddleware>();
         return app;

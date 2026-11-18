@@ -1,4 +1,5 @@
 import { useMe } from "@/App";
+import { ConnectedApps } from "@/components/ConnectedApps";
 import { LinkCards, type CardItem } from "@/components/LinkCards";
 import { Page, PageTitle } from "@/components/Layout";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
@@ -22,6 +23,7 @@ export function HomePage() {
       ) : (
         <LinkCards items={items} />
       )}
+      <ConnectedApps />
     </Page>
   );
 }

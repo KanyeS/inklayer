@@ -240,16 +240,7 @@ internal sealed partial class DocsHub(DocsRegistry registry, InklayerDbContext d
             doc.UpdatedAt = now;
             doc.UpdatedByUserId = editors.Count > 0 ? editors[^1] : me.Peer.UserId;
 
-            // History: an "edited" entry per person, at most every few minutes each.
-            foreach (var editor in editors.Count > 0 ? editors.Distinct() : [me.Peer.UserId])
-            {
-                var last = await db.DocRevisions.Where(r => r.DocId == docId && r.ActorUserId == editor && r.Action == DocActions.Edited)
-                    .MaxAsync(r => (DateTime?)r.OccurredAt);
-                if (last is null || now - last.Value >= EditRevisionEvery)
-                {
-                    db.DocRevisions.Add(DocEndpoints.Revision(doc, DocActions.Edited, editor, now));
-                }
-            }
+            await AddEditRevisionsAsync(db, doc, editors.Count > 0 ? [.. editors.Distinct()] : [me.Peer.UserId], now, default);
 
             await db.SaveChangesAsync();
             await indexer.IndexDocAsync(doc, default);
@@ -258,6 +249,20 @@ internal sealed partial class DocsHub(DocsRegistry registry, InklayerDbContext d
         await db.SaveChangesAsync();
         await tx.CommitAsync();
         return true;
+    }
+
+    /// <summary>History: an "edited" entry per person, at most every few minutes each. Call after the doc's content changed.</summary>
+    internal static async Task AddEditRevisionsAsync(InklayerDbContext db, Doc doc, IReadOnlyList<Guid> editors, DateTime now, CancellationToken ct)
+    {
+        foreach (var editor in editors)
+        {
+            var last = await db.DocRevisions.Where(r => r.DocId == doc.Id && r.ActorUserId == editor && r.Action == DocActions.Edited)
+                .MaxAsync(r => (DateTime?)r.OccurredAt, ct);
+            if (last is null || now - last.Value >= EditRevisionEvery)
+            {
+                db.DocRevisions.Add(DocEndpoints.Revision(doc, DocActions.Edited, editor, now));
+            }
+        }
     }
 
     /// <summary>The caller's role in the organisation, or null if they aren't a member. Instance administrators are Owners.</summary>

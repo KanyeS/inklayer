@@ -137,6 +137,7 @@ People with the extension can see and add comments **directly on any website**.
 - **Clients:**
   - **The web viewer** uses an HttpOnly session cookie. State-changing requests must send the `X-Inklayer-Csrf` header.
   - **The extension** uses short-lived bearer tokens with rotating refresh tokens.
+  - **AI assistants (MCP)** use the same kind of tokens, issued only for the MCP endpoint and only after the person allows the app (see below).
 - **Revocation:** disabling a user or "sign out everywhere" ends every cookie and token immediately.
 - **Network access (VPN), optional:** instance administrators can limit the whole server, including the viewer, the API, sign-in and the extension, to certain networks such as the company VPN. They manage the list under **Admin → Network access**.
   - **Format:** addresses or CIDR ranges, IPv4 or IPv6. An empty list allows every network. Requests from elsewhere get a 403 that shows the caller's address.
@@ -144,6 +145,21 @@ People with the extension can see and add comments **directly on any website**.
   - **Lockout protection:** an administrator can't save a list that leaves out their own address. If everyone is locked out anyway, set `INKLAYER_NETWORK_RESTRICTION_DISABLED=true`, restart, fix the list, then remove it.
   - **Always allowed:** health checks (`/health/*`) and the server itself (loopback).
   - **Behind a reverse proxy:** the proxy's network must be in `ForwardedHeaders:KnownNetworks` (the Lightsail compose file sets it), or every request appears to come from the proxy. The Admin page shows "Your address" as the server sees it, so you can check.
+
+### Using Inklayer from Claude (MCP)
+Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs in as you and can do what your role allows:
+- **Read:** comments and replies on a page, pages with comments, docs (search, read, links and backlinks), tags, history and activity.
+- **Write:** reply to, resolve and edit comments, and create, edit, rename, move and delete docs. Doc edits appear live to anyone editing the doc in the browser.
+
+To connect:
+- **Claude Code:** run `claude mcp add --transport http inklayer https://<your server>/api/mcp`, then `/mcp` to sign in.
+- **Claude Desktop or claude.ai:** add a custom connector with the same address.
+
+How sign-in works:
+- **Signing in:** the app registers itself (OAuth dynamic client registration), your browser opens, you sign in as usual, and Inklayer asks whether to allow the app. You're asked once per app.
+- **Disconnecting:** connected apps are listed on the viewer's home page, where you can disconnect them.
+- **Token scope:** tokens for MCP only work at `/api/mcp`, and the rest of the API refuses them.
+- **Network access:** clients that run on your machine, like Claude Code, work through the VPN. claude.ai and Claude Desktop connectors reach the server from Anthropic's cloud, so they can't connect while the network allow list is on.
 
 Licence check: `dotnet tool restore && dotnet nuget-license -i Inklayer.slnx -t -a ../.github/licenses/allowed-licenses.json -override ../.github/licenses/nuget-overrides.json`
 

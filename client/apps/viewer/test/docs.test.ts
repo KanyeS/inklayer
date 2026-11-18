@@ -199,3 +199,17 @@ describe("editor", () => {
     editor.destroy();
   });
 });
+
+describe("edits made on the server (YDotNet / yrs)", () => {
+  // The same document as the server's YjsCompatibilityTests, and an edit YDotNet made to it: "!" after the emoji.
+  const fromYjs = "AQOSIQAEAQdjb250ZW50AiMggZIhAQGEkiECKMOpbGxvIPCfkYsgd29ybGQKU2Vjb25kIGxpbmUgW1tSb2FkbWFwXV0BkiEBAgE=";
+  const fromServer = "AQGxndT844CqCwDEkiEJkiEKASEBkiEBAgE=";
+  const bytes = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
+  it("apply in the browser at the same place", () => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, bytes(fromYjs));
+    Y.applyUpdate(doc, bytes(fromServer));
+    expect(doc.getText("content").toString()).toBe("# éllo 👋! world\nSecond line [[Roadmap]]");
+  });
+});

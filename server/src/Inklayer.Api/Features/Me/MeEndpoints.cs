@@ -15,29 +15,31 @@ internal static class MeEndpoints
     {
         var me = app.MapGroup("/api/me").WithTags("Me").RequireAuthorization();
 
-        me.MapGet("/", async (CurrentUser currentUser, InklayerDbContext db, CancellationToken ct) =>
-        {
-            var user = await currentUser.GetAsync(ct);
-            if (user is null)
-            {
-                return Results.Unauthorized();
-            }
-
-            var organizations = user.IsSystemAdmin
-                ? await db.Organizations.OrderBy(o => o.Name).Select(o => new MyOrganization(o.Id, o.Name, Role.Owner)).ToListAsync(ct)
-                : await db.OrganizationMembers.Where(m => m.UserId == user.Id)
-                    .Join(db.Organizations, m => m.OrganizationId, o => o.Id, (m, o) => new { o.Id, o.Name, m.Role })
-                    .OrderBy(x => x.Name)
-                    .Select(x => new MyOrganization(x.Id, x.Name, x.Role))
-                    .ToListAsync(ct);
-
-            return Results.Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.AvatarUrl, user.IsSystemAdmin, organizations));
-        }).WithName("GetMe").WithSummary("The signed-in user and their organisations");
+        me.MapGet("/", MeAsync).WithName("GetMe").WithSummary("The signed-in user and their organisations");
 
         me.MapPost("/sessions/revoke", RevokeAllSessionsAsync)
             .WithSummary("Sign out everywhere: ends every browser session and extension token for this user");
 
         return app;
+    }
+
+    internal static async Task<IResult> MeAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    {
+        var user = await currentUser.GetAsync(ct);
+        if (user is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var organizations = user.IsSystemAdmin
+            ? await db.Organizations.OrderBy(o => o.Name).Select(o => new MyOrganization(o.Id, o.Name, Role.Owner)).ToListAsync(ct)
+            : await db.OrganizationMembers.Where(m => m.UserId == user.Id)
+                .Join(db.Organizations, m => m.OrganizationId, o => o.Id, (m, o) => new { o.Id, o.Name, m.Role })
+                .OrderBy(x => x.Name)
+                .Select(x => new MyOrganization(x.Id, x.Name, x.Role))
+                .ToListAsync(ct);
+
+        return TypedResults.Ok(new MeResponse(user.Id, user.Email, user.DisplayName, user.AvatarUrl, user.IsSystemAdmin, organizations));
     }
 
     internal static async Task RevokeUserAccessAsync(Guid userId, InklayerDbContext db, IServiceProvider services, CancellationToken ct)

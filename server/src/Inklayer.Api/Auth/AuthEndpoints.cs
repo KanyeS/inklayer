@@ -1,6 +1,8 @@
 using System.Net;
 using Microsoft.AspNetCore;
 using Inklayer.Api.Access;
+using Inklayer.Api.Auditing;
+using Microsoft.AspNetCore.Antiforgery;
 using Inklayer.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
@@ -58,15 +60,24 @@ internal static class AuthEndpoints
         var connect = app.MapGroup("/connect").ExcludeFromDescription().RequireRateLimiting(AuthenticationSetup.AuthRateLimitPolicy);
         connect.MapMethods("/authorize", [HttpMethods.Get, HttpMethods.Post], AuthorizeAsync);
         connect.MapPost("/token", TokenAsync);
+        app.MapClientRegistrationEndpoints();
 
         return app;
     }
 
     /// <summary>
-    /// OAuth authorization endpoint for the browser extension. If there's no session cookie yet, the user is sent to sign in
-    /// (choosing a provider if there are several) and returned here. Consent is implicit because the extension is a first-party client.
+    /// OAuth authorization endpoint. If there's no session cookie yet, the user is sent to sign in (choosing a provider if
+    /// there are several) and returned here.
+    /// <list type="bullet">
+    /// <item>The browser extension is first-party: consent is implicit.</item>
+    /// <item>Apps that registered themselves (MCP clients such as Claude) need the person to allow them, once: a consent
+    /// page, then a permanent authorization that later sign-ins reuse and the person can revoke under "Connected apps".</item>
+    /// </list>
+    /// Tokens carry the <c>resource</c> the client asked for (RFC 8707) as their audience; the MCP endpoint requires its own.
     /// </summary>
-    private static async Task<IResult> AuthorizeAsync(HttpContext context, InklayerDbContext db)
+    private static async Task<IResult> AuthorizeAsync(
+        HttpContext context, InklayerDbContext db, IOpenIddictApplicationManager applications, IOpenIddictAuthorizationManager authorizations,
+        IAntiforgery antiforgery, AuditLog audit)
     {
         var request = context.GetOpenIddictServerRequest()
             ?? throw new InvalidOperationException("The OpenID Connect request cannot be retrieved.");
@@ -87,7 +98,55 @@ internal static class AuthEndpoints
             return Forbid(Errors.AccessDenied, "The account is disabled.");
         }
 
-        return Results.SignIn(PrincipalFactory.CreateTokenPrincipal(user, request.GetScopes()), properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        // The only resource a token can be for is this server's MCP endpoint.
+        var resources = request.GetResources();
+        if (resources.Any(r => !string.Equals(r, McpResource.Uri(context.Request), StringComparison.Ordinal)))
+        {
+            return Forbid(Errors.InvalidTarget, $"The only resource this server issues tokens for is {McpResource.Uri(context.Request)}.");
+        }
+
+        var principal = PrincipalFactory.CreateTokenPrincipal(user, request.GetScopes());
+        principal.SetResources(resources);
+        var signIn = Results.SignIn(principal, properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+        var application = await applications.FindByClientIdAsync(request.ClientId!, context.RequestAborted)
+            ?? throw new InvalidOperationException("The client application can't be found.");
+        if (await applications.GetConsentTypeAsync(application, context.RequestAborted) != ConsentTypes.Explicit)
+        {
+            return signIn;
+        }
+
+        // Allowed before, for these scopes: carry on.
+        var applicationId = await applications.GetIdAsync(application, context.RequestAborted);
+        var subject = user.Id.ToString();
+        await foreach (var existing in authorizations.FindAsync(subject, applicationId, Statuses.Valid, AuthorizationTypes.Permanent, principal.GetScopes(), context.RequestAborted))
+        {
+            principal.SetAuthorizationId(await authorizations.GetIdAsync(existing, context.RequestAborted));
+            return signIn;
+        }
+
+        var name = await applications.GetDisplayNameAsync(application, context.RequestAborted) ?? request.ClientId!;
+        var decision = context.Request.HasFormContentType ? context.Request.Form["consent"].ToString() : "";
+        if (decision is "allow" or "deny")
+        {
+            if (!await antiforgery.IsRequestValidAsync(context))
+            {
+                return Results.Content(ConsentPage.Render(context, antiforgery, request, name, user.DisplayName, expired: true), "text/html; charset=utf-8");
+            }
+
+            if (decision == "deny")
+            {
+                return Forbid(Errors.AccessDenied, "You didn't allow this app to use Inklayer.");
+            }
+
+            var authorization = await authorizations.CreateAsync(principal, subject, applicationId!, AuthorizationTypes.Permanent, principal.GetScopes(), context.RequestAborted);
+            principal.SetAuthorizationId(await authorizations.GetIdAsync(authorization, context.RequestAborted));
+            audit.Record("app_authorized", null, "application", request.ClientId, new { name, redirect = request.RedirectUri }, user.Id);
+            await db.SaveChangesAsync(context.RequestAborted);
+            return signIn;
+        }
+
+        return Results.Content(ConsentPage.Render(context, antiforgery, request, name, user.DisplayName, expired: false), "text/html; charset=utf-8");
     }
 
     /// <summary>Exchanges an authorization code or refresh token. The user is re-checked every time, so disabling them or "sign out everywhere" stops refreshes.</summary>
@@ -112,7 +171,11 @@ internal static class AuthEndpoints
             return Forbid(Errors.InvalidGrant, "The token is no longer valid. Sign in again.");
         }
 
-        return Results.SignIn(PrincipalFactory.CreateTokenPrincipal(user, principal!.GetScopes()), properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        // Keep what the code or refresh token was for: its resources (audience) and the person's authorization of the app.
+        var refreshed = PrincipalFactory.CreateTokenPrincipal(user, principal!.GetScopes());
+        refreshed.SetResources(principal!.GetResources());
+        refreshed.SetAuthorizationId(principal!.GetAuthorizationId());
+        return Results.SignIn(refreshed, properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 
     private static IResult Forbid(string error, string description) => Results.Forbid(

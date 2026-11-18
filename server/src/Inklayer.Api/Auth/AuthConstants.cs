@@ -2,6 +2,9 @@ namespace Inklayer.Api.Auth;
 
 internal static class AuthSchemes
 {
+    /// <summary>For the MCP endpoint: bearer tokens, with MCP's challenge (pointing clients at the protected-resource metadata).</summary>
+    public const string Mcp = "inklayer.mcp";
+
     /// <summary>Selects bearer tokens (extension) or the session cookie (web viewer) per request.</summary>
     public const string Default = "inklayer";
 
@@ -21,6 +24,26 @@ internal static class InklayerClaims
 
     /// <summary>The user's security stamp at sign-in. A mismatch means the session or token was revoked.</summary>
     public const string SecurityStamp = "inklayer:stamp";
+}
+
+/// <summary>The MCP endpoint and what its tokens are for.</summary>
+internal static class McpResource
+{
+    public const string Path = "/api/mcp";
+
+    /// <summary>Lets a client use the MCP endpoint as the user.</summary>
+    public const string Scope = "mcp";
+
+    public const string Policy = "mcp";
+
+    /// <summary>Client ids of apps that registered themselves (dynamic client registration) start with this.</summary>
+    public const string DynamicClientPrefix = "dyn_";
+
+    /// <summary>This server's origin, as the client sees it (forwarded headers are already applied).</summary>
+    public static string Origin(HttpRequest request) => $"{request.Scheme}://{request.Host}{request.PathBase}";
+
+    /// <summary>The resource MCP tokens are issued for, and the audience the MCP endpoint requires.</summary>
+    public static string Uri(HttpRequest request) => Origin(request) + Path;
 }
 
 internal static class CsrfHeader
