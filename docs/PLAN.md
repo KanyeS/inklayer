@@ -31,6 +31,8 @@ Chrome Extension (MV3, TypeScript)          Web Viewer (SPA, TypeScript)
 
 Shipped as a `docker-compose.yml` with a single `server` service. All state (the SQLite database and snapshot files) lives on one `/data` volume, so a backup is a copy of one folder. TLS is handled by the host's reverse proxy, with Caddy or Traefik as the example setup.
 
+**Reference deployment:** an AWS Lightsail $5 instance, with Caddy for automatic HTTPS and Litestream streaming the SQLite database to S3 (`deploy/lightsail/`, `docs/deploy-aws-lightsail.md`). Images are published to GHCR (amd64 and arm64) by the Release workflow.
+
 ### Suggested repo layout
 ```
 /server

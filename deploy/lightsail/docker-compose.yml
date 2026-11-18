@@ -1,0 +1,93 @@
+# Inklayer: production stack for a single small VM (AWS Lightsail $5 plan: 512 MB RAM, 20 GB SSD).
+# See docs/deploy-aws-lightsail.md.
+#
+#   volume-init (one-shot) gives the data volume the server's non-root ownership
+#   restore  (one-shot) pulls the SQLite database from S3 if the disk is empty  ─┐
+#   server   Inklayer API on :8080 (internal only)                              <─┘ starts after restore
+#   litestream continuously streams every database change to S3
+#   caddy    public :80/:443, automatic Let's Encrypt HTTPS, proxies to server
+#
+# Images are pulled from a registry. Never build on the VM: 512 MB is not enough for the .NET SDK.
+
+name: inklayer
+
+x-litestream: &litestream
+  image: litestream/litestream:0.5.14
+  # Same uid as the server, so the files Litestream creates (-shm/-wal) stay writable by the server.
+  user: "1654:1654"
+  env_file: .env
+  volumes:
+    - inklayer-data:/data
+    - ./litestream.yml:/etc/litestream.yml:ro
+
+services:
+  # One-shot: the first container to mount a fresh volume decides who owns it. This container
+  # runs first, so the volume takes the server image's /data ownership (uid 1654).
+  volume-init:
+    image: ${INKLAYER_IMAGE:?set INKLAYER_IMAGE in .env}
+    restart: "no"
+    entrypoint: ["dotnet", "--list-runtimes"]
+    volumes:
+      - inklayer-data:/data
+
+  restore:
+    <<: *litestream
+    restart: "no"
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+    # Skips the restore if a database already exists locally, and exits cleanly if no backup exists yet (first install).
+    command: ["restore", "-if-db-not-exists", "-if-replica-exists", "/data/inklayer.db"]
+
+  server:
+    image: ${INKLAYER_IMAGE:?set INKLAYER_IMAGE in .env}
+    restart: unless-stopped
+    depends_on:
+      restore:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Hard heap cap (192 MB) keeps the server within the instance's memory.
+      DOTNET_GCHeapHardLimit: "0xC000000"
+      ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    volumes:
+      - inklayer-data:/data
+    expose:
+      - "8080"
+    mem_limit: 320m
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  litestream:
+    <<: *litestream
+    restart: unless-stopped
+    command: ["replicate"]
+    depends_on:
+      server:
+        condition: service_started
+    mem_limit: 64m
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      INKLAYER_DOMAIN: ${INKLAYER_DOMAIN:?set INKLAYER_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 64m
+    logging: *logging
+
+volumes:
+  inklayer-data:
+  caddy-data:
+  caddy-config:

@@ -16,11 +16,16 @@ internal static class HostingExtensions
             .AddDbContextCheck<InklayerDbContext>("database", tags: [HealthEndpoints.ReadyTag]);
 
         // Inklayer runs behind a TLS-terminating reverse proxy such as Caddy or Traefik.
-        // Proxies to trust are configured via ForwardedHeaders:KnownNetworks / KnownProxies.
+        // ForwardedHeaders:KnownNetworks takes a list of CIDR ranges whose X-Forwarded-* headers are trusted,
+        // e.g. the Docker bridge network 172.16.0.0/12. Loopback is always trusted.
+        var knownNetworks = configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [];
         services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
-            configuration.GetSection("ForwardedHeaders").Bind(options);
+            foreach (var cidr in knownNetworks)
+            {
+                options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(cidr));
+            }
         });
 
         return services;

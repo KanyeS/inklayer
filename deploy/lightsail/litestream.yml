@@ -1,0 +1,15 @@
+# Litestream 0.5 (Apache-2.0): continuous SQLite replication to S3.
+# Credentials come from AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env.
+# ${VAR} references are expanded from the environment.
+
+# Full snapshot daily; changes in between are streamed (about 1 s behind).
+# Keep 7 days of point-in-time history.
+snapshot:
+  interval: 24h
+  retention: 168h
+
+dbs:
+  - path: /data/inklayer.db
+    replica:
+      url: s3://${LITESTREAM_BUCKET}/inklayer.db
+      region: ${AWS_REGION}
