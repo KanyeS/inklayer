@@ -94,7 +94,12 @@ public sealed class NetworkAccessTests(InklayerApiFactory factory)
         {
             await SaveAsync(admin, "10.8.0.0/16");
             await guest.GetAsync(new Uri($"/api/public/shares/{token}", UriKind.Relative)).ExpectAsync(HttpStatusCode.OK);
-            await guest.GetAsync(new Uri($"/s/{token}", UriKind.Relative)).ExpectAsync(HttpStatusCode.OK);
+            using (var page = await guest.GetAsync(new Uri($"/s/{token}", UriKind.Relative)))
+            {
+                // Let through (the page itself is 404 where the viewer isn't built, as in CI).
+                Assert.NotEqual(HttpStatusCode.Forbidden, page.StatusCode);
+            }
+
             await guest.GetAsync(new Uri("/api/me", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
             await guest.GetAsync(new Uri($"/api/shares?projectId={project.Id}", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
             await guest.GetAsync(new Uri($"/orgs/{org.Id}", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
