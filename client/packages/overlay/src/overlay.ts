@@ -52,7 +52,8 @@ export class Overlay {
     this.#ignored = options.ignoreEventsFrom ?? [];
 
     this.#host = doc.createElement("inklayer-overlay");
-    this.#host.setAttribute("style", "all:initial;position:absolute;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;");
+    // Just under the top: comment bubbles, the panel (both 2147483647) and live cursors (2147483646) sit above the drawings.
+    this.#host.setAttribute("style", "all:initial;position:absolute;top:0;left:0;width:0;height:0;z-index:2147483645;pointer-events:none;");
     const shadow = this.#host.attachShadow({ mode: "closed" });
     shadow.innerHTML = `<style>${STYLES}</style>`;
     this.#svg = doc.createElementNS(SVG_NS, "svg");
@@ -463,14 +464,16 @@ function rect(doc: Document, box: Box, className: string): SVGRectElement {
 
 function arrow(doc: Document, from: Point, to: Point): SVGGElement {
   const g = doc.createElementNS(SVG_NS, "g");
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const size = 14;
+  // The shaft stops inside the head: run to the tip, its thick round end would stick out past the head's narrow point.
+  const shaft = Math.min(size * 0.6, Math.hypot(to.x - from.x, to.y - from.y));
   const line = doc.createElementNS(SVG_NS, "line");
   line.setAttribute("class", "arrow");
   line.setAttribute("x1", String(from.x));
   line.setAttribute("y1", String(from.y));
-  line.setAttribute("x2", String(to.x));
-  line.setAttribute("y2", String(to.y));
-  const angle = Math.atan2(to.y - from.y, to.x - from.x);
-  const size = 14;
+  line.setAttribute("x2", String(to.x - shaft * Math.cos(angle)));
+  line.setAttribute("y2", String(to.y - shaft * Math.sin(angle)));
   const head = doc.createElementNS(SVG_NS, "polygon");
   head.setAttribute("class", "arrowhead");
   head.setAttribute("points", [

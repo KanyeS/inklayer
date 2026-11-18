@@ -685,12 +685,13 @@ class LiveSession {
     const tab = (view: View, label: string) =>
       h("button", { className: this.#view === view ? "tab active" : "tab", textContent: label, onclick: () => this.#setView(view) });
     const header = h("div", { className: "header" },
-      h("div", { className: "tabs grow" }, tab("comments", "Comments"), tab("activity", "Activity")),
-      h("button", { className: this.#bubblesOpen ? "icon on" : "icon",
+      h("div", { className: "tabs" }, tab("comments", "Comments"), tab("activity", "Activity")),
+      h("button", { className: this.#bubblesOpen ? "icon svg on" : "icon svg", ariaPressed: String(this.#bubblesOpen),
         title: this.#bubblesOpen ? "Comments are open next to their marks. Click to show them only on hover." : "Open every comment next to its mark (otherwise they show on hover)",
-        textContent: this.#bubblesOpen ? "All open" : "On hover", onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }),
-      h("button", { className: "icon", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page", textContent: this.#marksVisible ? "Hide" : "Show",
-        onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } }),
+        onclick: () => this.#setBubblesOpen(!this.#bubblesOpen) }, pinIcon()),
+      h("button", { className: "icon svg", title: this.#marksVisible ? "Hide marks on the page" : "Show marks on the page",
+        onclick: () => { this.#marksVisible = !this.#marksVisible; this.#overlay.setVisible(this.#marksVisible); this.#render(); } },
+        this.#marksVisible ? eyeIcon() : eyeOffIcon()),
       h("button", { className: "icon", title: "Minimise", textContent: "–", onclick: () => { this.#open = false; this.#render(); } }));
 
     const parts: Node[] = [header];
@@ -954,8 +955,8 @@ function withDocSuggestions(input: HTMLTextAreaElement, organizationId: () => st
   return h("div", { className: "suggest-wrap" }, input, list);
 }
 
-/** A pushpin, for keeping a comment bubble open. Built as DOM, not parsed. */
-function pinIcon(): SVGSVGElement {
+/** A line icon (Lucide's paths, 24×24, drawn in the text colour). Built as DOM, not parsed. */
+function icon(paths: string[]): SVGSVGElement {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
@@ -965,12 +966,32 @@ function pinIcon(): SVGSVGElement {
   svg.setAttribute("stroke-linecap", "round");
   svg.setAttribute("stroke-linejoin", "round");
   svg.setAttribute("aria-hidden", "true");
-  for (const d of ["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"]) {
+  for (const d of paths) {
     const path = document.createElementNS(ns, "path");
     path.setAttribute("d", d);
     svg.append(path);
   }
   return svg;
+}
+
+/** A pushpin, for keeping comment bubbles open. */
+function pinIcon(): SVGSVGElement {
+  return icon(["M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"]);
+}
+
+/** An open eye: marks are showing on the page. */
+function eyeIcon(): SVGSVGElement {
+  return icon(["M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"]);
+}
+
+/** A crossed-out eye: marks are hidden. */
+function eyeOffIcon(): SVGSVGElement {
+  return icon([
+    "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49",
+    "M14.084 14.158a3 3 0 0 1-4.242-4.242",
+    "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143",
+    "m2 2 20 20",
+  ]);
 }
 
 /** Copies text; pages without a secure context can't use the clipboard API, so fall back to the old way. */
@@ -1075,7 +1096,7 @@ const STYLES = `
   .panel { width: 330px; max-height: min(70vh, 640px); overflow: auto; background: var(--popover); color: var(--popover-foreground); border-radius: 22px; padding: 12px;
     box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.3), 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); display: flex; flex-direction: column; gap: 10px; }
   .header { display: flex; align-items: center; gap: 4px; }
-  .tabs { display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--muted); }
+  .tabs { display: flex; gap: 2px; margin-right: auto; padding: 3px; border-radius: 999px; background: var(--muted); }
   .tab { border: none; background: none; padding: 3px 12px; color: var(--muted-foreground); font-weight: 500; }
   .tab:hover { background: none; color: var(--foreground); }
   .tab.active { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
@@ -1095,6 +1116,8 @@ const STYLES = `
   select option { background: Canvas; color: CanvasText; }
   .icon { padding: 2px 10px; border-color: transparent; background: none; color: var(--muted-foreground); }
   .icon:hover { color: var(--foreground); }
+  .icon.svg { display: grid; place-items: center; padding: 4px 6px; }
+  .icon.svg svg { width: 16px; height: 16px; }
   .tools { display: flex; flex-wrap: wrap; gap: 4px; }
   .tool.active, .tool.active:hover { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
   .colors { display: flex; gap: 8px; padding: 2px; }

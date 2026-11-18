@@ -135,8 +135,8 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
     return <><p>You're signed in, but not a member of any organisation yet. Ask an administrator to invite you.</p>{footer}</>;
   }
 
-  /** Opens the Inklayer panel on the current page, on its comments or its activity log. */
-  const open = async (view: "comments" | "activity") => {
+  /** Opens the Inklayer panel on the current page. Its Activity tab holds the activity log. */
+  const openPanel = async () => {
     // Ask before any other await: Firefox only allows permission requests directly inside the click.
     // If access is already granted, this returns true without prompting.
     if (!(await chrome.permissions.request(SITE_ACCESS))) {
@@ -146,7 +146,7 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return;
     try {
-      await send({ type: "openLive", tabId: tab.id, view });
+      await send({ type: "openLive", tabId: tab.id, view: "comments" });
       window.close();
     } catch {
       setError("Inklayer can't open on this page (browser pages and extension stores are off limits).");
@@ -173,7 +173,7 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
 
   return (
     <>
-      <Button size="lg" onClick={() => void open("comments")}>Comment on this page</Button>
+      <Button size="lg" onClick={() => void openPanel()}>Comment on this page</Button>
       <p className="text-xs text-muted-foreground">Comments appear on the page for everyone in your projects who has the extension.</p>
       {/* Hidden while an administrator has turned live cursors off. */}
       {state.me!.features.liveCursors && (
@@ -189,9 +189,34 @@ function SignedIn({ state, onSettings, onSignedOut }: { state: StateResponse; on
           </p>
         </>
       )}
-      <Button variant="outline" title="Who commented where; admins also see sign-ins and errors" onClick={() => void open("activity")}>Activity log</Button>
+      {/* Hidden while an administrator has turned docs off. */}
+      {state.me!.features.docs && <OpenDocs serverUrl={state.serverUrl!} organizations={state.me!.organizations} />}
       <ErrorText>{error}</ErrorText>
       {footer}
+    </>
+  );
+}
+
+/** Opens the organisation's docs in the web viewer. With several organisations, lists them to pick from. */
+function OpenDocs({ serverUrl, organizations }: { serverUrl: string; organizations: { id: string; name: string }[] }) {
+  const [picking, setPicking] = useState(false);
+  const openDocs = async (orgId: string) => {
+    await chrome.tabs.create({ url: `${serverUrl}/orgs/${encodeURIComponent(orgId)}/docs` });
+    window.close();
+  };
+  if (organizations.length === 1) {
+    return <Button variant="outline" onClick={() => void openDocs(organizations[0]!.id)}>Open docs</Button>;
+  }
+  return (
+    <>
+      <Button variant={picking ? "secondary" : "outline"} aria-expanded={picking} onClick={() => setPicking(!picking)}>Open docs</Button>
+      {picking && (
+        <div className="flex flex-col gap-1">
+          {organizations.map((o) => (
+            <Button key={o.id} variant="ghost" size="sm" className="justify-start" onClick={() => void openDocs(o.id)}>{o.name}</Button>
+          ))}
+        </div>
+      )}
     </>
   );
 }

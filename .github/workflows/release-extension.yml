@@ -1,0 +1,75 @@
+name: Release extension
+
+# Builds the browser extension and attaches it to the GitHub Release for the tag, as
+#   inklayer-extension-chrome-<version>.zip   (Chrome, Edge, Brave: unzip, then "Load unpacked")
+#   inklayer-extension-firefox-<version>.zip  (Firefox: unsigned, loads as a temporary add-on)
+#   git tag v0.2.0 && git push origin v0.2.0   ->  Release v0.2.0 with both zips (same tag as the server image)
+#   Manual run from the Actions tab             ->  the zips as a workflow artifact only, no release
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT";
+          else echo "value=$(node -p 'require("./apps/extension/public/manifest.json").version')-edge.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"; fi
+
+      # Browsers only accept dotted numbers in "version", so a manual build keeps the manifest's own version
+      # and carries the edge suffix in the file names only.
+      - name: Stamp the manifest with the tag's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          node -e '
+            const fs = require("fs"), p = "apps/extension/public/manifest.json";
+            const m = JSON.parse(fs.readFileSync(p, "utf8"));
+            m.version = process.env.VERSION.split("-")[0];
+            fs.writeFileSync(p, JSON.stringify(m, null, 2) + "\n");'
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Zip the builds
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          mkdir -p ../out
+          (cd apps/extension/dist && zip -qr "$GITHUB_WORKSPACE/out/inklayer-extension-chrome-$VERSION.zip" .)
+          (cd apps/extension/dist-firefox && zip -qr "$GITHUB_WORKSPACE/out/inklayer-extension-firefox-$VERSION.zip" .)
+          ls -l ../out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inklayer-extension-${{ steps.version.outputs.value }}
+          path: out/*.zip
+
+      # Creates the release if it doesn't exist yet (e.g. one drafted by hand), then adds or replaces the zips.
+      - name: Attach to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          gh release upload "$GITHUB_REF_NAME" "$GITHUB_WORKSPACE"/out/*.zip --clobber
