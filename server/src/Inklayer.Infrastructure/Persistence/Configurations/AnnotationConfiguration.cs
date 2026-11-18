@@ -1,6 +1,5 @@
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Projects;
-using Inklayer.Domain.Snapshots;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -17,10 +16,8 @@ internal sealed class AnnotationConfiguration : IEntityTypeConfiguration<Annotat
         builder.Property(a => a.Color).HasMaxLength(7);
         builder.Property(a => a.Version).IsConcurrencyToken();
         builder.Property(a => a.PageUrl).HasMaxLength(LivePageUrl.MaxLength);
-        builder.HasIndex(a => new { a.SnapshotId, a.CreatedAt });
         builder.HasIndex(a => new { a.ProjectId, a.PageUrl, a.CreatedAt });
-        builder.HasOne<Snapshot>().WithMany().HasForeignKey(a => a.SnapshotId).OnDelete(DeleteBehavior.Cascade);
-        builder.ToTable(t => t.HasCheckConstraint("CK_Annotations_SnapshotOrPage", "(SnapshotId IS NULL) <> (PageUrl IS NULL)"));
+        builder.HasOne<Project>().WithMany().HasForeignKey(a => a.ProjectId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

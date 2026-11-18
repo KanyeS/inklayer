@@ -1,5 +1,7 @@
 # Inklayer: Self-Hosted Web Page Annotation Platform (Plan)
 
+> **Change of direction (November 2026): snapshots removed.** Inklayer now only annotates live pages through the extension (see "As built (live mode)" in §2.1). Capturing pages, the snapshot origin, the HTML sanitizer, blob storage and the snapshot viewer have been removed, along with comments made on snapshots. Sections 2.1 (capture) and 2.6 are kept below as a record of the earlier design.
+
 ## Context
 This is a new **open-source** project named **Inklayer**, hosted as a single repository. It is aimed at UX designers, developers, QA and general users.
 
@@ -54,7 +56,7 @@ Shipped as a `docker-compose.yml` with a single `server` service. All state (the
 
 ## 2. Core design decisions
 
-### 2.1 Capturing "any web page"
+### 2.1 Capturing "any web page" (capture removed; live mode below is current)
 The extension captures the page as the user sees it, while logged in, rather than having the server fetch the URL. Server-side fetching cannot reach pages behind a login, on an intranet or on localhost, and those are exactly the pages UX and QA teams need.
 - **DOM snapshot** with `rrweb-snapshot` (MIT licence). It serializes the DOM, including shadow DOM, the current state of form inputs, and inlined or linked stylesheets. Canvas content is converted to data URLs.
 - **Asset bundling:** the extension's service worker fetches images, fonts and CSS and uploads them. Each asset is stored once, keyed by its SHA-256 hash, so repeated captures of a site take almost no extra storage.
@@ -67,8 +69,8 @@ The extension captures the page as the user sees it, while logged in, rather tha
 **As built (live mode):**
 - **Any site, no setup.** Commenters and above can annotate any http(s) page; Viewers see comments. The extension registers its live script for all sites, but it stays invisible unless the site has comments or the user chooses "Comment on this page".
 - **Privacy.** `/api/live/origins` lists only the origins with comments the user can see. The background caches it and checks the page's origin locally, so a full page address is only sent on those sites, or on request.
-- **Storage.** A live annotation has `PageUrl` instead of `SnapshotId` (a check constraint keeps exactly one). `PageUrl` is the normalised key: origin and path, plus the query and/or hash only if the annotation's project matches on them. Raw URLs are never stored. Loosening a project's rule re-keys its annotations. `/api/live/annotations?url=` returns a page's comments across all of the user's projects, each keyed by its own project's rules.
-- **No auto-snapshot.** Live comments are re-anchored on each visit; nothing records what the page looked like. Capture a snapshot for a frozen record.
+- **Storage.** Every annotation has a `PageUrl`, the normalised key: origin and path, plus the query and/or hash only if the annotation's project matches on them. Raw URLs are never stored. Loosening a project's rule re-keys its annotations. `/api/live/annotations?url=` returns a page's comments across all of the user's projects, each keyed by its own project's rules.
+- **No frozen record.** Comments are re-anchored on each visit; nothing records what the page looked like.
 - **On the page.** The shared overlay (links not blocked) plus a small panel, both in closed shadow roots. New comments go to a project picked in the panel. The content script never holds a token: it messages the background worker, which checks each request against the sender's real origin.
 - **Following the page.** URL changes (single-page apps) reload the comments; DOM mutations re-anchor, debounced; the overlay re-attaches if the page removes it.
 - **Tested** in headless Firefox through a WebDriver harness with a stubbed background (24 checks): staying invisible without comments, opening from the toolbar, the project picker, pin/box/highlight, layout shifts, replaced elements, panel clicks, resolve, links, SPA navigation, re-attaching, and comments showing after a reload. The real background (registration, sign-in) isn't covered by that harness.
@@ -149,7 +151,7 @@ The server never sees, stores or resets a password. Google handles sign-in, 2FA,
   - Tenant isolation is enforced by an `AccessService` check on every endpoint, which returns 404 to non-members, plus explicit `OrganizationId` filters, rather than an EF global query filter. A global filter needs a single "current org" per request, and requests like `/api/me` span several organisations.
 - **Later, if needed:** add Microsoft Entra ID or a generic OIDC provider using the same handler with no password code. This is just another provider entry in config.
 
-### 2.6 Securely serving stored pages (critical)
+### 2.6 Securely serving stored pages (removed with snapshots)
 Captured HTML is untrusted, so it could run scripts against the app's users. Snapshots are therefore served:
 - from a **separate origin** (for example `snapshots.example.com`, configured by the customer), so they can't reach app cookies;
 - with **all scripts removed** at capture time and again on the server, using a sanitizer such as AngleSharp-based HtmlSanitizer, set up to keep styles;
@@ -211,7 +213,7 @@ Captured HTML is untrusted, so it could run scripts against the app's users. Sna
      - **Some popular .NET libraries switched to commercial licences:** MediatR, AutoMapper and MassTransit v9+ (with FluentAssertions v8+ for tests), plus ImageSharp (Six Labors split licence). Don't use them; they aren't needed anyway.
      - **Redis 7.4+ is not open source** (RSAL/SSPL, now AGPL in v8). It isn't needed with a single SQLite node; if a cache or backplane is ever added, use **Valkey** (BSD).
    - **Chosen dependencies (all permissive):**
-     - **Server:** ASP.NET Core and EF Core (MIT), Microsoft.Data.Sqlite (MIT) with SQLitePCLRaw (Apache-2.0) and SQLite (public domain), OpenIddict (Apache-2.0), HtmlSanitizer/AngleSharp (MIT), Serilog (Apache-2.0), OpenTelemetry (Apache-2.0)
+     - **Server:** ASP.NET Core and EF Core (MIT), Microsoft.Data.Sqlite (MIT) with SQLitePCLRaw (Apache-2.0) and SQLite (public domain), OpenIddict (Apache-2.0), Serilog (Apache-2.0), OpenTelemetry (Apache-2.0)
      - **Client:** rrweb-snapshot, perfect-freehand, @medv/finder, React and Vite (all MIT)
      - **Tests:** xUnit (Apache-2.0), Playwright (Apache-2.0)
    - **Enforce it in CI:** fail the build if a disallowed licence appears. Use `nuget-license` for .NET and `license-checker --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD"` for npm.

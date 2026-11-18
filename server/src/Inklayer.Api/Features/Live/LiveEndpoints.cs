@@ -77,8 +77,8 @@ internal static class LiveEndpoints
 
         var ids = visible.Select(v => v.Project.Id).ToList();
         var pages = await db.Annotations.AsNoTracking()
-            .Where(a => ids.Contains(a.ProjectId) && a.PageUrl != null && a.DeletedAt == null)
-            .Select(a => a.PageUrl!)
+            .Where(a => ids.Contains(a.ProjectId) && a.DeletedAt == null)
+            .Select(a => a.PageUrl)
             .Distinct()
             .ToListAsync(ct);
         return TypedResults.Ok(pages.Select(LivePageUrl.OriginOf).OfType<string>().Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList());
@@ -112,7 +112,7 @@ internal static class LiveEndpoints
         var ids = keys.Keys.ToList();
         var distinctKeys = keys.Values.Distinct(StringComparer.Ordinal).ToList();
         var annotations = (await db.Annotations.AsNoTracking()
-                .Where(a => ids.Contains(a.ProjectId) && a.PageUrl != null && distinctKeys.Contains(a.PageUrl) && a.DeletedAt == null)
+                .Where(a => ids.Contains(a.ProjectId) && distinctKeys.Contains(a.PageUrl) && a.DeletedAt == null)
                 .OrderBy(a => a.CreatedAt)
                 .ToListAsync(ct))
             .Where(a => a.PageUrl == keys[a.ProjectId])
@@ -151,7 +151,7 @@ internal static class LiveEndpoints
             return InvalidUrl();
         }
 
-        var target = new AnnotationEndpoints.AnnotationTarget(projectId, project.OrganizationId, SnapshotId: null, PageUrl: key);
+        var target = new AnnotationEndpoints.AnnotationTarget(projectId, project.OrganizationId, key);
         return await AnnotationEndpoints.CreateCoreAsync(
             target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, clock, ct);
     }
@@ -165,8 +165,8 @@ internal static class LiveEndpoints
         }
 
         var pages = await db.Annotations.AsNoTracking()
-            .Where(a => a.ProjectId == projectId && a.PageUrl != null && a.DeletedAt == null)
-            .GroupBy(a => a.PageUrl!)
+            .Where(a => a.ProjectId == projectId && a.DeletedAt == null)
+            .GroupBy(a => a.PageUrl)
             .Select(g => new LivePageSummaryResponse(
                 g.Key,
                 g.Count(a => a.Status == AnnotationStatus.Open),

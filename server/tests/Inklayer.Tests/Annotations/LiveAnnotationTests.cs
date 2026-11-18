@@ -53,7 +53,7 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
 
         var created = await CreateAsync(commenter, project.Id, $"{site}/pricing/?utm_source=newsletter#plans");
 
-        Assert.Null(created.SnapshotId);
+        Assert.Equal(project.Id, created.ProjectId);
         Assert.Equal($"{site}/pricing", created.PageUrl);
         var page = Assert.Single(await ListAsync(admin, $"{site}/pricing?ref=footer"));
         Assert.Equal(project.Id, page.ProjectId);
@@ -200,6 +200,54 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
         var a = Assert.Single(pages, p => p.PageUrl == $"{site}/a");
         Assert.Equal((1, 1), (a.OpenCount, a.ResolvedCount));
         Assert.Equal(1, Assert.Single(pages, p => p.PageUrl == $"{site}/b").OpenCount);
+        admin.Dispose();
+    }
+
+    [Fact]
+    public async Task Only_the_author_or_an_admin_can_edit_but_anyone_who_comments_can_resolve()
+    {
+        var (admin, org, project) = await SetUpAsync();
+        var (author, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (other, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Editor");
+        var annotation = await CreateAsync(author, project.Id, $"{NewSite()}/");
+
+        await other.PatchJsonAsync($"/api/annotations/{annotation.Id}", new { version = 1, body = "hijacked" }).ExpectAsync(HttpStatusCode.Forbidden);
+        await other.DeleteAsync(new Uri($"/api/annotations/{annotation.Id}", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
+
+        using var resolved = await other.PatchJsonAsync($"/api/annotations/{annotation.Id}", new { version = 1, status = "Resolved" });
+        Assert.Equal("Resolved", (await resolved.ReadAsync<AnnotationDto>()).Status);
+
+        using var edited = await admin.PatchJsonAsync($"/api/annotations/{annotation.Id}", new { version = 2, body = "Edited by admin" });
+        Assert.Equal(3, (await edited.ReadAsync<AnnotationDto>()).Version);
+        admin.Dispose();
+    }
+
+    [Fact]
+    public async Task Stale_versions_are_rejected_with_the_current_state()
+    {
+        var (admin, _, project) = await SetUpAsync();
+        var annotation = await CreateAsync(admin, project.Id, $"{NewSite()}/");
+        await admin.PatchJsonAsync($"/api/annotations/{annotation.Id}", new { version = 1, body = "First edit" }).ExpectAsync(HttpStatusCode.OK);
+
+        using var conflict = await admin.PatchJsonAsync($"/api/annotations/{annotation.Id}", new { version = 1, body = "Lost update" });
+
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Contains("First edit", await conflict.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        await admin.DeleteAsync(new Uri($"/api/annotations/{annotation.Id}?version=1", UriKind.Relative)).ExpectAsync(HttpStatusCode.Conflict);
+        admin.Dispose();
+    }
+
+    [Fact]
+    public async Task Anchor_geometry_and_colour_are_validated()
+    {
+        var (admin, _, project) = await SetUpAsync();
+        var url = $"/api/projects/{project.Id}/live/annotations";
+        var page = $"{NewSite()}/";
+
+        await admin.PostJsonAsync(url, new { url = page, kind = "Ink", anchor = "not an object", geometry = Geometry }).ExpectAsync(HttpStatusCode.BadRequest);
+        await admin.PostJsonAsync(url, new { url = page, kind = "Ink", anchor = Anchor, geometry = new { points = new string('x', 600_000) } }).ExpectAsync(HttpStatusCode.BadRequest);
+        await admin.PostJsonAsync(url, new { url = page, kind = "Pin", anchor = Anchor, geometry = Geometry, color = "red" }).ExpectAsync(HttpStatusCode.BadRequest);
+        await admin.PostJsonAsync(url, new { url = page, kind = "Banana", anchor = Anchor, geometry = Geometry }).ExpectAsync(HttpStatusCode.BadRequest);
         admin.Dispose();
     }
 }

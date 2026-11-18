@@ -8,7 +8,6 @@ import { HomePage } from "./pages/HomePage";
 import { OrganizationPage } from "./pages/OrganizationPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { SignInPage } from "./pages/SignInPage";
-import { SnapshotPage } from "./pages/SnapshotPage";
 
 const MeContext = createContext<{ me: Me; reloadMe: () => Promise<void> } | null>(null);
 
@@ -32,12 +31,10 @@ export function App() {
   else if (path === "/admin") page = <AdminPage />;
   else if ((params = match("/orgs/:orgId", path))) page = <OrganizationPage orgId={params.orgId!} />;
   else if ((params = match("/projects/:projectId", path))) page = <ProjectPage projectId={params.projectId!} />;
-  else if ((params = match("/snapshots/:snapshotId", path))) page = <SnapshotPage snapshotId={params.snapshotId!} />;
 
-  const fullBleed = path.startsWith("/snapshots/");
   return (
     <MeContext.Provider value={{ me, reloadMe: reload }}>
-      <Layout fullBleed={fullBleed}>{page}</Layout>
+      <Layout>{page}</Layout>
     </MeContext.Provider>
   );
 }

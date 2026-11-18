@@ -1,4 +1,4 @@
-# Deploying Inklayer on AWS Lightsail (~$5/month)
+# Deploying Inklayer on AWS Lightsail (~$7/month)
 
 This guide runs Inklayer on a single Lightsail instance:
 - **HTTPS:** automatic, through Caddy and Let's Encrypt.
@@ -8,7 +8,7 @@ This guide runs Inklayer on a single Lightsail instance:
 ```
             Internet
                │ :443
-        ┌──────▼──────┐   Lightsail instance (512 MB, 20 GB SSD)
+        ┌──────▼──────┐   Lightsail instance (1 GB, 40 GB SSD)
         │    Caddy    │   automatic HTTPS
         └──────┬──────┘
         ┌──────▼──────┐        ┌────────────┐
@@ -24,11 +24,11 @@ This guide runs Inklayer on a single Lightsail instance:
 
 | Item | Monthly |
 |---|---|
-| Lightsail Linux, 512 MB plan (includes a static IPv4 address and 1 TB of transfer) | ~$5.00 |
+| Lightsail Linux, 1 GB plan (includes a static IPv4 address and at least 1 TB of transfer) | ~$7.00 |
 | S3 backups (a few hundred MB plus requests) | < $0.10 |
 | Domain name | ~$1 (varies) |
 
-Check current prices at <https://aws.amazon.com/lightsail/pricing/>. If memory runs short (see [Operations](#operations)), the 1 GB plan costs about $2 more.
+Check current prices at <https://aws.amazon.com/lightsail/pricing/>. The $5 plan (512 MB) is too small: the system and Docker use most of its memory, it swaps constantly, and it runs out of CPU credits, which can take the site down during updates.
 
 ## 1. Create the S3 backup bucket and credentials
 
@@ -57,15 +57,15 @@ Inklayer never stores passwords; everyone signs in with Google.
 
 ## 3. Create the Lightsail instance
 
-1. **Create the instance.** Lightsail → Create instance → Linux/Unix → **OS only → Ubuntu 24.04 LTS**, and choose the **$5 (512 MB)** plan.
+1. **Create the instance.** Lightsail → Create instance → Linux/Unix → **OS only → Ubuntu 24.04 LTS**, and choose the **$7 (1 GB)** plan.
 2. **Attach a static IP.** In Networking → Create static IP, attach it to the instance. A static IP is free while attached.
 3. **Open the firewall.** In the instance's Networking tab, under the IPv4 firewall, add **HTTPS (443)**. **SSH (22)** and **HTTP (80)** are open by default. Caddy needs port 80 for Let's Encrypt validation and HTTP→HTTPS redirects.
 4. **Turn on snapshots.** In the instance's Snapshots tab, turn on **automatic snapshots**. They cost a few cents a month and act as a second safety net.
-5. **Point DNS at the server.** At your DNS provider, create two `A` records pointing at the static IP: `inklayer.example.com` and `snapshots.inklayer.example.com`. Captured pages are served from the second hostname, isolated from the app.
+5. **Point DNS at the server.** At your DNS provider, create an `A` record for `inklayer.example.com` pointing at the static IP. If the DNS provider is Cloudflare, turn its proxy off ("DNS only"), so Caddy can get its certificate.
 
 ## 4. Publish the server image
 
-Images are built by GitHub Actions, not on the instance. 512 MB isn't enough RAM to compile .NET.
+Images are built by GitHub Actions, not on the instance, which doesn't have the RAM to compile .NET.
 
 ```bash
 git tag v0.1.0
@@ -186,10 +186,10 @@ If no instance administrator can sign in, add a working Google email to `INKLAYE
 free -m
 docker stats --no-stream
 ```
-The server is capped at a 192 MB heap and a 320 MB container limit. If `docker compose ps` shows the server restarting with exit code 137 (killed for running out of memory), or swap use stays high, move to the 1 GB plan: Lightsail → Snapshots → create a new instance from the snapshot on the larger plan → move the static IP over.
+The server is capped at a 192 MB heap and a 320 MB container limit. If `docker compose ps` shows the server restarting with exit code 137 (killed for running out of memory), or swap use stays high, move to a larger plan: stop the stack (`docker compose stop`), take an instance snapshot, create a new instance from it on the larger plan, and move the static IP over.
 
 ### Disk
-Captured pages take roughly 2–20 MB each, and 20 GB holds several thousand. Check with `df -h /`. Moving snapshot assets to S3 is on the roadmap.
+Inklayer stores only its database, which stays small. Check with `df -h /`; Docker images are the main use of disk, and `docker image prune` clears old ones.
 
 ## Limits of this setup
 - **One instance.** SQLite allows one writer, so don't run two servers against the same database or the same Litestream bucket path.

@@ -4,7 +4,7 @@ export function SignInPage() {
     <div className="center">
       <div className="card signin">
         <h1>Inklayer</h1>
-        <p className="muted">Capture, annotate and review web pages with your team.</p>
+        <p className="muted">Comment on any web page, right on the page, with your team.</p>
         <a className="button primary" href={`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`}>Sign in with Google</a>
       </div>
     </div>

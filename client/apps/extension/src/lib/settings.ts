@@ -9,11 +9,9 @@ export interface Tokens {
 export interface Settings {
   serverUrl: string | null;
   tokens: Tokens | null;
-  lastProjectId: string | null;
-  maskSelector: string | null;
 }
 
-const DEFAULTS: Settings = { serverUrl: null, tokens: null, lastProjectId: null, maskSelector: null };
+const DEFAULTS: Settings = { serverUrl: null, tokens: null };
 
 export async function getSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(Object.keys(DEFAULTS));

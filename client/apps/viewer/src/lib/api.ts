@@ -89,47 +89,6 @@ export interface LivePageSummary {
   lastActivityAt: string;
 }
 
-export interface SnapshotSummary {
-  id: string;
-  url: string;
-  title: string;
-  capturedAt: string;
-  capturedBy: { id: string; displayName: string };
-  hasScreenshot: boolean;
-  assetCount: number;
-}
-
-export interface Snapshot extends SnapshotSummary {
-  projectId: string;
-  organizationId: string;
-  viewportWidth: number;
-  viewportHeight: number;
-  scrollX: number;
-  scrollY: number;
-  viewUrl: string | null;
-  screenshotUrl: string | null;
-}
-
-export interface Annotation {
-  id: string;
-  /** Set for snapshot annotations; live-page annotations have pageUrl instead. */
-  snapshotId: string | null;
-  pageUrl: string | null;
-  kind: import("@inklayer/overlay").AnnotationKind;
-  status: "Open" | "Resolved";
-  body: string;
-  color: string;
-  anchor: import("@inklayer/overlay").Anchor;
-  geometry: import("@inklayer/overlay").Geometry;
-  viewportWidth: number;
-  version: number;
-  author: { id: string; displayName: string; avatarUrl: string | null };
-  createdAt: string;
-  updatedAt: string;
-  canEdit: boolean;
-  canDelete: boolean;
-}
-
 export interface AdminUser {
   id: string;
   email: string;

@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Inklayer.Api.Features.Annotations;
 
 /// <summary>
-/// Annotations on snapshots; live-page annotations are created and listed in <c>LiveEndpoints</c>, and edited here. Who can do what:
+/// Editing annotations; they're created and listed in <c>LiveEndpoints</c>. Who can do what:
 /// <list type="bullet">
 /// <item>Commenters and above can create annotations, and resolve or reopen any annotation.</item>
 /// <item>Authors can edit and delete their own; project Admins can edit and delete anyone's.</item>
@@ -24,10 +24,6 @@ internal static partial class AnnotationEndpoints
 
     public static IEndpointRouteBuilder MapAnnotationEndpoints(this IEndpointRouteBuilder app)
     {
-        var bySnapshot = app.MapGroup("/api/snapshots/{snapshotId:guid}/annotations").WithTags("Annotations").RequireAuthorization();
-        bySnapshot.MapGet("/", ListAsync);
-        bySnapshot.MapPost("/", CreateAsync);
-
         var annotations = app.MapGroup("/api/annotations").WithTags("Annotations").RequireAuthorization();
         annotations.MapPatch("/{annotationId:guid}", UpdateAsync);
         annotations.MapDelete("/{annotationId:guid}", DeleteAsync).WithSummary("Soft-delete; send ?version= to guard against deleting a changed annotation");
@@ -36,48 +32,8 @@ internal static partial class AnnotationEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListAsync(Guid snapshotId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
-    {
-        var projectId = await db.Snapshots.Where(s => s.Id == snapshotId).Select(s => (Guid?)s.ProjectId).SingleOrDefaultAsync(ct);
-        if (projectId is null)
-        {
-            return TypedResults.NotFound();
-        }
-
-        var check = await access.CheckProjectAsync(projectId.Value, Permission.View, ct);
-        if (!check.IsAllowed)
-        {
-            return check.Denied!;
-        }
-
-        var annotations = await db.Annotations.AsNoTracking()
-            .Where(a => a.SnapshotId == snapshotId && a.DeletedAt == null)
-            .OrderBy(a => a.CreatedAt)
-            .ToListAsync(ct);
-        var authors = await AuthorsAsync(db, annotations.Select(a => a.AuthorUserId), ct);
-        return TypedResults.Ok(annotations.Select(a => ToResponse(a, authors, check.Role, currentUser.Id!.Value)).ToList());
-    }
-
-    private static async Task<IResult> CreateAsync(Guid snapshotId, CreateAnnotationRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
-    {
-        var snapshot = await db.Snapshots.Where(s => s.Id == snapshotId).Select(s => new { s.ProjectId, s.OrganizationId }).SingleOrDefaultAsync(ct);
-        if (snapshot is null)
-        {
-            return TypedResults.NotFound();
-        }
-
-        var check = await access.CheckProjectAsync(snapshot.ProjectId, Permission.Comment, ct);
-        if (!check.IsAllowed)
-        {
-            return check.Denied!;
-        }
-
-        var target = new AnnotationTarget(snapshot.ProjectId, snapshot.OrganizationId, snapshotId, PageUrl: null);
-        return await CreateCoreAsync(target, request.Kind!.Value, request.Body, request.Color, request.Anchor, request.Geometry, request.ViewportWidth, check.Role, currentUser, db, clock, ct);
-    }
-
-    /// <summary>Where a new annotation goes: a snapshot, or a live page (its normalised URL).</summary>
-    internal readonly record struct AnnotationTarget(Guid ProjectId, Guid OrganizationId, Guid? SnapshotId, string? PageUrl);
+    /// <summary>Where a new annotation goes: a project, and the page's normalised URL.</summary>
+    internal readonly record struct AnnotationTarget(Guid ProjectId, Guid OrganizationId, string PageUrl);
 
     /// <summary>Validates and saves a new annotation. The caller has already checked <see cref="Permission.Comment"/>.</summary>
     internal static async Task<IResult> CreateCoreAsync(
@@ -102,7 +58,6 @@ internal static partial class AnnotationEndpoints
         var userId = currentUser.Id!.Value;
         var annotation = new Annotation
         {
-            SnapshotId = target.SnapshotId,
             PageUrl = target.PageUrl,
             ProjectId = target.ProjectId,
             OrganizationId = target.OrganizationId,
@@ -300,7 +255,7 @@ internal static partial class AnnotationEndpoints
     }
 
     internal static AnnotationResponse ToResponse(Annotation a, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) => new(
-        a.Id, a.SnapshotId, a.PageUrl, a.Kind, a.Status, a.Body, a.Color, Parse(a.Anchor), Parse(a.Geometry), a.ViewportWidth, a.Version,
+        a.Id, a.ProjectId, a.PageUrl, a.Kind, a.Status, a.Body, a.Color, Parse(a.Anchor), Parse(a.Geometry), a.ViewportWidth, a.Version,
         authors.GetValueOrDefault(a.AuthorUserId) ?? new AuthorSummary(a.AuthorUserId, "", null),
         a.CreatedAt, a.UpdatedAt, a.ResolvedAt, a.ResolvedByUserId,
         CanEdit(a, role, userId), CanEdit(a, role, userId));

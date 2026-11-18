@@ -1,7 +1,5 @@
-import type { Project } from "../lib/api";
-import type { CaptureStatus } from "../lib/capture";
 import { send, type StateResponse } from "../lib/messages";
-import { getSettings, normaliseServerUrl, updateSettings } from "../lib/settings";
+import { normaliseServerUrl, updateSettings } from "../lib/settings";
 
 const app = document.getElementById("app")!;
 const who = document.getElementById("who")!;
@@ -30,7 +28,7 @@ async function refresh(): Promise<void> {
   who.textContent = state.me?.email ?? "";
   if (!state.serverUrl) return renderSetup(state);
   if (!state.signedIn || !state.me) return renderSignIn(state);
-  return renderCapture(state);
+  return renderSignedIn(state);
 }
 
 function renderSetup(state: StateResponse, error?: string): void {
@@ -41,8 +39,8 @@ function renderSetup(state: StateResponse, error?: string): void {
   save.onclick = async () => {
     try {
       const serverUrl = normaliseServerUrl(input.value);
-      // Needed to reach the server, and to fetch the images, fonts and styles of pages you capture.
-      if (!(await chrome.permissions.request(SITE_ACCESS))) throw new Error("Inklayer needs site access to capture pages.");
+      // Needed to reach the server, and to show comments on the pages you visit.
+      if (!(await chrome.permissions.request(SITE_ACCESS))) throw new Error("Inklayer needs site access to show comments on pages.");
       await updateSettings({ serverUrl, tokens: null });
       await refresh();
     } catch (e) {
@@ -81,79 +79,18 @@ function renderSignIn(state: StateResponse, error?: string): void {
   );
 }
 
-async function renderCapture(state: StateResponse): Promise<void> {
-  const me = state.me!;
-  if (me.organizations.length === 0) {
+function renderSignedIn(state: StateResponse): void {
+  if (state.me!.organizations.length === 0) {
     render(h("p", {}, "You're signed in, but not a member of any organisation yet. Ask an administrator to invite you."), footer(state));
     return;
   }
 
-  const orgSelect = h("select");
-  for (const org of me.organizations) orgSelect.append(h("option", { value: org.id, textContent: org.name }));
-  const projectSelect = h("select");
-  const captureButton = h("button", { className: "primary", textContent: "Capture this page" });
-  const status = h("div");
-
-  const settings = await getSettings();
-  const loadProjects = async () => {
-    projectSelect.replaceChildren(h("option", { textContent: "Loading…", disabled: true }));
-    let projects: Project[] = [];
-    try {
-      projects = await send({ type: "projects", organizationId: orgSelect.value });
-    } catch (e) {
-      status.replaceChildren(h("p", { className: "error", textContent: (e as Error).message }));
-    }
-    const capturable = projects.filter((p) => ["Editor", "Admin", "Owner"].includes(p.myRole));
-    projectSelect.replaceChildren(...capturable.map((p) => h("option", { value: p.id, textContent: p.name, selected: p.id === settings.lastProjectId })));
-    if (capturable.length === 0) projectSelect.append(h("option", { textContent: "No projects you can capture into", disabled: true, selected: true }));
-    captureButton.disabled = capturable.length === 0;
-  };
-  orgSelect.onchange = loadProjects;
-
-  captureButton.onclick = async () => {
+  const error = h("p", { className: "error" });
+  const comment = h("button", { className: "primary", textContent: "Comment on this page", onclick: async () => {
     // Ask before any other await: Firefox only allows permission requests directly inside the click.
     // If access is already granted, this returns true without prompting.
     if (!(await chrome.permissions.request(SITE_ACCESS))) {
-      status.replaceChildren(h("p", { className: "error", textContent: "Site access is needed to read the page's images and fonts." }));
-      return;
-    }
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return;
-    captureButton.disabled = true;
-    await send({ type: "capture", tabId: tab.id, projectId: projectSelect.value });
-  };
-
-  const showStatus = (s: CaptureStatus) => {
-    captureButton.disabled = s.state === "working";
-    switch (s.state) {
-      case "idle":
-        status.replaceChildren();
-        break;
-      case "working":
-        status.replaceChildren(h("p", { className: "muted", textContent: s.step }), ...(s.progress === undefined ? [] : [h("progress", { value: s.progress, max: 1 })]));
-        break;
-      case "error":
-        status.replaceChildren(h("p", { className: "error", textContent: s.message }));
-        break;
-      case "done": {
-        const parts: Node[] = [h("p", { className: "ok", textContent: "Captured." })];
-        if (s.failedResources > 0) parts.push(h("p", { className: "muted", textContent: `${s.failedResources} file(s) couldn't be fetched; the screenshot shows the page as it was.` }));
-        parts.push(h("button", { textContent: "Open and annotate", onclick: () => void chrome.tabs.create({ url: new URL(`/snapshots/${s.snapshot.id}`, state.serverUrl!).href }) }));
-        status.replaceChildren(...parts);
-        break;
-      }
-    }
-  };
-  showStatus(state.status);
-  chrome.storage.session.onChanged.addListener((changes) => {
-    if (changes.captureStatus?.newValue) showStatus(changes.captureStatus.newValue as CaptureStatus);
-  });
-
-  // Live comments: open the Inklayer panel on the page itself.
-  const liveError = h("p", { className: "error" });
-  const commentButton = h("button", { className: "primary", textContent: "Comment on this page", onclick: async () => {
-    if (!(await chrome.permissions.request(SITE_ACCESS))) {
-      liveError.textContent = "Site access is needed to show comments on pages.";
+      error.textContent = "Site access is needed to show comments on pages.";
       return;
     }
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -162,21 +99,16 @@ async function renderCapture(state: StateResponse): Promise<void> {
       await send({ type: "openLive", tabId: tab.id });
       window.close();
     } catch {
-      liveError.textContent = "Inklayer can't open on this page (browser pages and extension stores are off limits).";
+      error.textContent = "Inklayer can't open on this page (browser pages and extension stores are off limits).";
     }
   } });
 
-  captureButton.className = "";
   render(
-    commentButton,
-    h("p", { className: "muted", textContent: "Comments appear on the page for everyone in the project who has the extension." }),
-    liveError,
-    h("details", { open: state.status.state !== "idle" }, h("summary", { textContent: "Capture a snapshot instead" }),
-      h("p", { className: "muted", textContent: "A frozen copy of the page, to comment on in the Inklayer web app." }),
-      h("label", {}, "Organisation", orgSelect), h("label", {}, "Project", projectSelect), captureButton, status),
+    comment,
+    h("p", { className: "muted", textContent: "Comments appear on the page for everyone in your projects who has the extension." }),
+    error,
     footer(state),
   );
-  await loadProjects();
 }
 
 function footer(state: StateResponse): HTMLElement {
@@ -186,26 +118,8 @@ function footer(state: StateResponse): HTMLElement {
   );
 }
 
-async function renderSettings(state: StateResponse): Promise<void> {
-  const settings = await getSettings();
-  const mask = h("input", { placeholder: ".customer-name, [data-private]", value: settings.maskSelector ?? "" });
-  const save = h("button", { className: "primary", textContent: "Save" });
-  const message = h("p", { className: "error" });
-  save.onclick = async () => {
-    const selector = mask.value.trim();
-    try {
-      if (selector) document.querySelector(selector); // throws on invalid selectors
-      await updateSettings({ maskSelector: selector || null });
-      await refresh();
-    } catch {
-      message.textContent = "That isn't a valid CSS selector.";
-    }
-  };
+function renderSettings(state: StateResponse): void {
   render(
-    h("label", {}, "Hide personal data (CSS selector)", mask),
-    h("p", { className: "muted", textContent: "Text and form values inside matching elements are replaced with dots before upload. Password fields are never captured." }),
-    save,
-    message,
     h("p", { className: "muted" }, "Server: ", h("code", { textContent: state.serverUrl ?? "" })),
     h("button", { className: "link", textContent: "Change server", onclick: () => renderSetup(state) }),
     h("button", { className: "link", textContent: "Back", onclick: refresh }),

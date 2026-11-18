@@ -1,13 +1,11 @@
 import { defineConfig } from "vite";
 
 // Paths are relative to this folder (npm runs workspace scripts here).
-// Three builds into dist/:
+// Two builds into dist/:
 //  - default: the module service worker (background.js) and the popup page
-//  - content: the capture script injected into pages, as one self-contained IIFE (content.js),
-//    because files injected with chrome.scripting can't use ES module imports
-//  - live: the live-mode script registered for a project's live sites, also one self-contained IIFE (live.js)
+//  - live: the script that shows comments on pages, as one self-contained IIFE (live.js), because content scripts
+//    registered with chrome.scripting can't use ES module imports
 const SCRIPTS: Record<string, { entry: string; name: string; file: string }> = {
-  content: { entry: "src/content.ts", name: "InklayerContent", file: "content.js" },
   live: { entry: "src/live-page.ts", name: "InklayerLive", file: "live.js" },
 };
 

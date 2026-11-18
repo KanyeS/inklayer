@@ -5,11 +5,8 @@ public enum Permission
     /// <summary>See the organisation, its projects, members and content.</summary>
     View,
 
-    /// <summary>Comment on and annotate snapshots.</summary>
+    /// <summary>Comment on and annotate pages.</summary>
     Comment,
-
-    /// <summary>Capture new snapshots.</summary>
-    Capture,
 
     /// <summary>Create, rename and archive projects; set per-project roles.</summary>
     ManageProjects,
@@ -28,7 +25,6 @@ public static class PermissionPolicy
     {
         Permission.View => Role.Viewer,
         Permission.Comment => Role.Commenter,
-        Permission.Capture => Role.Editor,
         Permission.ManageProjects => Role.Admin,
         Permission.ManageMembers => Role.Admin,
         Permission.ManageOwners => Role.Owner,

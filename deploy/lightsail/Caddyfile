@@ -13,15 +13,3 @@
 		-Server
 	}
 }
-
-# Captured pages: a separate hostname, so captured HTML is isolated from the app's cookies and API.
-# The server adds its own strict Content-Security-Policy to these responses.
-snapshots.{$INKLAYER_DOMAIN} {
-	encode zstd gzip
-	reverse_proxy server:8080
-
-	header {
-		Strict-Transport-Security "max-age=31536000"
-		-Server
-	}
-}

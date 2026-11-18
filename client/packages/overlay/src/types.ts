@@ -1,4 +1,4 @@
-/** Shared model between the overlay (inside the captured page) and the viewer (the app). */
+/** The overlay's model, shared by the overlay and the extension's live panel. */
 
 export type AnnotationKind = "Pin" | "Element" | "Highlight" | "Rect" | "Arrow" | "Ink";
 export type Tool = "select" | "pin" | "element" | "highlight" | "rect" | "arrow" | "ink";
@@ -74,7 +74,7 @@ export interface Draft {
 
 export type AnchorQuality = "exact" | "fallback" | "orphaned";
 
-/** Messages from the viewer to the overlay. */
+/** Commands from the panel to the overlay. */
 export type HostMessage =
   | { type: "setAnnotations"; annotations: OverlayAnnotation[] }
   | { type: "setTool"; tool: Tool; color: string }
@@ -82,18 +82,9 @@ export type HostMessage =
   | { type: "clearDraft" }
   | { type: "scrollTo"; x: number; y: number };
 
-/** Messages from the overlay to the viewer. */
+/** Events from the overlay to the panel. */
 export type OverlayMessage =
   | { type: "ready"; width: number; height: number }
   | { type: "draft"; draft: Draft }
   | { type: "selected"; id: string | null }
   | { type: "anchors"; quality: Record<string, AnchorQuality> };
-
-export const PROTOCOL = "inklayer-overlay";
-export const PROTOCOL_VERSION = 1;
-
-export interface Envelope<T> {
-  protocol: typeof PROTOCOL;
-  version: typeof PROTOCOL_VERSION;
-  message: T;
-}

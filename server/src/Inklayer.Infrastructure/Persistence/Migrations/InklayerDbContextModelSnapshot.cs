@@ -59,6 +59,7 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PageUrl")
+                        .IsRequired()
                         .HasMaxLength(2048)
                         .HasColumnType("TEXT");
 
@@ -69,9 +70,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("ResolvedByUserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("SnapshotId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
@@ -91,14 +89,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SnapshotId", "CreatedAt");
-
                     b.HasIndex("ProjectId", "PageUrl", "CreatedAt");
 
-                    b.ToTable("Annotations", t =>
-                        {
-                            t.HasCheckConstraint("CK_Annotations_SnapshotOrPage", "(SnapshotId IS NULL) <> (PageUrl IS NULL)");
-                        });
+                    b.ToTable("Annotations");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationRevision", b =>
@@ -337,124 +330,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("ProjectMembers");
-                });
-
-            modelBuilder.Entity("Inklayer.Domain.Snapshots.OrganizationBlob", b =>
-                {
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Hash")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Size")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("OrganizationId", "Hash");
-
-                    b.HasIndex("Hash");
-
-                    b.ToTable("OrganizationBlobs");
-                });
-
-            modelBuilder.Entity("Inklayer.Domain.Snapshots.Snapshot", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CapturedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("CapturedByUserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<double>("DevicePixelRatio")
-                        .HasColumnType("REAL");
-
-                    b.Property<string>("DocumentHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ScreenshotContentType")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ScreenshotHash")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("ScrollX")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ScrollY")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("TotalBytes")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Url")
-                        .IsRequired()
-                        .HasMaxLength(4096)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserAgent")
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("ViewportHeight")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ViewportWidth")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrganizationId");
-
-                    b.HasIndex("ProjectId", "CapturedAt");
-
-                    b.ToTable("Snapshots");
-                });
-
-            modelBuilder.Entity("Inklayer.Domain.Snapshots.SnapshotAsset", b =>
-                {
-                    b.Property<Guid>("SnapshotId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Hash")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("Size")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("SnapshotId", "Hash");
-
-                    b.HasIndex("Hash");
-
-                    b.ToTable("SnapshotAssets");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Users.User", b =>
@@ -720,10 +595,11 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Inklayer.Domain.Annotations.Annotation", b =>
                 {
-                    b.HasOne("Inklayer.Domain.Snapshots.Snapshot", null)
+                    b.HasOne("Inklayer.Domain.Projects.Project", null)
                         .WithMany()
-                        .HasForeignKey("SnapshotId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationRevision", b =>
@@ -800,33 +676,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Inklayer.Domain.Snapshots.OrganizationBlob", b =>
-                {
-                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
-                        .WithMany()
-                        .HasForeignKey("OrganizationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Inklayer.Domain.Snapshots.Snapshot", b =>
-                {
-                    b.HasOne("Inklayer.Domain.Projects.Project", null)
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Inklayer.Domain.Snapshots.SnapshotAsset", b =>
-                {
-                    b.HasOne("Inklayer.Domain.Snapshots.Snapshot", null)
-                        .WithMany("Assets")
-                        .HasForeignKey("SnapshotId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization", b =>
                 {
                     b.HasOne("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", "Application")
@@ -861,11 +710,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Inklayer.Domain.Projects.Project", b =>
                 {
                     b.Navigation("Members");
-                });
-
-            modelBuilder.Entity("Inklayer.Domain.Snapshots.Snapshot", b =>
-                {
-                    b.Navigation("Assets");
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", b =>

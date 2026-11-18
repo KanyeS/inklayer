@@ -2,22 +2,21 @@ namespace Inklayer.Api.Hosting;
 
 /// <summary>
 /// Serves the web viewer (a single-page app built into wwwroot) on the app host. Any path that isn't an API or
-/// auth route falls back to index.html, so client-side routes like /snapshots/{id} work on reload.
+/// auth route falls back to index.html, so client-side routes like /projects/{id} work on reload.
 /// </summary>
 internal static class ViewerApp
 {
-    private static readonly string[] ServerPrefixes = ["/api", "/auth", "/connect", "/s", "/health", "/openapi", "/_inklayer"];
+    private static readonly string[] ServerPrefixes = ["/api", "/auth", "/connect", "/health", "/openapi"];
 
     public static WebApplication UseViewerApp(this WebApplication app)
     {
-        var policy = ViewerPolicy(app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Features.Snapshots.SnapshotOptions>>().Value.OriginUri);
         app.UseStaticFiles(new StaticFileOptions
         {
             OnPrepareResponse = ctx =>
             {
                 if (ctx.File.Name.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
                 {
-                    ctx.Context.Response.Headers.ContentSecurityPolicy = policy;
+                    ctx.Context.Response.Headers.ContentSecurityPolicy = ViewerPolicy;
                 }
 
                 // Vite fingerprints everything under /assets, so it can be cached forever.
@@ -31,8 +30,6 @@ internal static class ViewerApp
 
     public static WebApplication MapViewerFallback(this WebApplication app)
     {
-        var snapshotOrigin = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<Features.Snapshots.SnapshotOptions>>().Value.OriginUri;
-        var policy = ViewerPolicy(snapshotOrigin);
         app.MapFallback(async context =>
         {
             var path = context.Request.Path;
@@ -47,15 +44,14 @@ internal static class ViewerApp
 
             context.Response.ContentType = "text/html; charset=utf-8";
             context.Response.Headers.CacheControl = "no-cache";
-            context.Response.Headers.ContentSecurityPolicy = policy;
+            context.Response.Headers.ContentSecurityPolicy = ViewerPolicy;
             await context.Response.SendFileAsync(index);
         });
         return app;
     }
 
-    /// <summary>The viewer's own CSP: only its bundled scripts, and frames only from the snapshot origin.</summary>
-    internal static string ViewerPolicy(Uri? snapshotOrigin) =>
-        "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; " +
-        $"frame-src {(snapshotOrigin is null ? "'none'" : snapshotOrigin.GetLeftPart(UriPartial.Authority))}; " +
+    /// <summary>The viewer's own CSP: only its bundled scripts, and no frames.</summary>
+    internal const string ViewerPolicy =
+        "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; frame-src 'none'; " +
         "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 }

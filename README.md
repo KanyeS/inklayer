@@ -2,7 +2,7 @@
 
 Open-source, self-hosted web page annotation for UX designers, developers and QA.
 
-Capture any web page with the Chrome extension. Then comment on it, highlight it or draw on it, either on specific elements or freehand. Every change is kept with a full history and timestamps. Access is controlled by roles, and sign-in uses Google SSO.
+Comment on any web page, right on the page, with the browser extension (Chrome or Firefox): pin comments, highlight text or draw, attached to specific elements or freehand. Everyone in the project who has the extension sees them on the page. Every change is kept with a full history and timestamps. Access is controlled by roles, and sign-in uses Google SSO.
 
 > **Status:** early development. Nothing is usable yet. See [docs/PLAN.md](docs/PLAN.md) for the design and roadmap.
 
@@ -10,11 +10,10 @@ Capture any web page with the Chrome extension. Then comment on it, highlight it
 
 | Path | What it is |
 |---|---|
-| `server/` | ASP.NET Core (.NET 10) API, auth, real-time hub, snapshot host |
-| `client/apps/extension/` | Chrome extension (Manifest V3) for capture and annotation |
-| `client/apps/viewer/` | Web viewer: organisations, projects, snapshots, and the annotation workspace (React) |
-| `client/packages/overlay/` | Annotation overlay injected into captured pages: anchoring, drawing tools |
-| `client/packages/capture/` | Page serializer and resource resolver used by the extension |
+| `server/` | ASP.NET Core (.NET 10) API and auth |
+| `client/apps/extension/` | Browser extension (Manifest V3, Chrome and Firefox) that shows and adds comments on pages |
+| `client/apps/viewer/` | Web app: organisations, members, projects and their commented pages (React) |
+| `client/packages/overlay/` | Annotation overlay drawn on pages: anchoring, drawing tools |
 | `deploy/` | Dockerfile, docker-compose, reverse-proxy examples |
 
 ## Self-hosting
@@ -24,9 +23,9 @@ cd deploy
 docker compose up -d          # serves on http://localhost:8080
 ```
 
-All data (the SQLite database and snapshots) lives on the `inklayer-data` volume. Run a single replica on local disk, and put a TLS reverse proxy in front (see `deploy/Caddyfile.example`).
+All data (a SQLite database) lives on the `inklayer-data` volume. Run a single replica on local disk, and put a TLS reverse proxy in front (see `deploy/Caddyfile.example`).
 
-**Production on AWS for about $5/month:** see [docs/deploy-aws-lightsail.md](docs/deploy-aws-lightsail.md). It covers Lightsail with Caddy HTTPS and continuous Litestream backups to S3.
+**Production on AWS for about $7/month:** see [docs/deploy-aws-lightsail.md](docs/deploy-aws-lightsail.md). It covers Lightsail with Caddy HTTPS and continuous Litestream backups to S3.
 
 ## Development
 
@@ -35,10 +34,10 @@ Requires the .NET 10 SDK.
 ```bash
 cd server
 dotnet test                                  # unit + integration tests
-dotnet run --project src/Inklayer.Api        # app on http://localhost:5048, captured pages on :5049 (data in server/.data/)
+dotnet run --project src/Inklayer.Api        # app on http://localhost:5048 (data in server/.data/)
 ```
 
-Build the web viewer and overlay into the server's `wwwroot` first (once, or after client changes):
+Build the web app into the server's `wwwroot` first (once, or after client changes):
 
 ```bash
 cd client && npm ci && npm run build
@@ -64,9 +63,8 @@ Then open <http://localhost:5048/auth/login>.
 | `/api/me` | Current user and their organisations |
 | `/api/orgs/...`, `/api/projects/...` | Organisations, members, invitations, projects, per-project roles, audit log |
 | `/api/admin/users` | Instance administration |
-| `/api/projects/{id}/blobs/...`, `/api/projects/{id}/snapshots`, `/api/snapshots/{id}` | Capture upload, snapshot list/detail/delete |
-| `/api/live/...`, `/api/projects/{id}/live/...` | Live mode: sites with comments, your projects, and comments on live pages |
-| `/s/{snapshotId}/{token}/` (snapshot origin only) | Serves a captured page under a signed, expiring link |
+| `/api/live/...`, `/api/projects/{id}/live/...` | Sites with comments, your projects, and comments on a page |
+| `/api/annotations/{id}` | Edit, resolve, delete; `/history` for every revision |
 
 ### Browser extension
 
@@ -75,7 +73,7 @@ Requires Node.js 22.
 ```bash
 cd client
 npm ci
-npm test             # serializer, CSS and resource-resolution tests
+npm test             # overlay anchoring tests
 npm run build        # Chrome: client/apps/extension/dist, Firefox: client/apps/extension/dist-firefox
 ```
 
@@ -83,47 +81,39 @@ To install it:
 1. **Load it.**
    - **Chrome** (120 or later): open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose `client/apps/extension/dist`.
    - **Firefox** (128 or later): open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and choose `client/apps/extension/dist-firefox/manifest.json`. Temporary add-ons are removed when Firefox closes; a permanent install needs the add-on signed by addons.mozilla.org.
-2. **Connect it.** Open the extension popup, enter your server address, and grant site access. Site access is how it reaches your server and fetches the images and fonts of pages you capture.
+2. **Connect it.** Open the extension popup, enter your server address, and grant site access. Site access is how it reaches your server and shows comments on the pages you visit.
 3. **Allow its sign-in address.** The popup shows the extension's sign-in address: `https://<extension-id>.chromiumapp.org/` in Chrome, `https://<hash>.extensions.allizom.org/` in Firefox. Add it to the server's `Inklayer:Auth:ExtensionRedirectUris` (`INKLAYER_EXTENSION_REDIRECT_URIS` in Docker). To use both browsers, list both addresses, separated by a comma.
-4. **Capture.** Sign in with Google, pick a project, and click **Capture this page**.
+4. **Sign in** with Google.
 
-**What a capture contains:**
-- **Static HTML:** the page as you see it, including typed form values, CSS-in-JS styles, shadow DOM and canvases. Password fields are never captured, and a CSS selector in Settings can mask personal data.
-- **Assets:** images, fonts and stylesheets, deduplicated by content hash.
-- **A screenshot** of the visible area.
+### Commenting
 
-The server sanitizes the HTML, then serves it only from the separate snapshot origin under signed, expiring links, with scripts and external loads blocked.
-
-### Live comments
-
-People with the extension can see and add comments **directly on any website**, without capturing it first.
+People with the extension can see and add comments **directly on any website**.
 
 - **See comments.** On a page that has comments in your projects, an **Inklayer** button appears in the bottom-right corner, with the number of open comments.
 - **Add comments.** On any page, click the Inklayer toolbar button and choose **Comment on this page**. Pick the project in the panel; Commenters and above can add comments, Viewers can only see them.
 - **Same page or not.** By default `/pricing?ref=email#faq` and `/pricing` are the same page. A project Admin can tick the query-string or #hash options in the project's **Settings** for apps that use them to show different screens.
 
-**Privacy:** the extension keeps a list of the sites (domains only) that have comments you can see. It only sends the server a page's full address on those sites, or when you choose **Comment on this page**. The server stores only the parts of an address that make a different page. Each project lists its commented pages under **Live pages**.
+**Privacy:** the extension keeps a list of the sites (domains only) that have comments you can see. It only sends the server a page's full address on those sites, or when you choose **Comment on this page**. The server stores only the parts of an address that make a different page. Each project lists its commented pages under **Pages** in the web app.
 
-### Annotating
+**Tools** (in the panel on the page; Viewers see comments but get no tools):
 
-Open a snapshot in the web viewer (`/snapshots/{id}`, or **Open and annotate** in the extension).
-
-| Tool | Key | What it does |
-|---|---|---|
-| Select | V | Click a mark to find its comment; click a comment to scroll to its mark |
-| Comment pin | C | Pin a comment to a point on an element |
-| Element | E | Outline a whole element |
-| Highlight | H | Select text to highlight it |
-| Rectangle / Arrow | R / A | Drag to draw |
-| Draw | D | Freehand ink (pen pressure supported) |
+| Tool | What it does |
+|---|---|
+| Select | Click a mark to find its comment; click a comment to scroll to its mark |
+| Pin | Pin a comment to a point on an element |
+| Element | Outline a whole element |
+| Text | Select text to highlight it |
+| Box / Arrow | Drag to draw |
+| Draw | Freehand ink (pen pressure supported) |
 
 **How marks stay attached:**
 - **Anchors:** each mark is attached to an element through several independent anchors: CSS selectors (shadow DOM aware), XPath, text, and its original position. Shapes are stored relative to that element, so they follow layout changes.
-- **Orphans:** if the element can't be found, the mark is shown where it originally was and flagged in the list.
+- **Orphans:** if the element can't be found, the mark is shown where it originally was and flagged as "moved" in the list.
+- **Changing pages:** marks follow single-page-app navigation and DOM changes.
 
 **Comments:** Commenters and above can annotate and resolve. Authors and project Admins can edit and delete. Every change is versioned (`GET /api/annotations/{id}/history`), and conflicting edits are refused rather than overwritten.
 
-**What runs inside the captured page:** only Inklayer's overlay script runs there, admitted by a per-response CSP nonce. The page is sandboxed with an opaque origin, so it has no cookies, no storage and no network access, and it talks to the viewer only through `postMessage`.
+**On the page:** the overlay and panel live in closed shadow roots, so the page's CSS and scripts can't restyle or read them. The page never sees an access token: the extension's background worker makes every API call, checked against the page's real origin.
 
 ### How sign-in and access work
 - **Google only.** Inklayer stores no passwords.
@@ -131,7 +121,7 @@ Open a snapshot in the web viewer (`/snapshots/{id}`, or **Open and annotate** i
   - instance administrators listed in `Inklayer:Auth:BootstrapAdmins`;
   - people with an invitation for their verified Google email;
   - Google Workspace users whose domain an organisation has allowed. They join automatically with that organisation's default role.
-- **Roles:** Viewer < Commenter < Editor < Admin < Owner. A project can raise or lower a Viewer, Commenter or Editor; Admins and Owners keep their role everywhere.
+- **Roles:** Viewer < Commenter < Editor < Admin < Owner. Viewers only see comments; Commenters and Editors can add them (Editor is kept for compatibility and currently grants the same as Commenter). A project can raise or lower a Viewer, Commenter or Editor; Admins and Owners keep their role everywhere.
 - **Clients:**
   - **The web viewer** uses an HttpOnly session cookie. State-changing requests must send the `X-Inklayer-Csrf` header.
   - **The extension** uses short-lived bearer tokens with rotating refresh tokens.

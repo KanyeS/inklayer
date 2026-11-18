@@ -1,4 +1,4 @@
-# Inklayer: production stack for a single small VM (AWS Lightsail $5 plan: 512 MB RAM, 20 GB SSD).
+# Inklayer: production stack for a single small VM (AWS Lightsail $7 plan: 1 GB RAM, 40 GB SSD).
 # See docs/deploy-aws-lightsail.md.
 #
 #   volume-init (one-shot) gives the data volume the server's non-root ownership
@@ -7,7 +7,7 @@
 #   litestream continuously streams every database change to S3
 #   caddy    public :80/:443, automatic Let's Encrypt HTTPS, proxies to server
 #
-# Images are pulled from a registry. Never build on the VM: 512 MB is not enough for the .NET SDK.
+# Images are pulled from a registry. Never build on the VM: it doesn't have the RAM for the .NET SDK.
 
 name: inklayer
 
@@ -54,9 +54,6 @@ services:
       Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:?set GOOGLE_CLIENT_SECRET in .env}
       Inklayer__Auth__BootstrapAdmins: ${INKLAYER_BOOTSTRAP_ADMINS:?set INKLAYER_BOOTSTRAP_ADMINS in .env}
       Inklayer__Auth__ExtensionRedirectUris: ${INKLAYER_EXTENSION_REDIRECT_URIS:-}
-      # Captured pages are served from their own hostname, isolated from the app (docs/PLAN.md §2.6).
-      Inklayer__Snapshots__Origin: https://snapshots.${INKLAYER_DOMAIN}
-      Inklayer__Snapshots__AppOrigin: https://${INKLAYER_DOMAIN}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     volumes:
       - inklayer-data:/data

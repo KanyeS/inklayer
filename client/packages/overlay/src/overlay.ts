@@ -15,17 +15,12 @@ interface Resolved {
 }
 
 export interface OverlayOptions {
-  /**
-   * Stop links from navigating (default true). Right for captured pages, which are a record rather than a website;
-   * live pages keep working links.
-   */
-  blockLinks?: boolean;
-  /** Elements whose events the tools ignore, such as the extension's own panel on a live page. */
+  /** Elements whose events the tools ignore, such as the extension's own panel. */
   ignoreEventsFrom?: Element[];
 }
 
 /**
- * Draws annotations on top of a page (a captured snapshot, or a live page through the extension) and implements the drawing tools. Everything lives in a closed shadow
+ * Draws annotations on top of a web page (through the extension) and implements the drawing tools. Everything lives in a closed shadow
  * root on one host element, so the page's CSS can't restyle the overlay and the overlay can't disturb the page.
  * Annotation positions are recalculated from their anchors whenever the layout changes.
  */
@@ -39,7 +34,6 @@ export class Overlay {
   readonly #surface: HTMLDivElement;
   readonly #resolved = new Map<string, Resolved>();
   readonly #cleanup: (() => void)[] = [];
-  readonly #blockLinks: boolean;
   readonly #ignored: Element[];
 
   #annotations: OverlayAnnotation[] = [];
@@ -53,7 +47,6 @@ export class Overlay {
   constructor(doc: Document, send: (message: OverlayMessage) => void, options: OverlayOptions = {}) {
     this.#doc = doc;
     this.#send = send;
-    this.#blockLinks = options.blockLinks ?? true;
     this.#ignored = options.ignoreEventsFrom ?? [];
 
     this.#host = doc.createElement("inklayer-overlay");
@@ -106,7 +99,7 @@ export class Overlay {
     this.#host.remove();
   }
 
-  /** Finds every annotation's element again. For live pages, after the page has changed its DOM. */
+  /** Finds every annotation's element again, after the page has changed its DOM. */
   reanchor(): void {
     this.#resolved.clear();
     this.#resolveAll();
@@ -298,14 +291,6 @@ export class Overlay {
       target.addEventListener(type, fn as EventListener, capture);
       this.#cleanup.push(() => target.removeEventListener(type, fn as EventListener, capture));
     };
-
-    // Captured pages are a record, not a website: links never navigate away.
-    if (this.#blockLinks) {
-      on(this.#doc, "click", (e) => {
-        const target = e.target as Element | null;
-        if (target?.closest?.("a[href], area[href]")) e.preventDefault();
-      });
-    }
 
     on(win, "resize", this.render, false);
     // Marks on position:fixed or sticky elements move when the page scrolls.

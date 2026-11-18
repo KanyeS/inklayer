@@ -20,11 +20,11 @@ public sealed class ViewerFallbackTests(InklayerApiFactory factory)
     }
 
     [Fact]
-    public void Viewer_policy_only_frames_the_snapshot_origin()
+    public void Viewer_policy_allows_no_frames()
     {
-        var policy = Inklayer.Api.Hosting.ViewerApp.ViewerPolicy(new Uri("https://snapshots.example.com"));
+        const string policy = Inklayer.Api.Hosting.ViewerApp.ViewerPolicy;
 
-        Assert.Contains("frame-src https://snapshots.example.com;", policy, StringComparison.Ordinal);
+        Assert.Contains("frame-src 'none';", policy, StringComparison.Ordinal);
         Assert.Contains("frame-ancestors 'none'", policy, StringComparison.Ordinal);
         Assert.DoesNotContain("unsafe-eval", policy, StringComparison.Ordinal);
     }

@@ -8,8 +8,6 @@ public sealed class PermissionPolicyTests
     [InlineData(Role.Viewer, Permission.View, true)]
     [InlineData(Role.Viewer, Permission.Comment, false)]
     [InlineData(Role.Commenter, Permission.Comment, true)]
-    [InlineData(Role.Commenter, Permission.Capture, false)]
-    [InlineData(Role.Editor, Permission.Capture, true)]
     [InlineData(Role.Editor, Permission.ManageProjects, false)]
     [InlineData(Role.Admin, Permission.ManageMembers, true)]
     [InlineData(Role.Admin, Permission.ManageOwners, false)]

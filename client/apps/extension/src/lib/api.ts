@@ -46,16 +46,3 @@ export interface Me {
   displayName: string;
   organizations: { id: string; name: string; role: string }[];
 }
-
-export interface Project {
-  id: string;
-  name: string;
-  myRole: string;
-}
-
-export interface Snapshot {
-  id: string;
-  title: string;
-  url: string;
-  viewUrl: string | null;
-}

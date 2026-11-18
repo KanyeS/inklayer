@@ -125,7 +125,7 @@ internal static class ProjectEndpoints
     /// </summary>
     private static async Task RekeyLivePagesAsync(InklayerDbContext db, Guid projectId, bool matchQuery, bool matchHash, CancellationToken ct)
     {
-        var live = await db.Annotations.Where(a => a.ProjectId == projectId && a.PageUrl != null).ToListAsync(ct);
+        var live = await db.Annotations.Where(a => a.ProjectId == projectId).ToListAsync(ct);
         foreach (var annotation in live)
         {
             var key = LivePageUrl.Normalize(annotation.PageUrl, matchQuery, matchHash);

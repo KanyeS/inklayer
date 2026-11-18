@@ -18,8 +18,8 @@ manifest.browser_specific_settings = {
   gecko: {
     id: FIREFOX_ID,
     strict_min_version: FIREFOX_MIN_VERSION,
-    // addons.mozilla.org asks every add-on to declare what it transmits. Captured pages are sent to the
-    // Inklayer server the user connects to.
+    // addons.mozilla.org asks every add-on to declare what it transmits. Comments, with the element they're
+    // attached to on the page, are sent to the Inklayer server the user connects to.
     data_collection_permissions: { required: ["websiteContent"] },
   },
 };

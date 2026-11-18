@@ -1,9 +1,8 @@
-import { api, type Me, type Project } from "./lib/api";
+import { api, type Me } from "./lib/api";
 import { NotSignedInError, redirectUri, signIn, signOut } from "./lib/auth";
-import { captureTab, getStatus } from "./lib/capture";
 import type { Request, Response, StateResponse } from "./lib/messages";
 import { handleLive, isLiveRequest, openLiveInTab, stopLive, syncLiveScript, type LiveRequest } from "./lib/live";
-import { getSettings, updateSettings } from "./lib/settings";
+import { getSettings } from "./lib/settings";
 
 // Keep the live content script registered while signed in with site access.
 chrome.runtime.onStartup.addListener(() => void syncLiveScript());
@@ -52,19 +51,9 @@ async function handle(request: Request): Promise<unknown> {
       await signOut();
       await stopLive();
       return null;
-    case "projects":
-      return api<Project[]>(`/api/orgs/${request.organizationId}/projects`);
     case "openLive":
       await openLiveInTab(request.tabId);
       return null;
-    case "capture": {
-      const tab = await chrome.tabs.get(request.tabId);
-      const { maskSelector } = await getSettings();
-      await updateSettings({ lastProjectId: request.projectId });
-      // Runs to completion in the background; the popup follows progress through chrome.storage.session.
-      void captureTab(tab, request.projectId, maskSelector).catch(() => undefined);
-      return null;
-    }
   }
 }
 
@@ -83,8 +72,6 @@ async function state(): Promise<StateResponse> {
     serverUrl: settings.serverUrl,
     signedIn: me !== null,
     me,
-    lastProjectId: settings.lastProjectId,
     redirectUri: redirectUri(),
-    status: await getStatus(),
   };
 }

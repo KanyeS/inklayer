@@ -3,14 +3,14 @@ import { useMe } from "../App";
 import { post } from "../lib/api";
 import { Link } from "../lib/router";
 
-export function Layout({ children, fullBleed }: { children: ReactNode; fullBleed: boolean }) {
+export function Layout({ children }: { children: ReactNode }) {
   const { me } = useMe();
   const signOut = async () => {
     await post("/auth/logout");
     window.location.href = "/";
   };
   return (
-    <div className={fullBleed ? "shell full" : "shell"}>
+    <div className="shell">
       <header className="topbar">
         <Link to="/" className="brand">Inklayer</Link>
         <nav>

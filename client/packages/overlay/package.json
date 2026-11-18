@@ -7,9 +7,6 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "scripts": {
-    "build": "vite build"
-  },
   "dependencies": {
     "perfect-freehand": "1.2.3"
   }

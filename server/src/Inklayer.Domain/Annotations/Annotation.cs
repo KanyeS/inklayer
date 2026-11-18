@@ -26,12 +26,8 @@ public enum AnnotationStatus
 }
 
 /// <summary>
-/// A mark with an optional comment, on either a snapshot or a live page:
-/// <list type="bullet">
-/// <item>Snapshot annotations have <see cref="SnapshotId"/> set and are drawn on the frozen copy.</item>
-/// <item>Live annotations have <see cref="PageUrl"/> set and are re-anchored on the real page each time someone with the extension opens it.</item>
-/// </list>
-/// Exactly one of the two is set. Both kinds store:
+/// A mark with an optional comment on a real web page (<see cref="PageUrl"/>). The browser extension re-anchors it to the
+/// page each time someone opens the page. It stores:
 /// <list type="bullet">
 /// <item><see cref="Anchor"/>: how to find the element or text again (several independent selectors).</item>
 /// <item><see cref="Geometry"/>: the shape relative to that anchor.</item>
@@ -42,11 +38,8 @@ public sealed class Annotation
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
-    /// <summary>The snapshot this is drawn on, or null for a live-page annotation.</summary>
-    public Guid? SnapshotId { get; init; }
-
-    /// <summary>For live-page annotations: the page's URL, normalised by the project's matching rules (see <c>LivePageUrl</c>).</summary>
-    public string? PageUrl { get; init; }
+    /// <summary>The page's URL, normalised by the project's matching rules (see <c>LivePageUrl</c>).</summary>
+    public required string PageUrl { get; init; }
 
     public required Guid ProjectId { get; init; }
 

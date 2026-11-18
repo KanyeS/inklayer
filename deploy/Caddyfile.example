@@ -1,10 +1,5 @@
 # Example reverse proxy with automatic HTTPS (Caddy is Apache-2.0).
-# Captured pages are served from a separate origin (docs/PLAN.md §2.6). Set Inklayer__Snapshots__Origin to match.
 
 inklayer.example.com {
-	reverse_proxy server:8080
-}
-
-snapshots.inklayer.example.com {
 	reverse_proxy server:8080
 }

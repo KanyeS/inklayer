@@ -28,20 +28,12 @@ public sealed record TokenDto(
     [property: System.Text.Json.Serialization.JsonPropertyName("refresh_token")] string? RefreshToken,
     [property: System.Text.Json.Serialization.JsonPropertyName("token_type")] string TokenType);
 
-public sealed record MissingDto(List<string> Missing);
-
 public sealed record UserSummaryDto(Guid Id, string DisplayName);
-
-public sealed record SnapshotDto(
-    Guid Id, Guid ProjectId, string Url, string Title, UserSummaryDto CapturedBy, int ViewportWidth, int AssetCount, long TotalBytes,
-    Uri? ViewUrl, string? ScreenshotUrl);
-
-public sealed record SnapshotSummaryDto(Guid Id, string Url, string Title, bool HasScreenshot, int AssetCount);
 
 public sealed record AuthorDto(Guid Id, string DisplayName);
 
 public sealed record AnnotationDto(
-    Guid Id, Guid? SnapshotId, string? PageUrl, string Kind, string Status, string Body, string Color,
+    Guid Id, Guid ProjectId, string PageUrl, string Kind, string Status, string Body, string Color,
     System.Text.Json.JsonElement Anchor, System.Text.Json.JsonElement Geometry, int Version, AuthorDto Author, bool CanEdit, bool CanDelete);
 
 public sealed record RevisionDto(int Version, string Action, AuthorDto Actor, System.Text.Json.JsonElement State);

@@ -1,22 +1,17 @@
-import type { Me, Project } from "./api";
-import type { CaptureStatus } from "./capture";
+import type { Me } from "./api";
 
 /** Messages from the popup to the background worker, and what each one returns. */
 export type Request =
   | { type: "state" }
   | { type: "signIn" }
   | { type: "signOut" }
-  | { type: "projects"; organizationId: string }
-  | { type: "capture"; tabId: number; projectId: string }
   | { type: "openLive"; tabId: number };
 
 export interface StateResponse {
   serverUrl: string | null;
   signedIn: boolean;
   me: Me | null;
-  lastProjectId: string | null;
   redirectUri: string;
-  status: CaptureStatus;
 }
 
 export type Response<T> = { ok: true; value: T } | { ok: false; error: string; notSignedIn?: boolean };
@@ -25,8 +20,6 @@ export interface ResponseMap {
   state: StateResponse;
   signIn: null;
   signOut: null;
-  projects: Project[];
-  capture: null;
   openLive: null;
 }
 

@@ -107,7 +107,7 @@ class LiveSession {
     // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
     for (const type of ["keydown", "keyup", "keypress"] as const) this.#root.addEventListener(type, (e) => e.stopPropagation());
 
-    this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { blockLinks: false, ignoreEventsFrom: [this.#host] });
+    this.#overlay = new Overlay(document, (m) => this.#onOverlay(m), { ignoreEventsFrom: [this.#host] });
     document.documentElement.append(this.#host);
   }
 
