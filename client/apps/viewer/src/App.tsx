@@ -11,6 +11,7 @@ import { SignInPage } from "./pages/SignInPage";
 
 // The docs app (editor, live editing, graph) loads only when someone opens docs.
 const DocsPage = lazy(() => import("./docs/DocsPage").then((m) => ({ default: m.DocsPage })));
+const GraphPage = lazy(() => import("./docs/GraphPage").then((m) => ({ default: m.GraphPage })));
 
 const MeContext = createContext<{ me: Me; reloadMe: () => Promise<void> } | null>(null);
 
@@ -34,6 +35,7 @@ export function App() {
   else if (path === "/admin") page = <AdminPage />;
   else if ((params = match("/orgs/:orgId", path))) page = <OrganizationPage orgId={params.orgId!} />;
   else if ((params = match("/orgs/:orgId/docs", path))) page = <DocsPage orgId={params.orgId!} />;
+  else if ((params = match("/orgs/:orgId/graph", path))) page = <GraphPage orgId={params.orgId!} />;
   else if ((params = match("/orgs/:orgId/docs/:docId", path))) page = <DocsPage key={params.orgId} orgId={params.orgId!} docId={params.docId!} />;
   else if ((params = match("/projects/:projectId", path))) page = <ProjectPage projectId={params.projectId!} />;
 
