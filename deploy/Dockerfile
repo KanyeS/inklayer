@@ -23,6 +23,8 @@ COPY server/src/Inklayer.Infrastructure/Inklayer.Infrastructure.csproj server/sr
 COPY server/src/Inklayer.Api/Inklayer.Api.csproj server/src/Inklayer.Api/
 RUN dotnet restore server/src/Inklayer.Api/Inklayer.Api.csproj -a $TARGETARCH
 
+# Analyzer settings live in the repository root's .editorconfig.
+COPY .editorconfig ./
 COPY server/src/ server/src/
 COPY --from=client /src/server/src/Inklayer.Api/wwwroot server/src/Inklayer.Api/wwwroot
 RUN dotnet publish server/src/Inklayer.Api/Inklayer.Api.csproj \
