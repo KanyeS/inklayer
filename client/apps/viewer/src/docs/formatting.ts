@@ -15,6 +15,27 @@ export type FormatId =
   | "codeblock" | "mermaid" | "table" | "divider" | "footnote"
   | "doclink" | "tag" | "mention";
 
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+const mod = isMac ? "⌘" : "Ctrl+";
+
+/** The formatting toolbar's buttons, in groups (the viewer's FormatToolbar and the showcase site draw them). */
+export const FORMAT_GROUPS: { id: FormatId; title: string }[][] = [
+  [
+    { id: "bold", title: `Bold (${mod}B)` }, { id: "italic", title: `Italic (${mod}I)` }, { id: "strike", title: "Strikethrough" },
+    { id: "highlight", title: "Highlight" }, { id: "code", title: `Inline code (${mod}E)` }, { id: "link", title: "Link" },
+  ],
+  [{ id: "h1", title: "Heading 1" }, { id: "h2", title: "Heading 2" }, { id: "h3", title: "Heading 3" }],
+  [
+    { id: "task", title: "Checkbox: every selected line" }, { id: "bullet", title: "Bulleted list" }, { id: "numbered", title: "Numbered list" },
+    { id: "quote", title: "Quote" }, { id: "callout", title: "Callout" },
+  ],
+  [
+    { id: "table", title: "Table (select lines split by commas or tabs to make one from them)" }, { id: "codeblock", title: "Code block" },
+    { id: "mermaid", title: "Diagram (mermaid)" }, { id: "math", title: "Maths" }, { id: "footnote", title: "Footnote" }, { id: "divider", title: "Divider" },
+  ],
+  [{ id: "doclink", title: "Link to a doc ([[ ]])" }, { id: "tag", title: "Tag" }, { id: "mention", title: "Mention someone" }],
+];
+
 /** The change an action makes to the editor's state (null when there's nothing to do). */
 export function formatSpec(state: EditorState, id: FormatId): TransactionSpec | null {
   switch (id) {

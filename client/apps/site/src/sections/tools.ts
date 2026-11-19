@@ -64,6 +64,7 @@ export function tools(): void {
         h("span", { textContent: `· ${c.time}` })),
       h("p", { className: "body", textContent: c.body }));
     item.dataset.id = c.id;
+    if (c.person.id !== YOU.id) item.dataset.demo = "";
     item.addEventListener("click", () => {
       stage.select(c.id);
       showSelected(c.id);

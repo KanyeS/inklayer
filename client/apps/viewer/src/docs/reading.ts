@@ -1,3 +1,4 @@
+/// <reference path="./markdown-it-mark.d.ts" />
 import MarkdownIt, { type StateBlock, type StateCore, type StateInline } from "markdown-it";
 import { full as emoji } from "markdown-it-emoji";
 import footnote from "markdown-it-footnote";

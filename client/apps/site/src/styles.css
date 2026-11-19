@@ -199,8 +199,10 @@ section.feature:nth-of-type(even) { background: var(--background); }
   box-shadow: 0 14px 0 -6px #1e1b4b; }
 .shop .photo::before { content: ""; position: absolute; left: 40px; right: 70px; bottom: 92px; height: 30px; border-radius: 30px 30px 6px 6px; background: #fde68a; }
 .shop h3 { font-size: 24px; margin: 2px 0 4px; }
-.shop .stars { color: #f59e0b; letter-spacing: 2px; font-size: 15px; }
-.shop .stars span { color: var(--muted-foreground); letter-spacing: 0; font-size: 13px; margin-left: 4px; }
+.shop .stars { display: flex; align-items: center; gap: 2px; color: #f59e0b; }
+.shop .stars svg { width: 15px; height: 15px; }
+.shop .stars svg.on { fill: currentColor; }
+.shop .stars span { color: var(--muted-foreground); font-size: 13px; margin-left: 6px; }
 .shop .price { font: 650 26px/1 var(--heading); margin: 12px 0; }
 .shop .price s { font-size: 16px; color: var(--muted-foreground); font-weight: 400; margin-left: 6px; }
 .shop .sizes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
@@ -309,11 +311,12 @@ section.feature:nth-of-type(even) { background: var(--background); }
 .integrations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .integ { padding: 14px; font-size: 13.5px; }
 .integ h5 { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; font: 600 14.5px/1.2 var(--sans); }
-.integ h5 i { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; font-style: normal; font-size: 13px; color: #fff; }
+.integ-icon { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; color: #fff; }
+.integ-icon svg { width: 14px; height: 14px; }
 .integ p { margin: 0; color: var(--muted-foreground); font-size: 13px; }
 .integ pre { margin: 8px 0 0; font-size: 10.5px; line-height: 1.45; background: var(--muted); padding: 8px; border-radius: 8px; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .slack-msg { margin-top: 8px; display: flex; gap: 8px; font-size: 12px; background: var(--muted); padding: 8px; border-radius: 8px; }
-.slack-msg i { width: 20px; height: 20px; border-radius: 5px; flex: none; background: url("assets/icon.svg") center/cover; }
+.slack-msg i { width: 20px; height: 20px; border-radius: 5px; flex: none; background: url("/assets/icon.svg") center/cover; }
 .outbox { display: flex; gap: 6px; align-items: center; margin-top: 8px; font-size: 11.5px; color: var(--muted-foreground); }
 .outbox span { width: 12px; height: 6px; border-radius: 3px; background: var(--input); }
 .outbox span.fail { background: #fca5a5; }
@@ -395,30 +398,6 @@ section.feature:nth-of-type(even) { background: var(--background); }
 .seeno ul { margin: 0; padding-left: 18px; color: var(--muted-foreground); }
 
 /* ---------- Docs ---------- */
-.docs-stage { display: grid; grid-template-columns: 1.25fr 1fr; gap: 22px; align-items: stretch; }
-.doc-edit { position: relative; padding: 24px 28px; font-size: 15px; }
-.doc-edit .crumbs { font-size: 12px; color: var(--muted-foreground); margin-bottom: 10px; display: flex; gap: 8px; align-items: center; }
-.doc-edit .crumbs .tag { background: var(--tint); color: var(--primary-text); border-radius: 999px; padding: 1px 8px; font-weight: 600; }
-.doc-edit h3 { font-size: 24px; margin-bottom: 12px; }
-.doc-edit p { margin: 0 0 12px; }
-.wl { color: var(--primary-text); background: var(--tint); border-radius: 6px; padding: 0 4px; font-weight: 500; white-space: nowrap; }
-.cembed { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; font-size: 13.5px; }
-.cembed .badge { color: #fff; background: var(--c); border-radius: 11px; min-width: 20px; height: 20px; padding: 0 6px; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; flex: none; }
-.cembed small { display: block; color: var(--muted-foreground); font-family: var(--mono); font-size: 11px; }
-.typing-caret { display: inline-block; width: 2px; height: 1.1em; vertical-align: -3px; background: var(--c); position: relative; }
-.typing-caret b { position: absolute; bottom: 100%; left: -1px; white-space: nowrap; background: var(--c); color: #fff; font: 600 10px/1.4 system-ui, sans-serif; padding: 0 5px; border-radius: 3px 3px 3px 0; }
-.graph { position: relative; padding: 0; overflow: hidden; min-height: 340px; }
-.graph svg { width: 100%; height: 100%; position: absolute; inset: 0; }
-.graph .edge { stroke: var(--border); stroke-width: 1.5; }
-@media (prefers-color-scheme: dark) { .graph .edge { stroke: oklch(1 0 0 / 22%); } }
-.graph .edge.hot { stroke: var(--primary-text); stroke-width: 2; }
-.graph .node circle { fill: var(--background); stroke: var(--primary-text); stroke-width: 2; }
-.graph .node.c circle { stroke: #ef4444; }
-.graph .node.t circle { stroke: #10b981; }
-.graph .node.me circle { fill: var(--primary-text); }
-.graph .node text { font: 500 11.5px var(--sans); fill: var(--foreground); }
-.graph .legend { position: absolute; left: 14px; bottom: 12px; display: flex; gap: 12px; font-size: 12px; color: var(--muted-foreground); }
-.graph .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--c); margin-right: 5px; vertical-align: -1px; }
 
 /* ---------- MCP ---------- */
 .mcp-stage { display: grid; grid-template-columns: 1fr 330px; gap: 22px; align-items: start; }
@@ -499,7 +478,7 @@ footer a:hover { color: var(--foreground); }
   section.feature { padding: 76px 0; }
   .hero { padding: 56px 0 96px; }
   .tryit .card { grid-template-columns: 1fr; gap: 14px; }
-  .bug-grid, .history-stage, .docs-stage, .host-grid, .seeno { grid-template-columns: 1fr; }
+  .bug-grid, .history-stage, .host-grid, .seeno { grid-template-columns: 1fr; }
   .shop .product { grid-template-columns: 1fr; }
   .site-hero { grid-template-columns: 1fr; }
   .site-hero .shot { display: none; }
@@ -520,12 +499,11 @@ footer a:hover { color: var(--foreground); }
 .grow-left { margin-left: auto; }
 .xpanel .draft .ta .mention { font-weight: 600; }
 html, body { overflow-x: clip; }
-.feature-grid > *, .hero .wrap > *, .tools-stage > *, .thread-stage > *, .share-stage > *, .mcp-stage > *, .docs-stage > *, .bug-grid > *, .history-stage > *, .issue-stage > * { min-width: 0; }
+.feature-grid > *, .hero .wrap > *, .tools-stage > *, .thread-stage > *, .share-stage > *, .mcp-stage > *, .docs-app > *, .bug-grid > *, .history-stage > *, .issue-stage > * { min-width: 0; }
 @media (max-width: 720px) {
   .urlbar { font-size: 12px; }
   .term { font-size: 11.5px; }
   .doc-edit { padding: 20px; }
-  .wl { white-space: normal; }
 }
 
 /* ---------- Stages: mock pages with the real overlay layers inside (see src/lib/stage.ts) ---------- */
@@ -553,3 +531,132 @@ html, body { overflow-x: clip; }
   color: #fff; font: 600 12px/22px var(--sans); text-align: center; box-shadow: 0 1px 3px rgb(0 0 0 / .35), 0 0 0 2px #fff; }
 /* Room for the real "Live" pill, which PresenceLayer puts at the stage's top-right. */
 #hero-page .site-nav { padding-right: 170px; }
+/* "Demo people" off: the pretend team's entries in the mock panel go too; the visitor's own stay. */
+.no-demo-people .xpanel .item[data-demo] { display: none; }
+
+/* Lucide icons (the icon set the shadcn components use), drawn by createIcons in main.ts. */
+.copy .try svg { display: inline-block; width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; color: var(--primary-text); }
+#issue-link svg { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; }
+
+/* ---------- Docs: the viewer's editor (apps/viewer/src/docs/editor.ts) on a local Yjs doc ---------- */
+.doc-edit { display: flex; flex-direction: column; gap: 8px; padding: 16px 22px 14px; font-size: 15px; --font-sans: var(--sans); --font-heading: var(--heading); min-width: 0; }
+.doc-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.doc-bar .crumbs { font-size: 12.5px; color: var(--muted-foreground); }
+/* The viewer leaves room below the text for a full page; a card doesn't need it. */
+#doc-editor .cm-editor .cm-content { padding-bottom: 16px; }
+.doc-hint { display: flex; align-items: center; gap: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-foreground); }
+.doc-hint p { margin: 0; flex: 1; }
+.doc-hint svg { display: inline-block; width: 15px; height: 15px; vertical-align: -3px; margin-right: 6px; }
+.doc-hint .btn { flex: none; gap: 6px; }
+.doc-hint .btn svg { margin: 0; }
+/* The editor's suggestions, in the page's font. */
+#doc-editor .cm-tooltip-autocomplete > ul { font-family: var(--sans); font-size: 13.5px; }
+#doc-editor .cm-tooltip-autocomplete > ul > li { padding: 4px 10px; }
+
+/* ---------- Docs demo: sidebar, note, graph (src/sections/docs/) ---------- */
+.docs-app { display: grid; grid-template-columns: 210px minmax(0, 1fr) 330px; gap: 16px; align-items: stretch; }
+.docs-side { padding: 14px 10px; font-size: 13.5px; display: flex; flex-direction: column; gap: 6px; }
+.docs-side h5 { margin: 4px 6px; font: 600 11.5px/1 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); }
+.docs-side h5:not(:first-child) { margin-top: 14px; }
+.side-notes { display: flex; flex-direction: column; gap: 1px; }
+.side-folder { display: flex; align-items: center; gap: 6px; padding: 6px 6px 2px; font-size: 12.5px; color: var(--muted-foreground); }
+.side-folder svg { width: 14px; height: 14px; }
+.side-note { all: unset; display: flex; align-items: center; gap: 7px; padding: 5px 8px 5px 14px; border-radius: 8px; cursor: pointer; color: color-mix(in oklch, var(--foreground) 85%, transparent); }
+.side-note svg { width: 15px; height: 15px; flex: none; }
+.side-note span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-note:hover { background: var(--muted); }
+.side-note.active { background: var(--tint); color: var(--foreground); font-weight: 600; }
+.side-filter { display: flex; align-items: center; justify-content: space-between; padding: 2px 6px 6px; font-size: 12.5px; color: var(--muted-foreground); }
+.side-tags { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 4px; }
+
+/* Tag pills: a tag's colour and icon, as in the app */
+.tag-pill { --c: var(--primary-text); display: inline-flex; align-items: center; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--c);
+  background: color-mix(in oklab, var(--c) 13%, transparent); }
+.tag-pill.active { background: color-mix(in oklab, var(--c) 26%, transparent); box-shadow: inset 0 0 0 1px var(--c); }
+.tag-pill .tag-name { all: unset; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; cursor: default; }
+.tag-pill button.tag-name { cursor: pointer; }
+.tag-pill .tag-name svg { width: 13px; height: 13px; }
+.tag-pill small { opacity: .6; font-weight: 500; }
+.tag-pill .tag-x { all: unset; display: grid; place-items: center; margin: 0 4px 0 -4px; padding: 2px; border-radius: 999px; cursor: pointer; opacity: .6; }
+.tag-pill .tag-x:hover { opacity: 1; background: color-mix(in oklab, var(--c) 18%, transparent); }
+.tag-pill .tag-x svg { width: 11px; height: 11px; }
+.tag-add { all: unset; font-size: 12px; color: var(--muted-foreground); padding: 2px 8px; border-radius: 999px; cursor: pointer; }
+.tag-add:hover { background: var(--muted); color: var(--foreground); }
+.tag-input { font: inherit; font-size: 12px; width: 90px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--ring); background: var(--background); color: var(--foreground); outline: none; }
+
+/* The note: header, tags, toolbar, editor or reading view */
+.doc-actions { display: flex; gap: 2px; }
+.doc-action { all: unset; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--muted-foreground); }
+.doc-action:hover { background: var(--muted); color: var(--foreground); }
+.doc-action svg { width: 15px; height: 15px; }
+.doc-action.icon-only { padding: 5px; }
+.doc-title { display: flex; align-items: center; gap: 10px; font-size: 24px; margin: 2px 0 0; }
+.doc-icon { --c: var(--primary-text); display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 10px; background: color-mix(in oklab, var(--c) 12%, transparent); }
+.doc-icon svg { width: 22px; height: 22px; }
+.doc-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 22px; }
+.doc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 12px; }
+.doc-toolbar .tb-group { display: flex; gap: 1px; padding: 0 3px; border-right: 1px solid var(--border); }
+.doc-toolbar .tb-group:last-child { border-right: 0; }
+.doc-toolbar button { all: unset; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; cursor: pointer; color: var(--muted-foreground); }
+.doc-toolbar button:hover { background: var(--muted); color: var(--foreground); }
+.doc-toolbar svg { width: 15px; height: 15px; }
+.doc-scroll { height: 330px; overflow-y: auto; overscroll-behavior: contain; margin-right: -10px; padding-right: 10px; }
+.doc-scroll .doc-reading { font-size: 15px; padding: 4px 0 12px; }
+.doc-scroll .doc-reading h2 { font-size: 1.25em; }
+
+/* The graph: icon tiles */
+.graph { position: relative; padding: 0; overflow: hidden; min-height: 360px; }
+.graph svg#graph-svg { width: 100%; height: 100%; position: absolute; inset: 0; }
+.graph .edge { stroke: var(--border); stroke-width: 1.4; }
+.dark .graph .edge { stroke: oklch(1 0 0 / 20%); }
+.graph .edge.hot { stroke: var(--primary-text); stroke-width: 2; }
+.graph .gnode { color: var(--c); }
+.graph .gnode-note { cursor: pointer; }
+.graph .gtile { fill: var(--card); }
+.graph .gring { fill: color-mix(in oklab, var(--c) 13%, transparent); stroke: var(--c); stroke-width: 1.3; }
+.graph .gnode.active .gring { fill: color-mix(in oklab, var(--c) 28%, transparent); stroke-width: 2.4; }
+.graph .gnode-note:hover .gring { stroke-width: 2.4; }
+.graph .gnode text { font: 500 11.5px var(--sans); fill: var(--foreground); }
+.graph .gnode-tag text, .graph .gnode-comment text { fill: var(--muted-foreground); }
+.graph-hint { position: absolute; left: 14px; bottom: 10px; margin: 0; font-size: 12px; color: var(--muted-foreground); }
+
+/* The cheat sheet */
+.cheat-sheet { width: min(860px, 100% - 32px); max-height: min(80vh, 760px); padding: 0; border: 0; border-radius: 20px; background: var(--popover); color: var(--foreground);
+  box-shadow: var(--shadow), 0 0 0 1px var(--border); font-size: 14px; }
+.cheat-sheet[open] { display: flex; flex-direction: column; }
+.cheat-sheet::backdrop { background: rgb(0 0 0 / .35); backdrop-filter: blur(2px); }
+.sheet-head { display: flex; justify-content: space-between; gap: 16px; padding: 18px 22px 10px; }
+.sheet-head h4 { font: 600 18px/1.2 var(--sans); margin: 0 0 4px; letter-spacing: 0; }
+.sheet-head p { margin: 0; color: var(--muted-foreground); font-size: 13.5px; }
+.sheet-close { all: unset; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 999px; cursor: pointer; color: var(--muted-foreground); flex: none; }
+.sheet-close:hover { background: var(--muted); color: var(--foreground); }
+.sheet-close svg { width: 18px; height: 18px; }
+.sheet-body { overflow-y: auto; padding: 0 22px 22px; --font-heading: var(--heading); }
+.sheet-body h5 { margin: 18px 0 8px; font: 600 12.5px/1 var(--sans); color: var(--muted-foreground); }
+.sheet-rows { border: 1px solid var(--border); border-radius: 12px; }
+.sheet-row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr) minmax(0, 1fr) 4.5rem; gap: 14px; align-items: center; padding: 10px 12px; }
+.sheet-row + .sheet-row { border-top: 1px solid var(--border); }
+.sheet-label { font-weight: 600; font-size: 13px; }
+.sheet-row pre { margin: 0; padding: 6px 10px; border-radius: 8px; background: var(--muted); font: 12.5px/1.5 var(--mono); overflow-x: auto; white-space: pre; }
+.sheet-how { margin: 0; color: var(--muted-foreground); font-style: italic; font-size: 13px; }
+.sheet-preview { font-size: 14px; }
+.sheet-preview > * { margin-top: 0 !important; }
+.sheet-preview .muted { color: var(--muted-foreground); }
+.sheet-note { margin: 4px 0 0; font-size: 12px; color: var(--muted-foreground); }
+.sheet-actions { display: flex; justify-content: flex-end; gap: 2px; }
+.sheet-actions button { all: unset; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; color: var(--muted-foreground); }
+.sheet-actions button:hover { background: var(--muted); color: var(--foreground); }
+.sheet-actions button.done { color: #16a34a; }
+.sheet-actions svg { width: 16px; height: 16px; }
+
+@media (max-width: 1080px) {
+  .docs-app { grid-template-columns: 190px minmax(0, 1fr); }
+  .docs-app .graph { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .docs-app { grid-template-columns: 1fr; }
+  .sheet-row { grid-template-columns: 1fr; gap: 6px; }
+  .sheet-actions { justify-content: flex-start; }
+}
+/* Room for the "Live" pill (PresenceLayer puts it at the note's top-right), so it never covers the buttons. */
+#doc-edit .doc-bar { padding-right: 132px; min-height: 34px; }

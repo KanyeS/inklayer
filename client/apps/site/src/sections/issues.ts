@@ -2,6 +2,7 @@
  * Issue trackers: Rosie creates an issue from her comment; Michael closes it in the tracker, which resolves the comment
  * with a reply saying so. Each loop uses the next tracker: GitHub, Jira, Linear.
  */
+import { ArrowUpRight, createElement } from "lucide";
 import { $, $$, h, replay } from "../lib/dom";
 import { MICHAEL, ROSIE } from "../lib/people";
 import { scene } from "../lib/scene";
@@ -29,7 +30,7 @@ const DETAILS: [string, string][] = [
   ["Browser", "Safari 17 · iOS 17.4"],
   ["Window", "375 × 667 @3x"],
   ["Console", "TypeError: banner.offsetHeight is undefined"],
-  ["Inklayer", "Open comment #4 ↗"],
+  ["Inklayer", "Open comment #4"],
 ];
 
 export function issues(): void {
@@ -82,7 +83,7 @@ export function issues(): void {
       h("div", { className: "row", style: { "margin-top": "12px" } }, close));
     create.hidden = true;
     link.hidden = false;
-    link.textContent = `${tracker.name} ${tracker.key} ↗`;
+    link.replaceChildren(`${tracker.name} ${tracker.key} `, createElement(ArrowUpRight));
     status.replaceChildren(pill("warn", tracker.open));
     await rosie.moveTo(ctx, { el: comment, x: 0.2, y: 1.3 }, 1200);
     await ctx.sleep(1200);

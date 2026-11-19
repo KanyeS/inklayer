@@ -90,7 +90,9 @@ export interface SceneOptions {
 }
 
 export class Scene {
+  /** Running: on screen, and the team isn't switched off. */
   visible = false;
+  #onScreen = false;
   #waiting: (() => void)[] = [];
   #run: Ctx | null = null;
 
@@ -103,9 +105,14 @@ export class Scene {
     return new Promise((resolve) => this.#waiting.push(resolve));
   }
 
-  setVisible(visible: boolean): void {
-    this.visible = visible;
-    if (visible) this.#wake();
+  setOnScreen(onScreen: boolean): void {
+    this.#onScreen = onScreen;
+    this.update();
+  }
+
+  update(): void {
+    this.visible = this.#onScreen && !paused;
+    if (this.visible) this.#wake();
   }
 
   #wake(): void {
@@ -142,8 +149,16 @@ export class Scene {
 
 const scenes = new Map<Element, Scene>();
 const visibility = new IntersectionObserver((entries) => {
-  for (const entry of entries) scenes.get(entry.target)?.setVisible(entry.isIntersecting);
+  for (const entry of entries) scenes.get(entry.target)?.setOnScreen(entry.isIntersecting);
 }, { threshold: 0.12 });
+
+let paused = false;
+
+/** Pauses every scene (the "Demo people" switch is off) or resumes them where they left off. */
+export function pauseScenes(pause: boolean): void {
+  paused = pause;
+  for (const s of scenes.values()) s.update();
+}
 
 /** Creates a scene for the section and starts it. */
 export function scene(root: Element, script: (ctx: Ctx) => Promise<void>, options?: SceneOptions): Scene {

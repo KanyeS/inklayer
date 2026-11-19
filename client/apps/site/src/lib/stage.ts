@@ -12,8 +12,8 @@ import {
 } from "@inklayer/overlay";
 import tokens from "@inklayer/ui/tokens.css?inline";
 import { followColorScheme, h, textRange } from "./dom";
-import type { Person } from "./people";
-import type { Ctx } from "./scene";
+import { YOU, type Person } from "./people";
+import { type Ctx, pauseScenes } from "./scene";
 
 /** What a comment points at: the same shape the extension saves. */
 export interface Mark {
@@ -76,11 +76,28 @@ export interface StageOptions {
 const allStages = new Set<Stage>();
 let peopleVisible = true;
 
-/** The "Demo people" switch: hides every stage's cursors, marks and cards, so a visitor sees only their own extension's. */
+/**
+ * The "Demo people" switch: pauses the pretend team and hides their cursors, marks and cards everywhere (and their entries
+ * in the mock panels, via the `no-demo-people` class), so a visitor sees only their own comments and their extension's.
+ */
 export function setDemoPeopleVisible(visible: boolean): void {
   peopleVisible = visible;
-  for (const stage of allStages) stage.setVisible(visible);
+  pauseScenes(!visible);
+  document.documentElement.classList.toggle("no-demo-people", !visible);
+  for (const stage of allStages) stage.sync();
+  for (const listener of switchListeners) listener(visible);
 }
+
+const switchListeners = new Set<(visible: boolean) => void>();
+
+/** Calls `listener` now and whenever the "Demo people" switch changes (for demo people drawn outside a stage). */
+export function onDemoPeopleSwitch(listener: (visible: boolean) => void): void {
+  switchListeners.add(listener);
+  listener(peopleVisible);
+}
+
+/** Whether a comment shows: the visitor's own always do; the pretend team's only while the switch is on. */
+const isShown = (c: Comment) => peopleVisible || c.person.id === YOU.id;
 
 let nextId = 1;
 
@@ -112,13 +129,7 @@ export class Stage {
     followColorScheme(this.cards.host);
     this.#followPageChanges();
     allStages.add(this);
-    this.setVisible(peopleVisible);
-  }
-
-  setVisible(visible: boolean): void {
-    this.overlay.setVisible(visible);
-    this.presence.setVisible(visible);
-    this.cards.host.style.display = visible ? "" : "none";
+    this.presence.setVisible(peopleVisible);
   }
 
   /** Someone on this page: adds their cursor (hidden until it first moves). */
@@ -186,7 +197,8 @@ export class Stage {
 
   /** Hands the comments to the overlay and redraws the cards. */
   sync(): void {
-    const annotations: OverlayAnnotation[] = this.comments.map((c) => ({
+    this.presence.setVisible(peopleVisible);
+    const annotations: OverlayAnnotation[] = this.comments.filter(isShown).map((c) => ({
       id: c.id, kind: c.kind, color: c.person.color, resolved: c.resolved, label: c.label, anchor: c.anchor, geometry: c.geometry,
     }));
     this.overlay.handle({ type: "setAnnotations", annotations });
@@ -261,7 +273,7 @@ export class Stage {
   /* ---------------------------------------------------------------- comment cards */
 
   #renderCards(): void {
-    const shown = this.comments.filter((c) => !c.draft && (this.cardsOpen || this.#pinned.has(c.id) || c.id === this.#hovered));
+    const shown = this.comments.filter((c) => isShown(c) && !c.draft && (this.cardsOpen || this.#pinned.has(c.id) || c.id === this.#hovered));
     this.cards.show(shown.map((c) => c.id), (id) => this.#card(this.comments.find((c) => c.id === id)!));
   }
 

@@ -1,0 +1,85 @@
+/* How docs look when read (reading.ts, enhance.ts) and their links in the editor. Plain CSS on the theme's variables, so
+   the showcase site uses it too. */
+
+/* Docs: reading view, links and comment cards. */
+.doc-reading { line-height: 1.7; font-size: 16px; overflow-wrap: anywhere; }
+.doc-reading > * + * { margin-top: 0.85em; }
+.doc-reading h1, .doc-reading h2, .doc-reading h3, .doc-reading h4 { font-family: var(--font-heading); font-weight: 700; line-height: 1.3; margin-top: 1.4em; }
+.doc-reading h1 { font-size: 1.75em; }
+.doc-reading h2 { font-size: 1.45em; }
+.doc-reading h3 { font-size: 1.25em; }
+.doc-reading ul { list-style: disc; padding-left: 1.5em; }
+.doc-reading ol { list-style: decimal; padding-left: 1.5em; }
+.doc-reading li + li { margin-top: 0.25em; }
+.doc-reading blockquote { border-left: 3px solid var(--border); padding-left: 1em; color: var(--muted-foreground); }
+.doc-reading code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; background: var(--muted); border-radius: 6px; padding: 0.1em 0.35em; }
+.doc-reading pre { background: var(--muted); border-radius: 12px; padding: 0.9em 1em; overflow-x: auto; }
+.doc-reading pre code { background: none; padding: 0; }
+.doc-reading hr { border-color: var(--border); }
+.doc-reading table { border-collapse: collapse; }
+.doc-reading th, .doc-reading td { border: 1px solid var(--border); padding: 0.3em 0.6em; }
+.doc-reading img { max-width: 100%; border-radius: 12px; }
+.doc-reading a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--primary) 40%, transparent); }
+.doc-reading a.unresolved { opacity: 0.7; text-decoration-style: dashed; }
+.doc-reading a.doc-tag { text-decoration: none; background: color-mix(in oklab, var(--primary) 10%, transparent); border-radius: 999px; padding: 0 0.45em; }
+.doc-reading .doc-comment-embed { display: block; }
+.doc-comment-card { display: block; text-decoration: none !important; color: inherit !important; border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 12px; padding: 0.6em 0.9em; margin: 0.4em 0; }
+.doc-comment-card:hover { background: var(--muted); }
+.doc-comment-card.missing { color: var(--muted-foreground) !important; font-style: italic; }
+.doc-comment-card-head, .doc-comment-card-page { display: block; font-size: 0.8em; color: var(--muted-foreground); }
+.doc-comment-card-body { display: block; white-space: pre-wrap; }
+.doc-reading .doc-mention { color: var(--primary); font-weight: 600; background: color-mix(in oklab, var(--primary) 10%, transparent); border-radius: 6px; padding: 0 0.2em; }
+
+/* In the dark theme --primary is a fill colour, too dark for text on the dark page: links, tags and mentions in docs use
+   a lighter violet (Tailwind violet-300, as the extension's panel does). */
+.dark .doc-reading a, .dark .doc-reading .doc-mention,
+.dark .cm-editor .cm-wikilink, .dark .cm-editor .cm-doctag, .dark .cm-editor .cm-mention { color: oklch(0.811 0.111 293.571); }
+
+/* ------------------------------------------------------------------ docs: markdown beyond the basics (reading.ts, enhance.ts) */
+
+/* Checkboxes */
+.doc-reading li.task-item { list-style: none; margin-left: -1.3em; }
+.doc-reading .task-checkbox { width: 1em; height: 1em; margin: 0 0.4em 0 0; vertical-align: -0.12em; accent-color: var(--primary); cursor: pointer; }
+.doc-reading .task-checkbox:disabled { cursor: default; }
+.doc-reading li.task-item:has(> .task-checkbox:checked, > p > .task-checkbox:checked) { color: var(--muted-foreground); text-decoration: line-through; text-decoration-color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); }
+
+/* Highlights and footnotes */
+.doc-reading mark { background: color-mix(in oklab, #facc15 45%, transparent); color: inherit; border-radius: 3px; padding: 0 0.15em; }
+.doc-reading .footnote-ref a, .doc-reading .footnote-backref { text-decoration: none; }
+.doc-reading .footnotes-sep { margin-top: 2em; border-color: var(--border); }
+.doc-reading .footnotes { font-size: 0.9em; color: var(--muted-foreground); }
+.doc-reading .footnotes ol { padding-left: 1.5em; }
+
+/* Callouts: > [!note] Title */
+.doc-reading blockquote.callout { --callout: #2563eb; border: 1px solid color-mix(in oklab, var(--callout) 30%, transparent); border-left: 4px solid var(--callout);
+  background: color-mix(in oklab, var(--callout) 8%, transparent); border-radius: 10px; padding: 0.6em 1em; color: inherit; }
+.doc-reading .callout-title { font-weight: 650; color: var(--callout); margin-bottom: 0.2em; }
+.doc-reading blockquote.callout > * + * { margin-top: 0.5em; }
+.doc-reading blockquote.callout-tip, .doc-reading blockquote.callout-hint, .doc-reading blockquote.callout-success, .doc-reading blockquote.callout-check, .doc-reading blockquote.callout-done { --callout: #16a34a; }
+.doc-reading blockquote.callout-warning, .doc-reading blockquote.callout-caution, .doc-reading blockquote.callout-attention, .doc-reading blockquote.callout-question,
+.doc-reading blockquote.callout-help, .doc-reading blockquote.callout-faq { --callout: #d97706; }
+.doc-reading blockquote.callout-danger, .doc-reading blockquote.callout-error, .doc-reading blockquote.callout-failure, .doc-reading blockquote.callout-fail, .doc-reading blockquote.callout-bug { --callout: #dc2626; }
+.doc-reading blockquote.callout-example, .doc-reading blockquote.callout-abstract, .doc-reading blockquote.callout-summary, .doc-reading blockquote.callout-tldr { --callout: #7c3aed; }
+.doc-reading blockquote.callout-quote, .doc-reading blockquote.callout-cite { --callout: #64748b; }
+.doc-reading blockquote.callout-important, .doc-reading blockquote.callout-todo { --callout: #0891b2; }
+
+/* Maths and diagrams */
+.doc-reading .math-block { overflow-x: auto; padding: 0.3em 0; text-align: center; }
+.doc-reading .mermaid-diagram { overflow-x: auto; }
+.doc-reading .mermaid-diagram[data-done] > svg { max-width: 100%; height: auto; margin: 0 auto; display: block; }
+.doc-reading .mermaid-error { color: var(--destructive); font-size: 0.85em; margin-top: 0.3em; }
+
+/* Code colours (highlight.js), from the theme */
+.doc-reading .hljs-keyword, .doc-reading .hljs-selector-tag, .doc-reading .hljs-built_in, .doc-reading .hljs-type { color: #7c3aed; }
+.doc-reading .hljs-string, .doc-reading .hljs-attr, .doc-reading .hljs-template-tag { color: #15803d; }
+.doc-reading .hljs-number, .doc-reading .hljs-literal, .doc-reading .hljs-symbol { color: #c2410c; }
+.doc-reading .hljs-comment, .doc-reading .hljs-quote { color: var(--muted-foreground); font-style: italic; }
+.doc-reading .hljs-title, .doc-reading .hljs-title.function_, .doc-reading .hljs-section { color: #2563eb; }
+.doc-reading .hljs-variable, .doc-reading .hljs-params, .doc-reading .hljs-property { color: #b45309; }
+.doc-reading .hljs-meta, .doc-reading .hljs-tag, .doc-reading .hljs-name { color: #be185d; }
+.dark .doc-reading .hljs-keyword, .dark .doc-reading .hljs-selector-tag, .dark .doc-reading .hljs-built_in, .dark .doc-reading .hljs-type { color: #c4b5fd; }
+.dark .doc-reading .hljs-string, .dark .doc-reading .hljs-attr, .dark .doc-reading .hljs-template-tag { color: #86efac; }
+.dark .doc-reading .hljs-number, .dark .doc-reading .hljs-literal, .dark .doc-reading .hljs-symbol { color: #fdba74; }
+.dark .doc-reading .hljs-title, .dark .doc-reading .hljs-title.function_, .dark .doc-reading .hljs-section { color: #93c5fd; }
+.dark .doc-reading .hljs-variable, .dark .doc-reading .hljs-params, .dark .doc-reading .hljs-property { color: #fcd34d; }
+.dark .doc-reading .hljs-meta, .dark .doc-reading .hljs-tag, .dark .doc-reading .hljs-name { color: #f9a8d4; }

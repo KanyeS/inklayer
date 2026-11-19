@@ -126,7 +126,7 @@
       <span class="eyebrow">Comment on anything</span>
       <h2>Six ways to point at the problem.</h2>
       <p>Open the panel on any website and pick a tool. Every mark gets a number, a comment thread and a place in the list. Click a mark to find its comment, or a comment to scroll to its mark. Viewers see everything but get no tools.</p>
-      <span class="try">👆 Click a tool in the panel to <b>try it yourself</b> on the shop page. Hover a number to see its comment.</span>
+      <span class="try"><i data-lucide="mouse-pointer-click"></i>Click a tool in the panel to <b>try it yourself</b> on the shop page. Hover a number to see its comment.</span>
     </div>
     <div class="tools-stage reveal">
       <div class="card shop" id="shop">
@@ -135,7 +135,7 @@
           <div class="photo" id="shop-photo"></div>
           <div>
             <h3 id="shop-title">Trail Runner 2</h3>
-            <div class="stars" id="shop-stars">★★★★☆<span>(212 reviews)</span></div>
+            <div class="stars" id="shop-stars"><i data-lucide="star" class="on"></i><i data-lucide="star" class="on"></i><i data-lucide="star" class="on"></i><i data-lucide="star" class="on"></i><i data-lucide="star"></i><span>(212 reviews)</span></div>
             <div class="price" id="shop-price">$129 <s>$169</s></div>
             <div class="sizes" id="shop-sizes"><span>8</span><span>9</span><span class="sel">10</span><span>11</span><span>12</span></div>
             <span class="addcart" id="shop-cart">Add to cart</span>
@@ -148,8 +148,8 @@
         <div class="header">
           <div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div>
           <div class="actions">
-            <button type="button" class="icon on" id="cards-toggle" aria-pressed="true" title="Comments are open next to their marks. Click to show them only on hover."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></button>
-            <span title="Share this page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+            <button type="button" class="icon on" id="cards-toggle" aria-pressed="true" title="Comments are open next to their marks. Click to show them only on hover."><i data-lucide="messages-square"></i></button>
+            <span title="Share this page"><i data-lucide="link"></i></span>
           </div>
         </div>
         <div class="project"><span class="select">Northwind shop ▾</span></div>
@@ -248,7 +248,7 @@
       <span class="eyebrow">Bug context</span>
       <h2>Every comment comes with what a developer needs to fix it.</h2>
       <p>When someone saves a comment, the extension attaches a screenshot of the area, the browser, OS, window size and pixel ratio, the element's selector and HTML (anything typed into forms left out), and the page's last console errors and failed requests. Nothing leaves the page until someone saves.</p>
-      <span class="try">🐞 The <b>Place order</b> button below is genuinely broken. Click it, then check the console, or comment on it with the extension.</span>
+      <span class="try"><i data-lucide="bug"></i>The <b>Place order</b> button below is genuinely broken. Click it, then check the console, or comment on it with the extension.</span>
     </div>
     <div class="bug-grid reveal">
       <div class="card checkout" id="checkout-card">
@@ -322,7 +322,7 @@
       <div class="xpanel stage" id="thread-panel">
         <div class="header">
           <div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div>
-          <div class="actions"><span id="bell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span></div>
+          <div class="actions"><span id="bell"><i data-lucide="bell"></i></span></div>
         </div>
         <ul class="list">
           <li class="item selected">
@@ -342,9 +342,9 @@
           <div class="card toast"><span class="face" style="--c:var(--john)">J</span><div><b>John</b> resolved your comment <i>“Hero image is blurry on retina”</i><p>shop.example/summer-sale</p></div><time>1h</time></div>
         </div>
         <div class="integrations">
-          <div class="card integ"><h5><i style="background:#7c3aed">✉</i>Email</h5><p>People get their own notifications by email, and can turn it off in Settings. Amazon SES works.</p><div class="outbox"><span class="fail"></span><span class="fail"></span><span class="ok"></span>Retried, delivered</div></div>
-          <div class="card integ"><h5><i style="background:#4a154b">#</i>Slack</h5><p>Post chosen events to a channel, for one project or all.</p><div class="slack-msg"><i></i><span><b>Inklayer</b> Leo mentioned Michael on shop.example/checkout</span></div></div>
-          <div class="card integ"><h5><i style="background:#0f766e">{}</i>Webhook</h5><p>Signed JSON for Teams, Discord or your own tools.</p><pre>X-Inklayer-Signature: sha256=9f2c…e71a
+          <div class="card integ"><h5><span class="integ-icon" style="background:#7c3aed"><i data-lucide="mail"></i></span>Email</h5><p>People get their own notifications by email, and can turn it off in Settings. Amazon SES works.</p><div class="outbox"><span class="fail"></span><span class="fail"></span><span class="ok"></span>Retried, delivered</div></div>
+          <div class="card integ"><h5><span class="integ-icon" style="background:#4a154b"><i data-lucide="hash"></i></span>Slack</h5><p>Post chosen events to a channel, for one project or all.</p><div class="slack-msg"><i></i><span><b>Inklayer</b> Leo mentioned Michael on shop.example/checkout</span></div></div>
+          <div class="card integ"><h5><span class="integ-icon" style="background:#0f766e"><i data-lucide="webhook"></i></span>Webhook</h5><p>Signed JSON for Teams, Discord or your own tools.</p><pre>X-Inklayer-Signature: sha256=9f2c…e71a
 {"event":"mention","page":"…"}</pre></div>
         </div>
         <p style="margin:0;color:var(--muted-foreground);font-size:14px">You hear about: mentions in comments, replies and docs · replies in your threads · your comment being resolved · a linked issue being closed. Messages wait in an outbox and are retried with growing gaps, up to 8 tries.</p>
@@ -374,7 +374,7 @@
           </li>
         </ul>
       </div>
-      <div class="sync" id="sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9h14l-4-4M20 15H6l4 4"/></svg></div>
+      <div class="sync" id="sync"><i data-lucide="arrow-left-right"></i></div>
       <div>
         <div class="tracker-tabs" id="tracker-tabs"><span data-t="github" class="on">GitHub</span><span data-t="jira">Jira</span><span data-t="linear">Linear</span></div>
         <div class="card issue empty" id="issue-card">No issue yet</div>
@@ -420,7 +420,7 @@
       <div class="xpanel" id="share-panel">
         <div class="header">
           <div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div>
-          <div class="actions"><span id="share-icon" title="Share this page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span></div>
+          <div class="actions"><span id="share-icon" title="Share this page"><i data-lucide="link"></i></span></div>
         </div>
         <div id="share-slot"></div>
         <ul class="list">
@@ -453,20 +453,34 @@
     <div class="copy reveal">
       <span class="eyebrow">Docs</span>
       <h2>A knowledge base that links to the comments it's about.</h2>
-      <p>Write specs, QA notes and decisions next to the work. Edit together live, link docs and comments with <code>[[double brackets]]</code>, tag them, and see how everything connects in the graph. Make a doc public with one click.</p>
+      <p>Write specs, QA notes and decisions next to the work. Edit together live, link docs and comments with <code>[[double brackets]]</code>, tag them, and see how everything connects in the graph. Checkboxes, tables, diagrams and maths too. This is the real editor: go ahead and type in it.</p>
     </div>
-    <div class="docs-stage reveal">
-      <div class="card doc-edit stage" id="doc-edit">
-        <div class="crumbs">Northwind / QA / <span class="tag">#checkout</span><span class="tag">#mobile</span></div>
-        <h3>Checkout redesign: QA notes</h3>
-        <p>Release blocker: the pay button sits under the cookie banner on small phones. See <span class="wl">[[Cookie banner]]</span> and Rosie's comment:</p>
-        <div class="cembed"><span class="badge" style="--c:var(--rosie)">4</span><div>Checkout button is hidden behind the cookie banner on iPhone SE.<small>shop.example/checkout · open</small></div></div>
-        <p id="doc-l1"></p>
-        <p id="doc-l2"></p>
+    <div class="docs-app reveal" id="docs-app">
+      <aside class="card docs-side" id="docs-side" aria-label="Notes and tags"></aside>
+      <div class="card doc-edit" id="doc-edit">
+        <div class="doc-bar">
+          <span class="crumbs" id="doc-crumbs"></span>
+          <span class="doc-actions">
+            <button type="button" class="doc-action" id="doc-mode"></button>
+            <button type="button" class="doc-action icon-only" id="doc-guide" title="Markdown cheat sheet" aria-label="Markdown cheat sheet"></button>
+          </span>
+        </div>
+        <h3 class="doc-title"><span class="doc-icon" id="doc-icon"></span><span id="doc-title"></span></h3>
+        <div class="doc-tags" id="doc-tags"></div>
+        <div class="doc-toolbar" id="doc-toolbar" role="toolbar" aria-label="Formatting"></div>
+        <div class="doc-scroll">
+          <!-- The viewer's real editor (CodeMirror + Yjs) goes here, or the reading view; see src/sections/docs/. -->
+          <div class="doc-editor" id="doc-editor"></div>
+          <div class="doc-reading" id="doc-reading" hidden></div>
+        </div>
+        <div class="doc-hint">
+          <p><i data-lucide="keyboard"></i>Type along with John and Rosie, pick another note on the left, or switch to <b>Read</b>. Nothing is saved.</p>
+          <button type="button" class="btn sm" id="doc-reset"><i data-lucide="rotate-ccw"></i>Start over</button>
+        </div>
       </div>
       <div class="card graph" id="graph">
-        <svg id="graph-svg" viewBox="0 0 400 340" preserveAspectRatio="xMidYMid meet"></svg>
-        <div class="legend"><span><i style="--c:var(--primary-text)"></i>Docs</span><span><i style="--c:#ef4444"></i>Comments</span><span><i style="--c:#10b981"></i>Tags</span></div>
+        <svg id="graph-svg" viewBox="15 25 370 315" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="graph-hint">Click a note to open it.</p>
       </div>
     </div>
   </div>
@@ -505,12 +519,12 @@
       <p>Inklayer stores no passwords. People sign in with Google or your own single sign-on, and roles decide what they can do in each organisation and project.</p>
     </div>
     <div class="sec-grid reveal">
-      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg></div><h4>Single sign-on only</h4><p>Google, or any OpenID Connect provider. Verified domains let a whole company join automatically.</p><div class="chips"><span>Google</span><span>JumpCloud</span><span>Okta</span><span>Entra ID</span><span>Any OIDC</span></div></div>
-      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h4>Sealed off from the page</h4><p>The overlay and panel live in closed shadow roots, so a site's CSS and scripts can't restyle or read them. The page never sees a token.</p></div>
-      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h4>Behind your VPN</h4><p>Optionally limit the whole server to your networks. Lockout protection stops an admin from shutting themselves out.</p></div>
-      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></div><h4>Short-lived tokens</h4><p>The extension uses short bearer tokens with rotating refresh tokens; the web app an HttpOnly cookie with CSRF checks.</p></div>
-      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg></div><h4>Instant revocation</h4><p>Disabling a user or "sign out everywhere" ends every cookie and token immediately.</p></div>
-      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg></div><h4>Permissive licences only</h4><p>Apache-2.0, and every dependency is MIT, Apache, BSD or ISC. CI enforces it.</p></div>
+      <div class="card sec"><div class="ic"><i data-lucide="log-in"></i></div><h4>Single sign-on only</h4><p>Google, or any OpenID Connect provider. Verified domains let a whole company join automatically.</p><div class="chips"><span>Google</span><span>JumpCloud</span><span>Okta</span><span>Entra ID</span><span>Any OIDC</span></div></div>
+      <div class="card sec"><div class="ic"><i data-lucide="lock"></i></div><h4>Sealed off from the page</h4><p>The overlay and panel live in closed shadow roots, so a site's CSS and scripts can't restyle or read them. The page never sees a token.</p></div>
+      <div class="card sec"><div class="ic"><i data-lucide="shield"></i></div><h4>Behind your VPN</h4><p>Optionally limit the whole server to your networks. Lockout protection stops an admin from shutting themselves out.</p></div>
+      <div class="card sec"><div class="ic"><i data-lucide="refresh-cw"></i></div><h4>Short-lived tokens</h4><p>The extension uses short bearer tokens with rotating refresh tokens; the web app an HttpOnly cookie with CSRF checks.</p></div>
+      <div class="card sec"><div class="ic"><i data-lucide="circle-x"></i></div><h4>Instant revocation</h4><p>Disabling a user or "sign out everywhere" ends every cookie and token immediately.</p></div>
+      <div class="card sec"><div class="ic"><i data-lucide="file-check"></i></div><h4>Permissive licences only</h4><p>Apache-2.0, and every dependency is MIT, Apache, BSD or ISC. CI enforces it.</p></div>
     </div>
     <div class="ladder reveal">
       <div style="--i:0"><b>Viewer</b><span>Sees comments, no tools</span></div>
