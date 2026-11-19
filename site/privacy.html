@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Inklayer</title>
+<meta name="description" content="What the Inklayer browser extension collects, where it sends it, and who is responsible for it.">
+<link rel="canonical" href="https://inklayer.online/privacy.html">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#5b21b6">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .policy { width: min(760px, 100% - 40px); margin: 48px auto 80px; }
+  .policy h1 { font-size: clamp(32px, 5vw, 44px); margin-bottom: 8px; }
+  .policy .updated { color: var(--muted-foreground); margin: 0 0 32px; }
+  .policy h2 { font-size: 24px; margin: 40px 0 12px; }
+  .policy h3 { font-size: 18px; margin: 24px 0 8px; }
+  .policy p, .policy li { margin: 0 0 12px; }
+  .policy ul { padding-left: 22px; margin: 0 0 12px; }
+  .policy .summary { background: var(--tint); border: 1px solid var(--border); border-radius: 14px; padding: 18px 22px; }
+  .policy .summary p:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/icon.svg" alt="">Inklayer</a>
+  </div>
+</header>
+
+<main class="policy">
+  <h1>Privacy policy</h1>
+  <p class="updated">Inklayer browser extension (Chrome and Firefox). Last updated 19 November 2026.</p>
+
+  <div class="summary">
+    <p><strong>Short version.</strong> Inklayer is self-hosted. The extension talks only to the Inklayer server that you (or your team) set up and enter in the extension. We, the developers of Inklayer, do not run that server, do not receive your data, and do not use analytics, tracking or advertising of any kind.</p>
+  </div>
+
+  <h2>Who is responsible for your data</h2>
+  <p>Everything the extension sends goes to the Inklayer server whose address is entered in the extension's settings. That server is run by you or by your organisation, not by us. The person or organisation running the server decides how long data is kept, who can see it, and which other services it is connected to (for example an issue tracker or single sign-on provider). For questions about data held on a server, contact whoever runs it.</p>
+
+  <h2>What the extension handles</h2>
+
+  <h3>Sign-in</h3>
+  <p>When you sign in, the extension opens your server's sign-in page using the browser's standard sign-in window. Your server then gives the extension access and refresh tokens. These are kept in the extension's local storage, which only the extension can read, and are sent only to your server. Your password is entered on your server's page, never into the extension. Your name, email address and profile are stored on your server, not by the extension.</p>
+
+  <h3>Showing comments on the pages you visit</h3>
+  <p>Without website access, the extension only works on a page when you click its icon there. If you grant website access (optional), it runs on every page so it can show your team's comments automatically. Every few minutes it downloads from your server the list of sites (domains only) that have comments. On sites not in that list, nothing about the page is sent. On sites in that list, or on any page where you open the extension, it sends your server that page's address so it can load the comments for it.</p>
+
+  <h3>Comments you create</h3>
+  <p>When you add a comment, highlight or drawing, the extension sends your server what you wrote, the address of the page, where on the page it is pinned, and the size of your browser window, so the comment appears in the right place for others.</p>
+
+  <h3>Screenshots and page details (optional)</h3>
+  <p>If "Attach screenshot and page details" is turned on when you save a comment, the extension also sends:</p>
+  <ul>
+    <li>a screenshot of the visible part of the tab, cropped to the area you commented on;</li>
+    <li>your browser, operating system, user agent, window size, pixel ratio and zoom level;</li>
+    <li>the HTML of the element you commented on and a selector to find it;</li>
+    <li>the page's last few console errors and warnings, and its last few failed network requests (method, address, status and timing). Addresses are recorded without their query string or <code>#</code> part, which can hold tokens, and messages are cut to 500 characters.</li>
+  </ul>
+  <p>To capture these, when website access is granted, the extension keeps a short list of the latest errors and failed requests (up to 20 of each) in each page's own memory. That list is not stored or sent anywhere unless you save a comment on that page with this option on, and it is gone when you leave the page. You can turn the option off at any time.</p>
+
+  <h3>Live presence (optional)</h3>
+  <p>If you turn on live presence in a tab, other people on your server can see your cursor and that you are on the same page. The extension does not send the page's address for this: it sends a one-way hash of it, so the server can match people on the same page without learning which page it is.</p>
+
+  <h3>Notifications</h3>
+  <p>About once a minute the extension asks your server whether you have new mentions or replies, so it can show an unread count. Only your sign-in token is sent.</p>
+
+  <h3>Settings stored in your browser</h3>
+  <p>Your server address, sign-in tokens, panel position and a few display preferences are stored in the browser's extension storage on your device. They are removed when you sign out or uninstall the extension.</p>
+
+  <h2>What the extension does not do</h2>
+  <ul>
+    <li>It does not send any data to us or to any service other than your Inklayer server.</li>
+    <li>It does not take screenshots or send page details unless you save a comment with that option on.</li>
+    <li>It does not record or send your browsing history. Page addresses are only sent as described above. It does not record keystrokes, form contents or passwords.</li>
+    <li>It does not use analytics, crash reporting, advertising or tracking.</li>
+    <li>It does not sell or share data, or use it for anything other than showing and sharing your team's comments.</li>
+    <li>It does not load or run code from the internet; all of its code ships inside the extension.</li>
+  </ul>
+
+  <h2>Permissions</h2>
+  <ul>
+    <li><strong>Active tab and scripting</strong>: to show the comment panel on the page you open it on.</li>
+    <li><strong>Access to websites</strong> (optional, only if you grant it): to show your team's comments on pages without clicking the icon each time, to keep the list of recent errors used for page details, and to take screenshots.</li>
+    <li><strong>Storage</strong>: to remember your server, sign-in and preferences.</li>
+    <li><strong>Identity</strong>: to open your server's sign-in page.</li>
+    <li><strong>Alarms</strong>: to check for new notifications in the background.</li>
+  </ul>
+
+  <h2>Your choices</h2>
+  <ul>
+    <li>Turn off screenshots and page details, or live presence, at any time.</li>
+    <li>Sign out to remove your tokens from the extension, or uninstall it to remove all of its stored settings.</li>
+    <li>To see, export or delete comments and account data, contact whoever runs your Inklayer server.</li>
+  </ul>
+
+  <h2>Hosted service</h2>
+  <p>If we ever offer a hosted Inklayer server, using it will mean we hold your data. That service will have its own privacy policy, and this page will be updated before it launches.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the new version will be published on this page with a new date. Significant changes will be noted in the extension's release notes.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy or the extension: open an issue on <a href="https://github.com/KanyeS/inklayer/issues">GitHub</a>.</p>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/icon.svg" alt="">Inklayer</a>
+    <span>Apache-2.0.</span>
+    <nav>
+      <a href="https://github.com/KanyeS/inklayer">GitHub</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="https://github.com/KanyeS/inklayer/blob/main/LICENSE">Licence</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

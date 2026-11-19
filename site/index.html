@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inklayer: comment on any web page, right on the page</title>
+<meta name="description" content="Open-source, self-hosted web page annotation for designers, developers and QA. Pin comments, highlight text and draw on any website with the Chrome or Firefox extension, with live cursors, bug context, issue trackers and Claude (MCP).">
+<link rel="canonical" href="https://inklayer.online/">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#5b21b6">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://inklayer.online/">
+<meta property="og:title" content="Inklayer: comment on any web page, right on the page">
+<meta property="og:description" content="Open-source, self-hosted page annotation with live cursors, bug context, issue trackers and Claude (MCP).">
+<meta property="og:image" content="https://inklayer.online/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="fonts/outfit.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/plex.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+<script defer src="demo.js"></script>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="">Inklayer</a>
+    <nav class="nav-links" aria-label="Features">
+      <a href="#tools">Tools</a>
+      <a href="#presence">Live cursors</a>
+      <a href="#bug-context">Bug context</a>
+      <a href="#threads">Mentions</a>
+      <a href="#issues">Issues</a>
+      <a href="#docs">Docs</a>
+      <a href="#mcp">Claude</a>
+      <a href="#security">Security</a>
+      <a href="#self-host">Self-host</a>
+    </nav>
+    <div class="nav-right">
+      <label class="toggle" title="Show or hide the pretend teammates on this page">
+        <span class="faces-mini" aria-hidden="true"><i style="--c:var(--john)"></i><i style="--c:var(--michael)"></i><i style="--c:var(--rosie)"></i><i style="--c:var(--leo)"></i></span>
+        <span class="label">Demo people</span>
+        <input type="checkbox" id="people-toggle" checked>
+      </label>
+      <a class="btn sm" href="https://github.com/KanyeS/inklayer" aria-label="Inklayer on GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+        <span>GitHub</span>
+      </a>
+    </div>
+  </div>
+  <div class="progress" id="progress"></div>
+</header>
+
+<main id="top">
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="hero" data-scene="hero">
+  <div class="wrap">
+    <div class="copy">
+      <span class="eyebrow">Open source · Self-hosted · Apache-2.0</span>
+      <h1 id="hero-title">Comment on <span class="ink">any web page</span>, right on the page.</h1>
+      <p class="lede">Inklayer is a browser extension and a small server for designers, developers and QA. Pin comments, highlight text and draw on any website. Your team sees them in place, live, with everything a developer needs to fix it.</p>
+      <div class="cta">
+        <a class="btn primary" id="dl-chrome" href="https://github.com/KanyeS/inklayer/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="M21.17 8H12M3.95 6.06 8.54 14M10.88 21.94 15.46 14"/></svg>
+          Get it for Chrome
+        </a>
+        <a class="btn" id="dl-firefox" href="https://github.com/KanyeS/inklayer/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10c0-1.5-.3-2.8-.9-4-.6 1.6-1.6 2.3-1.6 2.3s.2-3.4-2.5-6C15 2.5 13 3 13 3s2 2 1 4c-.6-1.1-2.5-1.4-3.5-.5-1 1-.5 2.5-.5 2.5S8 9 7.5 7C6 8.3 5.5 10 5.5 12a6.5 6.5 0 0 0 13 0"/></svg>
+          Firefox
+        </a>
+        <a class="btn" href="#self-host">Run your server</a>
+      </div>
+      <p class="fineprint" id="dl-note">Chrome, Edge, Brave and Firefox. The extension connects to your own Inklayer server.</p>
+    </div>
+
+    <div class="hero-stage stage" id="hero-stage">
+      <div class="browser">
+        <div class="chrome">
+          <div class="dots"><i></i><i></i><i></i></div>
+          <div class="url">shop.example/summer-sale</div>
+          <div class="ext"><img src="assets/icon.svg" alt=""><b id="hero-badge">3</b></div>
+        </div>
+        <div class="page" id="hero-page">
+          <div class="site-nav"><strong>Northwind</strong><span>Shop</span><span>Journal</span><span>Help</span></div>
+          <div class="site-hero">
+            <div>
+              <h3 id="hero-h3">Summer sale is here</h3>
+              <p id="hero-p">Up to 40% off trail shoes, packs and tents, this week only. Free shipping over $80.</p>
+              <span class="fake-btn" id="hero-btn">Shop the sale</span>
+            </div>
+            <div class="shot" id="hero-shot"></div>
+          </div>
+          <div class="site-cards">
+            <div id="hero-c1"><b>Trail Runner 2</b>$129, was $169</div>
+            <div id="hero-c2"><b>Ridge 30L Pack</b>$89, was $119</div>
+            <div id="hero-c3"><b>Basecamp Tent</b>$249, was $329</div>
+          </div>
+        </div>
+      </div>
+      <div class="pill" style="position:absolute; top:-16px; right:18px; z-index:15">
+        <span class="dot"></span>Live
+        <span class="faces" id="hero-faces"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRY IT HERE ============ -->
+<section class="tryit">
+  <div class="wrap">
+    <div class="card reveal">
+      <img src="assets/icon.svg" alt="">
+      <div>
+        <h3>This page is a playground. Comment on it for real.</h3>
+        <p>Everything on this page is fake people and real HTML. If you have the extension installed and signed in to your server:</p>
+        <ol>
+          <li>Click the Inklayer toolbar button and choose <b>Comment on this page</b>.</li>
+          <li>Pin, highlight or draw on anything below. The broken checkout button in <a href="#bug-context">Bug context</a> really fails, so you'll see real console errors in your comment.</li>
+          <li>Turn off <b>Demo people</b> at the top to see only your own team.</li>
+        </ol>
+      </div>
+      <a class="btn" href="https://github.com/KanyeS/inklayer#browser-extension">Install guide</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TOOLS ============ -->
+<section class="feature" id="tools" data-scene="tools">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Comment on anything</span>
+      <h2>Six ways to point at the problem.</h2>
+      <p>Open the panel on any website and pick a tool. Every mark gets a number, a comment thread and a place in the list. Click a mark to find its comment, or a comment to scroll to its mark. Viewers see everything but get no tools.</p>
+      <span class="try">👆 Click a tool in the panel to <b>try it yourself</b> on the shop page.</span>
+    </div>
+    <div class="tools-stage reveal">
+      <div class="card shop stage" id="shop">
+        <div class="drive-note">You're drawing. Nothing is saved. <button type="button" id="resume-demo">Resume demo</button></div>
+        <div class="crumbs">Shop › Footwear › Trail</div>
+        <div class="product">
+          <div class="photo" id="shop-photo"></div>
+          <div>
+            <h3 id="shop-title">Trail Runner 2</h3>
+            <div class="stars" id="shop-stars">★★★★☆<span>(212 reviews)</span></div>
+            <div class="price" id="shop-price">$129 <s>$169</s></div>
+            <div class="sizes" id="shop-sizes"><span>8</span><span>9</span><span class="sel">10</span><span>11</span><span>12</span></div>
+            <span class="addcart" id="shop-cart">Add to cart</span>
+          </div>
+        </div>
+        <p class="desc" id="shop-desc">Light, grippy and built for long days on rough ground. Recycled mesh upper, rock plate, 6&nbsp;mm drop. Free returns, and it ships in 3–5 days.</p>
+      </div>
+
+      <div class="xpanel" id="tools-panel">
+        <div class="header">
+          <div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div>
+          <div class="actions">
+            <span title="Share this page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+            <span title="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+          </div>
+        </div>
+        <div class="project"><span class="select">Northwind shop ▾</span></div>
+        <div class="tools" id="tool-chips">
+          <button class="tool active" data-tool="select" type="button">Select</button>
+          <button class="tool" data-tool="pin" type="button">Pin</button>
+          <button class="tool" data-tool="element" type="button">Element</button>
+          <button class="tool" data-tool="text" type="button">Text</button>
+          <button class="tool" data-tool="box" type="button">Box</button>
+          <button class="tool" data-tool="arrow" type="button">Arrow</button>
+          <button class="tool" data-tool="draw" type="button">Draw</button>
+        </div>
+        <div class="colors" id="tool-colors">
+          <span class="swatch active" style="--c:#f59e0b"></span><span class="swatch" style="--c:#ef4444"></span><span class="swatch" style="--c:#3b82f6"></span><span class="swatch" style="--c:#10b981"></span><span class="swatch" style="--c:#8b5cf6"></span>
+        </div>
+        <p class="hint" id="tool-hint">Click a mark to find its comment.</p>
+        <div class="draft" id="tool-draft" hidden>
+          <div class="ta" id="tool-ta"></div>
+          <span class="check"><i></i>Attach screenshot and page details</span>
+          <div class="row"><span class="pbtn primary" id="tool-save">Comment</span><span class="pbtn">Cancel</span></div>
+        </div>
+        <ul class="list" id="tool-list"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ANCHORS ============ -->
+<section class="feature" id="anchors" data-scene="anchors">
+  <div class="wrap feature-grid">
+    <div class="copy reveal">
+      <span class="eyebrow">Marks stay put</span>
+      <h2>The page changes. The comment doesn't get lost.</h2>
+      <p>Each mark is attached to an element through several independent anchors, and shapes are stored relative to that element. When the layout shifts, the screen is a different size, or a single-page app navigates, marks follow.</p>
+      <ul class="ticks">
+        <li>CSS selectors (shadow DOM aware), XPath, the text itself, and its original position</li>
+        <li>If the element is gone, the mark stays where it was and is flagged as <b>moved</b></li>
+        <li>Follows single-page-app navigation and DOM changes</li>
+      </ul>
+    </div>
+    <div class="stage reveal">
+      <div class="card anchor-stage">
+        <div class="mini-site" id="mini">
+          <div class="bar"><b>Northwind</b><span>Shop</span><span>Journal</span><span>Help</span></div>
+          <div class="promo" id="mini-promo">Free shipping on orders over $80, until Sunday</div>
+          <div class="grid">
+            <div class="tile" id="mini-t1"><div class="img" style="background:linear-gradient(135deg,#fde68a,#f97316)"></div><h4 id="mini-h1">Trail Runner 2</h4><p>$129</p><span class="buy" id="mini-buy">Buy</span></div>
+            <div class="tile"><div class="img" style="background:linear-gradient(135deg,#a7f3d0,#059669)"></div><h4>Ridge 30L Pack</h4><p id="mini-p2">Water-resistant, 1.1&nbsp;kg</p></div>
+            <div class="tile"><div class="img" style="background:linear-gradient(135deg,#bfdbfe,#4f46e5)"></div><h4>Basecamp Tent</h4><p>Sleeps three</p></div>
+          </div>
+        </div>
+        <dl class="anchor-readout" id="anchor-readout">
+          <dt>css</dt><dd>.grid &gt; .tile:nth-child(1) &gt; .buy</dd>
+          <dt>xpath</dt><dd>/html/body/main/div[2]/div[1]/span</dd>
+          <dt>text</dt><dd>"Buy"</dd>
+          <dt>position</dt><dd>x 0.18 · y 0.62 of page width</dd>
+        </dl>
+        <div class="anchor-controls">
+          <button class="btn sm" type="button" id="relayout">Change the layout</button>
+          <button class="btn sm" type="button" id="remove-promo">Remove the banner</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRESENCE ============ -->
+<section class="feature" id="presence" data-scene="presence">
+  <div class="wrap feature-grid flip">
+    <div class="copy reveal">
+      <span class="eyebrow">Live cursors</span>
+      <h2>See who's on the page with you.</h2>
+      <p>Turn on live cursors from the toolbar popup and review together, like a design tool, but on the real site. Everyone's pointer shows in their colour with a name tag, their text selection is tinted, and a row of faces shows who is here.</p>
+      <ul class="ticks">
+        <li>Positions travel as anchors, so a cursor over a paragraph stays over that paragraph on a different screen size</li>
+        <li>Idle cursors fade after ten seconds</li>
+        <li>Works on pages and in docs. Administrators can switch it off</li>
+      </ul>
+    </div>
+    <div class="stage reveal">
+      <div class="browser presence-stage" id="presence-stage">
+        <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url">northwind.example/journal/fastest-known-time</div></div>
+        <div class="pill chrome-pill"><span class="dot"></span>Live<span class="faces" id="presence-faces"></span></div>
+        <article class="doc-page">
+          <h3 id="pr-h">Chasing a fastest known time</h3>
+          <div class="by">Northwind Journal · 6 min read</div>
+          <p id="pr-p1">At 4:10 am the trailhead is silent except for the creek. You check your laces twice, then once more, because twelve hours from now that knot is the only thing you'll still trust.</p>
+          <h4 id="pr-h4">What we packed</h4>
+          <p id="pr-p2">Two soft flasks, a rain shell that weighs less than an apple, and enough salted potatoes to feed a small village. The Ridge 30L carried all of it without a single hot spot.</p>
+          <p id="pr-p3">By the second summit the cloud had lifted and the whole valley opened up below us, green and gold and impossibly quiet.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BUG CONTEXT ============ -->
+<section class="feature" id="bug-context" data-scene="bug">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Bug context</span>
+      <h2>Every comment comes with what a developer needs to fix it.</h2>
+      <p>When someone saves a comment, the extension attaches a screenshot of the area, the browser, OS, window size and pixel ratio, the element's selector and HTML (anything typed into forms left out), and the page's last console errors and failed requests. Nothing leaves the page until someone saves.</p>
+      <span class="try">🐞 The <b>Place order</b> button below is genuinely broken. Click it, then check the console, or comment on it with the extension.</span>
+    </div>
+    <div class="bug-grid reveal">
+      <div class="card checkout stage" id="checkout-card">
+        <form id="checkout" onsubmit="return false">
+          <h4>Checkout</h4>
+          <label for="co-name">Name on card</label>
+          <input id="co-name" autocomplete="off" value="Alex Rivera">
+          <label for="co-card">Card number</label>
+          <input id="co-card" autocomplete="off" value="4242 4242 4242 4242">
+          <div class="two">
+            <div><label for="co-exp">Expiry</label><input id="co-exp" autocomplete="off" value="09 / 29"></div>
+            <div><label for="co-cvc">CVC</label><input id="co-cvc" autocomplete="off" value="123"></div>
+          </div>
+          <div class="sum"><span>Total</span><b>$218.00</b></div>
+          <button class="place-order" id="place-order" type="button">Place order</button>
+          <div class="order-error" id="order-error">Something went wrong. Please try again.</div>
+        </form>
+      </div>
+      <div class="card details" id="details">
+        <h5>Screenshot</h5>
+        <div class="shot" id="details-shot"><div class="flash"></div></div>
+        <h5>Environment <span class="placeholder" style="text-transform:none;letter-spacing:0">(yours, right now)</span></h5>
+        <dl id="env"></dl>
+        <h5>Element</h5>
+        <pre id="el-info">form#checkout &gt; button#place-order
+&lt;button class="place-order" id="place-order" type="button"&gt;Place order&lt;/button&gt;
+&lt;input id="co-card" value="[removed]"&gt;</pre>
+        <h5>Console and network</h5>
+        <ul class="log" id="log"><li class="placeholder">Nothing yet. Click Place order.</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ADDRESS ============ -->
+<section class="feature" id="address" data-scene="address">
+  <div class="wrap feature-grid">
+    <div class="copy reveal">
+      <span class="eyebrow">The right page, and only that</span>
+      <h2>You choose which address a comment belongs to.</h2>
+      <p>When a page's address has a query string or #hash, the person commenting chooses: every version of the page, or only that exact address. Only the parts they pick are stored, so tracking parameters and tokens stay out.</p>
+      <ul class="ticks">
+        <li>The extension keeps a list of domains that have comments, nothing more</li>
+        <li>It sends a full address only on those sites, or when you choose <b>Comment on this page</b></li>
+        <li>Each comment shows the address it belongs to</li>
+      </ul>
+    </div>
+    <div class="stage reveal">
+      <div class="card addr">
+        <div class="urlbar" id="urlbar"></div>
+        <fieldset class="scope" style="border:0;padding:0;margin:0">
+          <label><input type="radio" name="scope" value="all"><span><b>Every version of this page</b><span class="sub">shop.example/products/trail-runner</span></span></label>
+          <label><input type="radio" name="scope" value="exact" checked><span><b>Only this address</b><span class="sub">Pick the parts that make it a different page</span></span></label>
+          <div class="params" id="params"></div>
+        </fieldset>
+        <div class="stored"><b>Stored on the server</b><span id="stored"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THREADS ============ -->
+<section class="feature" id="threads" data-scene="threads">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Threads, mentions, notifications</span>
+      <h2>Bring the right person to the right pixel.</h2>
+      <p>Reply in a thread and type <code>@</code> to mention anyone in the organisation. They get a notification in the web app and a count on their toolbar icon, and optionally an email, a Slack message or a webhook.</p>
+    </div>
+    <div class="thread-stage reveal">
+      <div class="xpanel stage" id="thread-panel">
+        <div class="header">
+          <div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div>
+          <div class="actions"><span id="bell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span></div>
+        </div>
+        <ul class="list">
+          <li class="item selected">
+            <div class="meta"><span class="badge" style="--c:var(--rosie)">4</span><b>Rosie</b><span>· 2h</span></div>
+            <p class="body">Checkout button is hidden behind the cookie banner on iPhone SE.</p>
+            <div class="address">shop.example/checkout</div>
+            <div class="reply" id="thread-replies"></div>
+          </li>
+        </ul>
+        <div class="draft">
+          <div class="ta" id="thread-ta"></div>
+          <div class="row"><span class="pbtn primary" id="thread-send">Reply</span></div>
+        </div>
+      </div>
+      <div class="notif-col">
+        <div id="toasts" style="display:grid;gap:10px">
+          <div class="card toast"><span class="face" style="--c:var(--john)">J</span><div><b>John</b> resolved your comment <i>“Hero image is blurry on retina”</i><p>shop.example/summer-sale</p></div><time>1h</time></div>
+        </div>
+        <div class="integrations">
+          <div class="card integ"><h5><i style="background:#7c3aed">✉</i>Email</h5><p>People get their own notifications by email, and can turn it off in Settings. Amazon SES works.</p><div class="outbox"><span class="fail"></span><span class="fail"></span><span class="ok"></span>Retried, delivered</div></div>
+          <div class="card integ"><h5><i style="background:#4a154b">#</i>Slack</h5><p>Post chosen events to a channel, for one project or all.</p><div class="slack-msg"><i></i><span><b>Inklayer</b> Leo mentioned Michael on shop.example/checkout</span></div></div>
+          <div class="card integ"><h5><i style="background:#0f766e">{}</i>Webhook</h5><p>Signed JSON for Teams, Discord or your own tools.</p><pre>X-Inklayer-Signature: sha256=9f2c…e71a
+{"event":"mention","page":"…"}</pre></div>
+        </div>
+        <p style="margin:0;color:var(--muted-foreground);font-size:14px">You hear about: mentions in comments, replies and docs · replies in your threads · your comment being resolved · a linked issue being closed. Messages wait in an outbox and are retried with growing gaps, up to 8 tries.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ISSUES ============ -->
+<section class="feature" id="issues" data-scene="issues">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Issue trackers</span>
+      <h2>One click from comment to ticket. Closed in one, closed in both.</h2>
+      <p>Connect GitHub (including Enterprise), Jira Cloud or Linear to a project. <b>Create issue</b> files the comment, its replies, the page address, a link back and the page details. Resolve the comment and its issues close; close the issue in the tracker and the comment resolves, with a reply saying so.</p>
+    </div>
+    <div class="issue-stage reveal">
+      <div class="xpanel" id="issue-panel">
+        <ul class="list">
+          <li class="item selected" id="issue-comment">
+            <div class="meta"><span class="badge" style="--c:var(--rosie)">4</span><b>Rosie</b><span>· 2h</span><span class="grow-left" id="issue-status"></span></div>
+            <p class="body">Checkout button is hidden behind the cookie banner on iPhone SE.</p>
+            <div class="address">shop.example/checkout</div>
+            <div class="reply"><b>Michael</b> On it, looks like a z-index fight.</div>
+            <div class="reply" id="issue-reply" hidden></div>
+            <div class="row" style="margin-top:4px"><span class="pbtn" id="create-issue">Create issue</span><span class="pbtn link" id="issue-link" hidden></span></div>
+          </li>
+        </ul>
+      </div>
+      <div class="sync" id="sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9h14l-4-4M20 15H6l4 4"/></svg></div>
+      <div>
+        <div class="tracker-tabs" id="tracker-tabs"><span data-t="github" class="on">GitHub</span><span data-t="jira">Jira</span><span data-t="linear">Linear</span></div>
+        <div class="card issue empty" id="issue-card">No issue yet</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HISTORY ============ -->
+<section class="feature" id="history" data-scene="history">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">History and activity</span>
+      <h2>Every change is kept. Nothing is silently overwritten.</h2>
+      <p>Each edit, resolve and reopen is a new revision with a timestamp. If two people edit the same comment at once, the second save is refused rather than overwriting the first. The <b>Activity</b> tab lists what happened, on this site or everywhere.</p>
+    </div>
+    <div class="history-stage reveal">
+      <div class="card timeline"><ol id="timeline"></ol></div>
+      <div style="display:grid;gap:16px">
+        <div class="card conflict" id="conflict">
+          <div class="editor"><div class="who"><span class="face" style="--c:var(--leo)">L</span>Leo is editing</div><div class="txt" id="ed-leo"></div><div class="res" id="res-leo"></div></div>
+          <div class="editor"><div class="who"><span class="face" style="--c:var(--john)">J</span>John is editing</div><div class="txt" id="ed-john"></div><div class="res" id="res-john"></div></div>
+        </div>
+        <div class="xpanel activity" style="width:auto">
+          <div class="header"><div class="tabs"><span class="tab">Comments</span><span class="tab active">Activity</span></div></div>
+          <div class="filters"><span class="pbtn primary">This site</span><span class="pbtn">Everywhere</span></div>
+          <ul id="activity"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SHARE ============ -->
+<section class="feature" id="share" data-scene="share">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Read-only links</span>
+      <h2>Share a page's comments with people who don't have an account.</h2>
+      <p>Send a client or a contractor a link to a page's comments, a whole project's, or a doc. They read names, comments, replies and screenshots, even from outside your network, and nothing else.</p>
+    </div>
+    <div class="share-stage reveal">
+      <div class="xpanel" id="share-panel">
+        <div class="header">
+          <div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div>
+          <div class="actions"><span id="share-icon" title="Share this page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span></div>
+        </div>
+        <div id="share-slot"></div>
+        <ul class="list">
+          <li class="item"><div class="meta"><span class="badge" style="--c:var(--john)">1</span><b>John</b><span>· 3h</span></div><p class="body">Hero image is soft on retina. Export at 2x.</p></li>
+          <li class="item"><div class="meta"><span class="badge" style="--c:var(--rosie)">2</span><b>Rosie</b><span>· 2h</span></div><p class="body">Sale price missing on the card.</p></li>
+        </ul>
+      </div>
+      <div>
+        <div class="browser guest">
+          <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url" id="guest-url">inklayer.your-company.com/s/…</div></div>
+          <div class="page">
+            <div class="gbar"><img src="assets/icon.svg" alt=""><span>Shared by <b>Leo</b> · shop.example/summer-sale · expires in 30 days</span><span class="views" id="views">0 views</span></div>
+            <div class="gc"><div class="meta"><span class="badge" style="--c:var(--john)">1</span><b>John</b> · 3h</div>Hero image is soft on retina. Export at 2x.<div class="thumb"></div></div>
+            <div class="gc"><div class="meta"><span class="badge" style="--c:var(--rosie)">2</span><b>Rosie</b> · 2h</div>Sale price missing on the card.</div>
+          </div>
+        </div>
+        <div class="seeno">
+          <div><h5>Guests see</h5><ul><li>Names, comments, replies</li><li>Screenshots</li><li>Public docs, with mentions as names</li></ul></div>
+          <div><h5>Never</h5><ul><li>Email addresses or roles</li><li>Page details, issues</li><li>Links into the app</li></ul></div>
+        </div>
+        <p style="color:var(--muted-foreground);font-size:14.5px;margin:14px 0 0">Long random tokens, stored hashed. Turning a link off stops it at once, every view is counted, and share pages aren't indexed, send no referrer, and are rate limited.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DOCS ============ -->
+<section class="feature" id="docs" data-scene="docs">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Docs</span>
+      <h2>A knowledge base that links to the comments it's about.</h2>
+      <p>Write specs, QA notes and decisions next to the work. Edit together live, link docs and comments with <code>[[double brackets]]</code>, tag them, and see how everything connects in the graph. Make a doc public with one click.</p>
+    </div>
+    <div class="docs-stage reveal">
+      <div class="card doc-edit stage" id="doc-edit">
+        <div class="crumbs">Northwind / QA / <span class="tag">#checkout</span><span class="tag">#mobile</span></div>
+        <h3>Checkout redesign: QA notes</h3>
+        <p>Release blocker: the pay button sits under the cookie banner on small phones. See <span class="wl">[[Cookie banner]]</span> and Rosie's comment:</p>
+        <div class="cembed"><span class="badge" style="--c:var(--rosie)">4</span><div>Checkout button is hidden behind the cookie banner on iPhone SE.<small>shop.example/checkout · open</small></div></div>
+        <p id="doc-l1"></p>
+        <p id="doc-l2"></p>
+      </div>
+      <div class="card graph" id="graph">
+        <svg id="graph-svg" viewBox="0 0 400 340" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="legend"><span><i style="--c:var(--primary-text)"></i>Docs</span><span><i style="--c:#ef4444"></i>Comments</span><span><i style="--c:#10b981"></i>Tags</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MCP ============ -->
+<section class="feature" id="mcp" data-scene="mcp">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Claude and MCP</span>
+      <h2>Let your AI assistant read the comments and fix the bugs.</h2>
+      <p>Inklayer is an MCP server. Connect Claude Code, Claude Desktop or claude.ai, sign in as yourself, and the assistant can do what your role allows: read open comments with their screenshots and page details, reply, resolve, file issues, and read or write docs.</p>
+      <div class="mcp-tools">
+        <code>list_open_comments</code><code>get_comment_screenshot</code><code>reply_to_comment</code><code>set_comment_status</code><code>create_issue_from_comment</code><code>search_docs</code><code>edit_doc</code><code>recent_activity</code>
+      </div>
+    </div>
+    <div class="mcp-stage reveal">
+      <div class="term"><div class="tbar"><i></i><i></i><i></i><span>~/northwind-shop</span></div><div class="out" id="term"></div></div>
+      <div class="xpanel" id="mcp-panel">
+        <div class="header"><div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div></div>
+        <ul class="list">
+          <li class="item" id="mcp-c4"><div class="meta"><span class="badge" style="--c:var(--rosie)">4</span><b>Rosie</b><span>· 2h</span><span class="grow-left" id="mcp-s4"></span></div><p class="body">Checkout button is hidden behind the cookie banner on iPhone SE.</p><div class="reply" id="mcp-r4" hidden></div></li>
+          <li class="item" id="mcp-c5"><div class="meta"><span class="badge" style="--c:var(--leo)">5</span><b>Leo</b><span>· 1h</span><span class="grow-left" id="mcp-s5"></span></div><p class="body">Total doesn't update after removing a coupon.</p><div class="reply" id="mcp-r5" hidden></div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECURITY ============ -->
+<section class="feature" id="security">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Sign-in and security</span>
+      <h2>Your server, your sign-in, your rules.</h2>
+      <p>Inklayer stores no passwords. People sign in with Google or your own single sign-on, and roles decide what they can do in each organisation and project.</p>
+    </div>
+    <div class="sec-grid reveal">
+      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg></div><h4>Single sign-on only</h4><p>Google, or any OpenID Connect provider. Verified domains let a whole company join automatically.</p><div class="chips"><span>Google</span><span>JumpCloud</span><span>Okta</span><span>Entra ID</span><span>Any OIDC</span></div></div>
+      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><h4>Sealed off from the page</h4><p>The overlay and panel live in closed shadow roots, so a site's CSS and scripts can't restyle or read them. The page never sees a token.</p></div>
+      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h4>Behind your VPN</h4><p>Optionally limit the whole server to your networks. Lockout protection stops an admin from shutting themselves out.</p></div>
+      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></div><h4>Short-lived tokens</h4><p>The extension uses short bearer tokens with rotating refresh tokens; the web app an HttpOnly cookie with CSRF checks.</p></div>
+      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg></div><h4>Instant revocation</h4><p>Disabling a user or "sign out everywhere" ends every cookie and token immediately.</p></div>
+      <div class="card sec"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg></div><h4>Permissive licences only</h4><p>Apache-2.0, and every dependency is MIT, Apache, BSD or ISC. CI enforces it.</p></div>
+    </div>
+    <div class="ladder reveal">
+      <div style="--i:0"><b>Viewer</b><span>Sees comments, no tools</span></div>
+      <div style="--i:1"><b>Commenter</b><span>Annotates, replies, resolves</span></div>
+      <div style="--i:2"><b>Editor</b><span>Same as Commenter, for compatibility</span></div>
+      <div style="--i:3"><b>Admin</b><span>Members, projects, integrations</span></div>
+      <div style="--i:4"><b>Owner</b><span>Everything in the organisation</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ADMIN ============ -->
+<section class="feature" id="admin">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Administration</span>
+      <h2>Everything an administrator needs, in one place.</h2>
+      <p>The web app manages organisations, members, projects and their commented pages. Instance administrators also get:</p>
+    </div>
+    <div class="admin-list reveal">
+      <div class="admin-item"><h4>Users</h4><p>Every account on the server. Disable someone or sign them out everywhere.</p></div>
+      <div class="admin-item"><h4>Features</h4><p>Turn Docs, Live cursors, AI assistants (MCP), Bug context, Issue trackers and Sharing on or off for everyone, instantly. Nothing is deleted.</p></div>
+      <div class="admin-item"><h4>Network access</h4><p>An allow list of addresses and CIDR ranges, IPv4 or IPv6, with your own address shown and protected.</p></div>
+      <div class="admin-item"><h4>Shared links</h4><p>Every working read-only link on the server, with view counts, and a switch to turn each off.</p></div>
+      <div class="admin-item"><h4>Activity log</h4><p>Comments and sign-ins, plus refused sign-ins and server errors (never query strings or bodies), kept 30 days.</p></div>
+      <div class="admin-item"><h4>Organisations and roles</h4><p>Invitations, allowed email domains with a default role, and per-project role changes.</p></div>
+      <div class="admin-item"><h4>Integrations</h4><p>Email, Slack and signed webhooks per organisation, with the last delivery error shown.</p></div>
+      <div class="admin-item"><h4>Issue trackers</h4><p>GitHub, Jira Cloud and Linear per project. Credentials checked before saving, stored encrypted.</p></div>
+      <div class="admin-item"><h4>Connected apps</h4><p>MCP clients each person has allowed, and a button to disconnect them.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SELF-HOST ============ -->
+<section class="feature" id="self-host">
+  <div class="wrap feature-grid stack">
+    <div class="copy reveal">
+      <span class="eyebrow">Self-host</span>
+      <h2>One container. One SQLite file. Yours.</h2>
+      <p>The server is ASP.NET Core with a SQLite database on a single volume. Put a TLS reverse proxy in front and you're done.</p>
+    </div>
+    <div class="host-grid reveal">
+      <pre class="code"><span class="c"># Run the server</span>
+<span class="p">$</span> git clone https://github.com/KanyeS/inklayer
+<span class="p">$</span> cd inklayer/deploy
+<span class="p">$</span> docker compose up -d
+<span class="c">  → http://localhost:8080</span>
+
+<span class="c"># .env: Google, or your own SSO</span>
+GOOGLE_CLIENT_ID=…
+GOOGLE_CLIENT_SECRET=…
+INKLAYER_BOOTSTRAP_ADMINS=you@company.com
+
+<span class="c"># Connect Claude Code</span>
+<span class="p">$</span> claude mcp add --transport http inklayer \
+    https://inklayer.your-company.com/api/mcp</pre>
+      <div class="host-cards">
+        <div class="card"><h4>Docker Compose <span>any server</span></h4><p>All data on the <code>inklayer-data</code> volume. Run one replica on local disk. Caddyfile example included.</p></div>
+        <div class="card"><h4>AWS Lightsail <span>about $7/month</span></h4><p>Caddy for HTTPS and Litestream for continuous backups to S3. <a href="https://github.com/KanyeS/inklayer/blob/main/docs/deploy-aws-lightsail.md">Step-by-step guide</a>.</p></div>
+        <div class="card"><h4>Browser extension <span>Chrome · Firefox</span></h4><p>Download the zips from the latest release, load them, and point them at your server. <a href="https://github.com/KanyeS/inklayer#browser-extension">Install guide</a>.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap">
+    <img src="assets/icon.svg" alt="" style="width:64px;height:64px;margin:0 auto">
+    <h2>Stop describing the bug. Point at it.</h2>
+    <p>Free and open source. Run it on your own server, connect your sign-in, and comment on any page your team works on.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/KanyeS/inklayer/releases/latest">Download the extension</a>
+      <a class="btn" href="https://github.com/KanyeS/inklayer">Star on GitHub</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="">Inklayer</a>
+    <span>Apache-2.0. The people on this page are pretend.</span>
+    <nav>
+      <a href="https://github.com/KanyeS/inklayer">GitHub</a>
+      <a href="https://github.com/KanyeS/inklayer/releases">Releases</a>
+      <a href="https://github.com/KanyeS/inklayer/blob/main/docs/sso-oidc.md">SSO setup</a>
+      <a href="https://github.com/KanyeS/inklayer/blob/main/docs/deploy-aws-lightsail.md">Deploy guide</a>
+      <a href="https://github.com/KanyeS/inklayer/blob/main/LICENSE">Licence</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
