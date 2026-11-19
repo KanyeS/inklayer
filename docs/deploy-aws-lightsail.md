@@ -108,7 +108,7 @@ nano .env
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | from step 2 (leave empty if you only use an OIDC provider) |
 | `OIDC_*` | optional: your OIDC provider, see [sso-oidc.md](sso-oidc.md) |
 | `INKLAYER_BOOTSTRAP_ADMINS` | the email address you sign in with. It becomes an instance administrator on first sign-in. |
-| `INKLAYER_EXTENSION_REDIRECT_URIS` | leave empty until the browser extension is installed |
+| `INKLAYER_EXTENSION_REDIRECT_URIS` | leave empty. The official extension is always allowed; this is only for builds with a different extension ID. |
 
 Then start the stack:
 

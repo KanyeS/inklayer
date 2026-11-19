@@ -77,6 +77,20 @@ public sealed class ExtensionOAuthTests(InklayerApiFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("https://cihhaaceflhcncmeoiembekghkhbgfio.chromiumapp.org/")] // Chrome Web Store build
+    [InlineData("https://01fc551d14085f05b25b6448f79709265f7c52ab.extensions.allizom.org/")] // Firefox build
+    public async Task Official_extension_redirect_uris_are_allowed_without_configuration(string redirectUri)
+    {
+        using var browser = await factory.SignInAsAdminAsync();
+        var (url, _) = AuthorizeUrl(redirectUri);
+
+        using var response = await browser.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.StartsWith(redirectUri, response.Headers.Location!.ToString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Pkce_is_required()
     {

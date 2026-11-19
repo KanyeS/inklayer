@@ -89,8 +89,9 @@ To install it:
    - **Chrome** (120 or later): open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and choose `client/apps/extension/dist`.
    - **Firefox** (128 or later): open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on**, and choose `client/apps/extension/dist-firefox/manifest.json`. Temporary add-ons are removed when Firefox closes; a permanent install needs the add-on signed by addons.mozilla.org.
 2. **Connect it.** Open the extension popup, enter your server address, and grant site access. Site access is how it reaches your server and shows comments on the pages you visit.
-3. **Allow its sign-in address.** The popup shows the extension's sign-in address: `https://<extension-id>.chromiumapp.org/` in Chrome, `https://<hash>.extensions.allizom.org/` in Firefox. Add it to the server's `Inklayer:Auth:ExtensionRedirectUris` (`INKLAYER_EXTENSION_REDIRECT_URIS` in Docker). To use both browsers, list both addresses, separated by a comma.
-4. **Sign in.**
+3. **Sign in.**
+
+The server always allows the official extension's sign-in addresses, so there's nothing to configure. They're fixed: in Chrome `https://cihhaaceflhcncmeoiembekghkhbgfio.chromiumapp.org/` (the manifest's `key` pins the ID, for Web Store installs and builds from source alike), in Firefox `https://01fc551d14085f05b25b6448f79709265f7c52ab.extensions.allizom.org/` (from the add-on ID). Only if you build the extension with a different ID (a fork), add its address to `Inklayer:Auth:ExtensionRedirectUris` (`INKLAYER_EXTENSION_REDIRECT_URIS` in Docker), comma-separated.
 
 ### Commenting
 

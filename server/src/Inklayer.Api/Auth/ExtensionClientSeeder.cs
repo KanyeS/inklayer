@@ -5,13 +5,13 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace Inklayer.Api.Auth;
 
 /// <summary>
-/// Registers (or updates) the browser extension as a public OAuth client. Its redirect URIs come from
+/// Registers (or updates) the browser extension as a public OAuth client. Its redirect URIs are the official extension's
+/// (<see cref="InklayerAuthOptions.OfficialExtensionRedirectUris"/>) plus any in
 /// <see cref="InklayerAuthOptions.ExtensionRedirectUris"/>. Runs at startup, after database migrations.
 /// </summary>
-internal sealed partial class ExtensionClientSeeder(
+internal sealed class ExtensionClientSeeder(
     IServiceProvider services,
-    IOptions<InklayerAuthOptions> options,
-    ILogger<ExtensionClientSeeder> logger) : IHostedService
+    IOptions<InklayerAuthOptions> options) : IHostedService
 {
     public const string ClientId = "inklayer-extension";
 
@@ -54,15 +54,7 @@ internal sealed partial class ExtensionClientSeeder(
         {
             await manager.UpdateAsync(existing, descriptor, cancellationToken);
         }
-
-        if (descriptor.RedirectUris.Count == 0)
-        {
-            LogNoRedirectUris(logger);
-        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Inklayer:Auth:ExtensionRedirectUris is empty; the browser extension can't sign in until it is set")]
-    private static partial void LogNoRedirectUris(ILogger logger);
 }

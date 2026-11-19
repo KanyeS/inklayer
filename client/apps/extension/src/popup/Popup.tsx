@@ -87,8 +87,6 @@ function Setup({ state, onDone }: { state: StateResponse; onDone: () => Promise<
         <Button type="submit">Connect</Button>
       </form>
       <ErrorText>{error}</ErrorText>
-      <p className="text-xs text-muted-foreground">Ask your administrator to allow this extension's sign-in address:</p>
-      <Code>{state.redirectUri}</Code>
     </>
   );
 }

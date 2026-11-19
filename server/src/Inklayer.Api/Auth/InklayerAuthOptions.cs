@@ -21,8 +21,20 @@ public sealed partial class InklayerAuthOptions
     public string BootstrapAdmins { get; set; } = "";
 
     /// <summary>
-    /// Redirect URIs of the browser extension, comma-separated: <c>https://&lt;extension-id&gt;.chromiumapp.org/</c> for
-    /// Chrome, <c>https://&lt;hash&gt;.extensions.allizom.org/</c> for Firefox.
+    /// Sign-in addresses of the official extension, always allowed. They are fixed: Chrome's comes from the Web Store
+    /// public key in the manifest (<c>key</c>), Firefox's from the add-on ID <c>inklayer-extension@inklayer</c>. Only the
+    /// browser's identity API for that extension can receive a redirect to them, so allowing them needs no setup.
+    /// </summary>
+    public static readonly IReadOnlyList<Uri> OfficialExtensionRedirectUris =
+    [
+        new("https://cihhaaceflhcncmeoiembekghkhbgfio.chromiumapp.org/"),
+        new("https://01fc551d14085f05b25b6448f79709265f7c52ab.extensions.allizom.org/"),
+    ];
+
+    /// <summary>
+    /// Extra redirect URIs for builds of the extension with a different ID (forks), comma-separated:
+    /// <c>https://&lt;extension-id&gt;.chromiumapp.org/</c> for Chrome, <c>https://&lt;hash&gt;.extensions.allizom.org/</c>
+    /// for Firefox. The official extension's addresses are always allowed, so most servers leave this empty.
     /// </summary>
     public string ExtensionRedirectUris { get; set; } = "";
 
@@ -36,8 +48,9 @@ public sealed partial class InklayerAuthOptions
 
     public IReadOnlySet<string> BootstrapAdminEmails => Split(BootstrapAdmins);
 
+    /// <summary>The official extension's addresses, then any extra ones from <see cref="ExtensionRedirectUris"/>.</summary>
     public IReadOnlyList<Uri> ExtensionRedirectUriList =>
-        [.. Split(ExtensionRedirectUris).Select(u => new Uri(u, UriKind.Absolute))];
+        [.. OfficialExtensionRedirectUris.Concat(Split(ExtensionRedirectUris).Select(u => new Uri(u, UriKind.Absolute))).Distinct()];
 
     /// <summary>Every sign-in provider that is fully configured, Google first.</summary>
     public IReadOnlyList<SignInProvider> Providers =>
