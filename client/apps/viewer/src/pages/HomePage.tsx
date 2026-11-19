@@ -1,13 +1,18 @@
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
 import { useMe } from "@/App";
 import { ConnectedApps } from "@/components/ConnectedApps";
-import { LinkCards, type CardItem } from "@/components/LinkCards";
 import { Page, PageTitle } from "@/components/Layout";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
+import { type CardItem, LinkCards } from "@/components/LinkCards";
 import { Link } from "@/lib/router";
 
 export function HomePage() {
   const { me } = useMe();
-  const items: CardItem[] = me.organizations.map((o) => ({ key: o.id, to: `/orgs/${o.id}`, title: o.name, badge: o.role }));
+  const items: CardItem[] = me.organizations.map((o) => ({
+    key: o.id,
+    to: `/orgs/${o.id}`,
+    title: o.name,
+    badge: o.role,
+  }));
   return (
     <Page>
       <PageTitle>Organisations</PageTitle>
@@ -16,7 +21,13 @@ export function HomePage() {
           <EmptyHeader>
             <EmptyTitle>You're not a member of any organisation yet</EmptyTitle>
             <EmptyDescription>
-              {me.isSystemAdmin ? <>Create one on the <Link to="/admin">Admin</Link> page.</> : "Ask an administrator to invite you."}
+              {me.isSystemAdmin ? (
+                <>
+                  Create one on the <Link to="/admin">Admin</Link> page.
+                </>
+              ) : (
+                "Ask an administrator to invite you."
+              )}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

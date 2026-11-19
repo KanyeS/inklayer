@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
+import { useState } from "react";
 import { useMe } from "@/App";
 import { ErrorText, Loading, SectionTitle } from "@/components/Layout";
 import { get, put } from "@/lib/api";
@@ -51,11 +51,14 @@ export function FeaturesSection() {
     <section>
       <SectionTitle>Features</SectionTitle>
       <p className="mb-4 max-w-2xl text-sm text-muted-foreground">
-        Turn features on or off for everyone on this server. Page comments are always on. Turning a feature off hides it in the web app and
-        the extension and closes its live connections; nothing is deleted, and turning it back on brings everything back.
+        Turn features on or off for everyone on this server. Page comments are always on. Turning a feature off hides it
+        in the web app and the extension and closes its live connections; nothing is deleted, and turning it back on
+        brings everything back.
       </p>
       <ErrorText error={error ?? features.error} />
-      {!features.data ? <Loading /> : (
+      {!features.data ? (
+        <Loading />
+      ) : (
         <ul className="max-w-2xl divide-y rounded-xl border">
           {features.data.map((f) => (
             <li key={f.feature} className="flex items-start gap-3 px-4 py-3">

@@ -1,10 +1,10 @@
 import { api, type Me } from "./lib/api";
 import { NotSignedInError, redirectUri, signIn, signOut } from "./lib/auth";
+import { handleLive, isLiveRequest, type LiveRequest, openLiveInTab, stopLive, syncLiveScript } from "./lib/live";
 import type { Request, Response, StateResponse } from "./lib/messages";
-import { handleLive, isLiveRequest, openLiveInTab, stopLive, syncLiveScript, type LiveRequest } from "./lib/live";
-import { getSettings } from "./lib/settings";
 import { inbox, markRead, startNotifications } from "./lib/notifications";
-import { PRESENCE_PORT, acceptPort, forgetTab, isPresenceOn, setPresence, stopPresence } from "./lib/presence";
+import { acceptPort, forgetTab, isPresenceOn, PRESENCE_PORT, setPresence, stopPresence } from "./lib/presence";
+import { getSettings } from "./lib/settings";
 
 // The unread count on the toolbar icon.
 startNotifications();
@@ -22,35 +22,39 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId));
 
-chrome.runtime.onMessage.addListener((request: Request | LiveRequest | { type: "presence.status" }, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id) return false;
+chrome.runtime.onMessage.addListener(
+  (request: Request | LiveRequest | { type: "presence.status" }, sender, sendResponse) => {
+    if (sender.id !== chrome.runtime.id) return false;
 
-  // From the live content script on a web page: only live requests, checked against the page's real origin.
-  if (sender.tab) {
-    // After a reload: was presence on in this tab?
-    if (request.type === "presence.status") {
-      respond(isPresenceOn(sender.tab.id ?? -1), sendResponse);
+    // From the live content script on a web page: only live requests, checked against the page's real origin.
+    if (sender.tab) {
+      // After a reload: was presence on in this tab?
+      if (request.type === "presence.status") {
+        respond(isPresenceOn(sender.tab.id ?? -1), sendResponse);
+        return true;
+      }
+      if (!isLiveRequest(request)) return false;
+      respond(handleLive(request, sender.url, sender.tab?.windowId, sender.tab?.id), sendResponse);
       return true;
     }
-    if (!isLiveRequest(request)) return false;
-    respond(handleLive(request, sender.url, sender.tab?.windowId, sender.tab?.id), sendResponse);
-    return true;
-  }
 
-  // From the extension's own pages (the popup).
-  if (isLiveRequest(request) || request.type === "presence.status") return false;
-  respond(handle(request), sendResponse);
-  return true; // respond asynchronously
-});
+    // From the extension's own pages (the popup).
+    if (isLiveRequest(request) || request.type === "presence.status") return false;
+    respond(handle(request), sendResponse);
+    return true; // respond asynchronously
+  },
+);
 
 function respond(result: Promise<unknown>, sendResponse: (response: Response<unknown>) => void): void {
   result
     .then((value) => sendResponse({ ok: true, value } satisfies Response<unknown>))
-    .catch((error: unknown) => sendResponse({
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-      notSignedIn: error instanceof NotSignedInError,
-    } satisfies Response<unknown>));
+    .catch((error: unknown) =>
+      sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        notSignedIn: error instanceof NotSignedInError,
+      } satisfies Response<unknown>),
+    );
 }
 
 async function handle(request: Request): Promise<unknown> {

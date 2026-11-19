@@ -1,7 +1,15 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
 import {
-  anchorFor, describeElement, describeRange, isStableId, resolveElement, resolveRange, scopedSelectorPath, uniqueSelector, xpathFor,
+  anchorFor,
+  describeElement,
+  describeRange,
+  isStableId,
+  resolveElement,
+  resolveRange,
+  scopedSelectorPath,
+  uniqueSelector,
+  xpathFor,
 } from "../src";
 
 const page = (html: string) => new JSDOM(`<!DOCTYPE html><html><body>${html}</body></html>`).window.document;
@@ -142,7 +150,9 @@ describe("text anchors", () => {
     const root = original.querySelector("article")!;
     const anchor = describeRange(select(original, root, "Limited"), root)!;
 
-    expect(resolveRange(page(`<article><p>Gone</p></article>`).querySelector("article")!, anchor).quality).toBe("orphaned");
+    expect(resolveRange(page(`<article><p>Gone</p></article>`).querySelector("article")!, anchor).quality).toBe(
+      "orphaned",
+    );
   });
 
   it("anchorFor combines the element and the text", () => {

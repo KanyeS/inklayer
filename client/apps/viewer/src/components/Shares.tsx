@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Check, Copy, Globe, Link2 } from "lucide-react";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
+import { Check, Copy, Globe, Link2 } from "lucide-react";
+import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
 import { del, get, post } from "@/lib/api";
@@ -33,12 +33,17 @@ export interface Share {
 function CopyButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <Button variant="ghost" size="sm" onClick={async () => {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    }}>
-      {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? "Copied" : "Copy link"}
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={async () => {
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+      {copied ? "Copied" : "Copy link"}
     </Button>
   );
 }
@@ -57,7 +62,15 @@ function safePath(url: string): string {
   }
 }
 
-function ShareList({ shares, onRevoked, showOwner }: { shares: Share[]; onRevoked: () => Promise<void>; showOwner?: boolean }) {
+function ShareList({
+  shares,
+  onRevoked,
+  showOwner,
+}: {
+  shares: Share[];
+  onRevoked: () => Promise<void>;
+  showOwner?: boolean;
+}) {
   const [error, setError] = useState<Error | null>(null);
   return (
     <>
@@ -68,20 +81,28 @@ function ShareList({ shares, onRevoked, showOwner }: { shares: Share[]; onRevoke
             <Link2 className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-2 font-medium">
-                <span className="truncate" title={s.pageUrl ?? undefined}>{describe(s)}</span>
+                <span className="truncate" title={s.pageUrl ?? undefined}>
+                  {describe(s)}
+                </span>
                 {s.includeResolved && <Badge variant="outline">With resolved</Badge>}
                 {s.expired && <Badge variant="secondary">Expired</Badge>}
               </p>
               <p className="text-sm text-muted-foreground">
-                {showOwner && s.projectName && s.kind !== "project" ? `${s.projectName} · ` : ""}By {s.createdBy} {timeAgo(s.createdAt)}
-                {" · "}{s.viewCount === 1 ? "1 view" : `${s.viewCount} views`}{s.lastViewedAt ? `, last ${timeAgo(s.lastViewedAt)}` : ""}
+                {showOwner && s.projectName && s.kind !== "project" ? `${s.projectName} · ` : ""}By {s.createdBy}{" "}
+                {timeAgo(s.createdAt)}
+                {" · "}
+                {s.viewCount === 1 ? "1 view" : `${s.viewCount} views`}
+                {s.lastViewedAt ? `, last ${timeAgo(s.lastViewedAt)}` : ""}
                 {s.expiresAt && !s.expired && ` · until ${dateTime(s.expiresAt)}`}
               </p>
             </div>
             <div className="flex items-center gap-1">
               {!s.expired && <CopyButton url={s.url} />}
               {s.canRevoke && (
-                <ConfirmButton title="Turn off this link?" description="It stops working straight away, for everyone who has it." confirmLabel="Turn off"
+                <ConfirmButton
+                  title="Turn off this link?"
+                  description="It stops working straight away, for everyone who has it."
+                  confirmLabel="Turn off"
                   onConfirm={async () => {
                     try {
                       await del(`/api/shares/${s.id}`);
@@ -90,7 +111,10 @@ function ShareList({ shares, onRevoked, showOwner }: { shares: Share[]; onRevoke
                       setError(e as Error);
                     }
                     await onRevoked();
-                  }}>Turn off</ConfirmButton>
+                  }}
+                >
+                  Turn off
+                </ConfirmButton>
               )}
             </div>
           </li>
@@ -109,7 +133,12 @@ export function ProjectSharesSection({ projectId }: { projectId: string }) {
 
   const create = async () => {
     try {
-      const created = await post<Share>("/api/shares", { kind: "project", projectId, includeResolved, expiresInDays: expiresInDays ? Number(expiresInDays) : undefined });
+      const created = await post<Share>("/api/shares", {
+        kind: "project",
+        projectId,
+        includeResolved,
+        expiresInDays: expiresInDays ? Number(expiresInDays) : undefined,
+      });
       await navigator.clipboard.writeText(created.url).catch(() => undefined);
       setError(null);
     } catch (e) {
@@ -121,12 +150,18 @@ export function ProjectSharesSection({ projectId }: { projectId: string }) {
   return (
     <div className="max-w-3xl space-y-4">
       <p className="text-sm text-muted-foreground">
-        Read-only links show comments to people without an account, even outside your network. They see names, comments, replies and screenshots; nothing else.
-        To share one page, use “Share this page” in the extension.
+        Read-only links show comments to people without an account, even outside your network. They see names, comments,
+        replies and screenshots; nothing else. To share one page, use “Share this page” in the extension.
       </p>
       <div className="flex flex-wrap items-center gap-3 rounded-xl border p-4">
-        <Button onClick={() => void create()}><Link2 data-icon="inline-start" />Create link to all comments</Button>
-        <label className="flex items-center gap-2 text-sm"><Checkbox checked={includeResolved} onCheckedChange={(on) => setIncludeResolved(on === true)} />Include resolved</label>
+        <Button onClick={() => void create()}>
+          <Link2 data-icon="inline-start" />
+          Create link to all comments
+        </Button>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={includeResolved} onCheckedChange={(on) => setIncludeResolved(on === true)} />
+          Include resolved
+        </label>
         <NativeSelect aria-label="Expires" value={expiresInDays} onChange={(e) => setExpiresInDays(e.target.value)}>
           <NativeSelectOption value="7">Expires in 7 days</NativeSelectOption>
           <NativeSelectOption value="30">Expires in 30 days</NativeSelectOption>
@@ -162,10 +197,20 @@ export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boo
     if (!canEdit) return null;
     return (
       <span className="inline-flex items-center gap-2">
-        <Button variant="ghost" size="sm" title="Anyone with the link can read this doc, without an account" onClick={() => void run(async () => {
-          const created = await post<Share>("/api/shares", { kind: "doc", docId });
-          await navigator.clipboard.writeText(created.url).catch(() => undefined);
-        })}><Globe data-icon="inline-start" />Make public</Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Anyone with the link can read this doc, without an account"
+          onClick={() =>
+            void run(async () => {
+              const created = await post<Share>("/api/shares", { kind: "doc", docId });
+              await navigator.clipboard.writeText(created.url).catch(() => undefined);
+            })
+          }
+        >
+          <Globe data-icon="inline-start" />
+          Make public
+        </Button>
         <ErrorText error={error} />
       </span>
     );
@@ -173,13 +218,26 @@ export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boo
 
   return (
     <span className="inline-flex items-center gap-1">
-      <Badge variant="outline" title={`Anyone with the link can read this doc. ${live.viewCount} views.`}><Globe data-icon="inline-start" />Public</Badge>
-      <Button variant="ghost" size="sm" onClick={async () => {
-        await navigator.clipboard.writeText(live.url);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      }}>{copied ? "Copied" : "Copy link"}</Button>
-      {live.canRevoke && <Button variant="ghost" size="sm" onClick={() => void run(() => del(`/api/shares/${live.id}`))}>Make private</Button>}
+      <Badge variant="outline" title={`Anyone with the link can read this doc. ${live.viewCount} views.`}>
+        <Globe data-icon="inline-start" />
+        Public
+      </Badge>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={async () => {
+          await navigator.clipboard.writeText(live.url);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? "Copied" : "Copy link"}
+      </Button>
+      {live.canRevoke && (
+        <Button variant="ghost" size="sm" onClick={() => void run(() => del(`/api/shares/${live.id}`))}>
+          Make private
+        </Button>
+      )}
       <ErrorText error={error} />
     </span>
   );
@@ -190,7 +248,10 @@ export function AdminSharesSection() {
   const shares = useAsync(() => get<Share[]>("/api/admin/shares"), []);
   return (
     <div className="max-w-3xl space-y-4">
-      <p className="text-sm text-muted-foreground">Every read-only link that works right now. Turn one off to stop it at once, or turn Sharing off under Features to stop them all.</p>
+      <p className="text-sm text-muted-foreground">
+        Every read-only link that works right now. Turn one off to stop it at once, or turn Sharing off under Features
+        to stop them all.
+      </p>
       <ErrorText error={shares.error} />
       {shares.data?.length === 0 && <p className="text-sm text-muted-foreground">No links.</p>}
       <ShareList shares={shares.data ?? []} onRevoked={shares.reload} showOwner />

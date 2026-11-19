@@ -20,24 +20,34 @@ export function presence(): void {
   const cursors = TEAM.map((person) => stage.person(person));
   const selecting = new Set<string>();
 
-  scene($("#presence"), async (ctx) => {
-    await Promise.all(cursors.map(async (cursor, i) => {
-      await ctx.sleep(i * 500);
-      const until = performance.now() + (reducedMotion ? 0 : 22_000);
-      do {
-        const free = PHRASES.filter(([block]) => !selecting.has(block));
-        if (Math.random() < 0.3 && free.length) {
-          const [block, phrase] = pick(free);
-          selecting.add(block);
-          await cursor.select(ctx, $(block), phrase);
-          await ctx.sleep(random(1800, 3200));
-          cursor.clearSelection();
-          selecting.delete(block);
-          continue;
-        }
-        await cursor.moveTo(ctx, { el: $(pick(BLOCKS)), x: random(0.05, 0.95), y: random(0.1, 0.9) }, random(1100, 2200));
-        await ctx.sleep(random(300, 1800));
-      } while (performance.now() < until);
-    }));
-  }, { gap: 200 });
+  scene(
+    $("#presence"),
+    async (ctx) => {
+      await Promise.all(
+        cursors.map(async (cursor, i) => {
+          await ctx.sleep(i * 500);
+          const until = performance.now() + (reducedMotion ? 0 : 22_000);
+          do {
+            const free = PHRASES.filter(([block]) => !selecting.has(block));
+            if (Math.random() < 0.3 && free.length) {
+              const [block, phrase] = pick(free);
+              selecting.add(block);
+              await cursor.select(ctx, $(block), phrase);
+              await ctx.sleep(random(1800, 3200));
+              cursor.clearSelection();
+              selecting.delete(block);
+              continue;
+            }
+            await cursor.moveTo(
+              ctx,
+              { el: $(pick(BLOCKS)), x: random(0.05, 0.95), y: random(0.1, 0.9) },
+              random(1100, 2200),
+            );
+            await ctx.sleep(random(300, 1800));
+          } while (performance.now() < until);
+        }),
+      );
+    },
+    { gap: 200 },
+  );
 }

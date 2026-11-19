@@ -1,4 +1,4 @@
-import { useEffect, useState, type AnchorHTMLAttributes, type MouseEvent } from "react";
+import { type AnchorHTMLAttributes, type MouseEvent, useEffect, useState } from "react";
 
 /** A minimal History API router. Routes are matched in App. */
 export function usePath(): string {
@@ -43,4 +43,25 @@ export function match(pattern: string, path: string): Record<string, string> | n
     else if (p[i] !== s[i]) return null;
   }
   return params;
+}
+
+/** A page of the app: the address it's at (with :params), and what it needs to be turned on. */
+export interface Route<T> {
+  pattern: string;
+  /** The page is shown only while this is true; otherwise `turnedOff` is (e.g. docs turned off on the server). */
+  enabled?: () => boolean;
+  page: T;
+}
+
+/** The first route whose pattern matches `path` ("/" also matches ""), with the address's :params. */
+export function findRoute<T>(
+  routes: readonly Route<T>[],
+  path: string,
+): { route: Route<T>; params: Record<string, string> } | null {
+  const clean = path.replace(/\/+$/, "");
+  for (const route of routes) {
+    const params = route.pattern === "/" ? (clean === "" ? {} : null) : match(route.pattern, clean);
+    if (params) return { route, params };
+  }
+  return null;
 }

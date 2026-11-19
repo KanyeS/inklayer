@@ -24,13 +24,16 @@ function demoPeopleSwitch(): void {
 }
 
 function revealOnScroll(): void {
-  const observer = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      entry.target.classList.add("in");
-      observer.unobserve(entry.target);
-    }
-  }, { threshold: 0.08 });
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add("in");
+        observer.unobserve(entry.target);
+      }
+    },
+    { threshold: 0.08 },
+  );
   for (const el of $$(".reveal")) observer.observe(el);
 }
 
@@ -41,7 +44,9 @@ function navProgress(): void {
   const update = () => {
     const max = document.documentElement.scrollHeight - innerHeight;
     bar.style.width = `${(scrollY / Math.max(1, max)) * 100}%`;
-    const current = links.filter((a) => (document.querySelector(a.hash)?.getBoundingClientRect().top ?? Infinity) < innerHeight * 0.4).pop();
+    const current = links
+      .filter((a) => (document.querySelector(a.hash)?.getBoundingClientRect().top ?? Infinity) < innerHeight * 0.4)
+      .pop();
     for (const a of links) a.classList.toggle("on", a === current);
   };
   addEventListener("scroll", update, { passive: true });
@@ -51,10 +56,16 @@ function navProgress(): void {
 /** Points the download buttons at the latest release's zips. They already link to the release page if this fails. */
 async function latestReleaseLinks(): Promise<void> {
   try {
-    const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } });
+    const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
     if (!response.ok) return;
-    const release = await response.json() as { tag_name: string; assets?: { name: string; browser_download_url: string }[] };
-    const zip = (browser: string) => release.assets?.find((a) => a.name.includes(`extension-${browser}`))?.browser_download_url;
+    const release = (await response.json()) as {
+      tag_name: string;
+      assets?: { name: string; browser_download_url: string }[];
+    };
+    const zip = (browser: string) =>
+      release.assets?.find((a) => a.name.includes(`extension-${browser}`))?.browser_download_url;
     const chrome = zip("chrome");
     const firefox = zip("firefox");
     if (chrome) $<HTMLAnchorElement>("#dl-chrome").href = chrome;

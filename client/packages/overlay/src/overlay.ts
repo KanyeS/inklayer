@@ -1,11 +1,12 @@
-import { getStroke } from "perfect-freehand";
 import { anchorFor, documentBox, innerOrigin, resolveElement, resolveRange } from "./anchoring";
-import { boundsOf, contains, fromFraction, normaliseRect, toFraction } from "./geometry";
-import type { AnchorQuality, Box, Draft, Geometry, HostMessage, OverlayAnnotation, OverlayMessage, Point, Tool } from "./types";
+import { contains, normaliseRect, toFraction } from "./geometry";
+import { arrow, badgeAnchor, INK_SIZE, ink, markShapes, rangeBoxes, rect, SVG_NS } from "./shapes";
+import { DRAWING_TOOLS, pressure, round, type Stroke, strokeBounds, strokeGeometry } from "./stroke";
+import STYLES from "./styles/overlay.css?inline";
+import type { AnchorQuality, Box, Draft, HostMessage, OverlayAnnotation, OverlayMessage, Point, Tool } from "./types";
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-const INK_SIZE = 6;
-const DRAWING_TOOLS: ReadonlySet<Tool> = new Set(["rect", "arrow", "ink"]);
+/** How deep to look through nested shadow roots for the element under the pointer. */
+const MAX_SHADOW_DEPTH = 32;
 
 interface Resolved {
   key: string;
@@ -47,7 +48,7 @@ export class Overlay {
   #color = "#f59e0b";
   #selected: string | null = null;
   #draft: Draft | null = null;
-  #preview: { tool: Tool; points: [number, number, number][] } | null = null;
+  #preview: Stroke | null = null;
   #frame = 0;
   #positions = new Map<string, Point>();
   #sentPositions = "";
@@ -60,9 +61,14 @@ export class Overlay {
 
     this.#host = doc.createElement("inklayer-overlay");
     // Just under the top: comment bubbles, the panel (both 2147483647) and live cursors (2147483646) sit above the drawings.
-    this.#host.setAttribute("style", "all:initial;position:absolute;top:0;left:0;width:0;height:0;z-index:2147483645;pointer-events:none;");
+    this.#host.setAttribute(
+      "style",
+      "all:initial;position:absolute;top:0;left:0;width:0;height:0;z-index:2147483645;pointer-events:none;",
+    );
     const shadow = this.#host.attachShadow({ mode: "closed" });
-    shadow.innerHTML = `<style>${STYLES}</style>`;
+    const style = doc.createElement("style");
+    style.textContent = STYLES;
+    shadow.append(style);
     this.#svg = doc.createElementNS(SVG_NS, "svg");
     this.#svg.setAttribute("class", "shapes");
     this.#badges = doc.createElement("div");
@@ -149,7 +155,9 @@ export class Overlay {
         let range: Range | null = null;
         let q = elementQuality;
         if (annotation.anchor.text) {
-          const text = element ? resolveRange(element, annotation.anchor.text) : { range: null, quality: "orphaned" as const };
+          const text = element
+            ? resolveRange(element, annotation.anchor.text)
+            : { range: null, quality: "orphaned" as const };
           range = text.range;
           q = !range ? "orphaned" : text.quality === "exact" && elementQuality === "exact" ? "exact" : "fallback";
         }
@@ -192,7 +200,10 @@ export class Overlay {
       const origin = innerOrigin(this.#within);
       this.#host.style.transform = `translate(${-origin.x}px, ${-origin.y}px)`;
       Object.assign(this.#surface.style, {
-        left: `${origin.x}px`, top: `${origin.y}px`, width: `${this.#within.clientWidth}px`, height: `${this.#within.clientHeight}px`,
+        left: `${origin.x}px`,
+        top: `${origin.y}px`,
+        width: `${this.#within.clientWidth}px`,
+        height: `${this.#within.clientHeight}px`,
       });
     }
     this.#svg.replaceChildren();
@@ -213,8 +224,12 @@ export class Overlay {
       const { anchor, geometry, kind } = this.#draft;
       const resolved = resolveElement(this.#doc, anchor.element);
       const range = anchor.text && resolved.element ? resolveRange(resolved.element, anchor.text).range : null;
-      this.#drawOne({ id: "", kind, color: this.#color, resolved: false, label: 0, anchor, geometry },
-        resolved.element ? documentBox(resolved.element) : anchor.element.box, range, { draft: true, selected: true, faded: false, orphaned: false });
+      this.#drawOne(
+        { id: "", kind, color: this.#color, resolved: false, label: 0, anchor, geometry },
+        resolved.element ? documentBox(resolved.element) : anchor.element.box,
+        range,
+        { draft: true, selected: true, faded: false, orphaned: false },
+      );
     }
 
     if (this.#preview) this.#drawPreview();
@@ -228,68 +243,41 @@ export class Overlay {
     }
   }
 
-  #drawOne(a: OverlayAnnotation, box: Box, range: Range | null, state: { draft: boolean; selected: boolean; faded: boolean; orphaned: boolean }): void {
-    const group = this.#doc.createElementNS(SVG_NS, "g");
-    group.setAttribute("class", ["mark", state.draft ? "draft" : "", state.selected ? "selected" : "", state.faded ? "faded" : "", state.orphaned ? "orphaned" : ""].join(" "));
-    group.style.setProperty("--c", a.color);
-    if (a.id) {
-      group.addEventListener("click", (e) => this.#onMarkClick(e, a.id));
-      this.#hoverEvents(group, a.id);
-    }
+  #drawOne(
+    a: OverlayAnnotation,
+    box: Box,
+    range: Range | null,
+    state: { draft: boolean; selected: boolean; faded: boolean; orphaned: boolean },
+  ): void {
+    const flags = (names: Record<string, boolean>) =>
+      Object.entries(names)
+        .filter(([, on]) => on)
+        .map(([name]) => name);
+    const highlightBoxes = range ? rangeBoxes(this.#doc, range) : null;
 
-    let badgeAt: Point = { x: box.x, y: box.y };
-    const g = a.geometry;
-    switch (g.kind) {
-      case "Pin":
-        badgeAt = fromFraction(g.point, box);
-        break;
-      case "Element":
-        group.append(rect(this.#doc, box, "outline"));
-        break;
-      case "Highlight": {
-        const rects = range ? clientRectsToDocument(this.#doc, range) : [box];
-        for (const r of rects) group.append(rect(this.#doc, r, "highlight"));
-        if (rects[0]) badgeAt = { x: rects[0].x, y: rects[0].y };
-        break;
-      }
-      case "Rect": {
-        const r = normaliseRect(fromFraction(g.from, box), fromFraction(g.to, box));
-        group.append(rect(this.#doc, r, "rect"));
-        badgeAt = { x: r.x, y: r.y };
-        break;
-      }
-      case "Arrow": {
-        const from = fromFraction(g.from, box);
-        const to = fromFraction(g.to, box);
-        group.append(arrow(this.#doc, from, to));
-        badgeAt = from;
-        break;
-      }
-      case "Ink": {
-        const points = g.points.map(([x, y, p]) => {
-          const pt = fromFraction({ x, y }, box);
-          return [pt.x, pt.y, p] as [number, number, number];
-        });
-        group.append(ink(this.#doc, points, g.size));
-        if (points[0]) badgeAt = { x: points[0][0], y: points[0][1] };
-        break;
-      }
-    }
+    const group = this.#doc.createElementNS(SVG_NS, "g");
+    group.setAttribute("class", ["mark", ...flags(state)].join(" "));
+    group.style.setProperty("--c", a.color);
+    group.append(...markShapes(this.#doc, a.geometry, box, highlightBoxes));
     this.#svg.append(group);
 
+    const badgeAt = badgeAnchor(a.geometry, box, highlightBoxes);
     const badge = this.#doc.createElement("div");
-    badge.className = `badge ${g.kind === "Pin" ? "pin" : ""} ${state.draft ? "draft" : ""} ${state.selected ? "selected" : ""} ${state.faded ? "faded" : ""}`;
+    const { orphaned: _orphaned, ...badgeState } = state;
+    badge.className = ["badge", ...flags({ pin: a.geometry.kind === "Pin", ...badgeState })].join(" ");
     badge.style.setProperty("--c", a.color);
     badge.style.left = `${badgeAt.x}px`;
     badge.style.top = `${badgeAt.y}px`;
     badge.textContent = state.draft ? "+" : String(a.label);
     if (state.orphaned) badge.title = "The element this was attached to has changed; shown where it originally was.";
-    if (a.id) {
-      badge.addEventListener("click", (e) => this.#onMarkClick(e, a.id));
-      this.#hoverEvents(badge, a.id);
-      this.#positions.set(a.id, { x: round(badgeAt.x), y: round(badgeAt.y) });
-    }
     this.#badges.append(badge);
+
+    if (!a.id) return; // the draft isn't clickable
+    for (const el of [group, badge]) {
+      el.addEventListener("click", (e) => this.#onMarkClick(e, a.id));
+      this.#hoverEvents(el, a.id);
+    }
+    this.#positions.set(a.id, { x: round(badgeAt.x), y: round(badgeAt.y) });
   }
 
   #hoverEvents(el: Element, id: string): void {
@@ -305,7 +293,8 @@ export class Overlay {
     const group = this.#doc.createElementNS(SVG_NS, "g");
     group.setAttribute("class", "mark draft selected");
     group.style.setProperty("--c", this.#color);
-    if (tool === "rect") group.append(rect(this.#doc, normaliseRect({ x: first[0], y: first[1] }, { x: last[0], y: last[1] }), "rect"));
+    if (tool === "rect")
+      group.append(rect(this.#doc, normaliseRect({ x: first[0], y: first[1] }, { x: last[0], y: last[1] }), "rect"));
     if (tool === "arrow") group.append(arrow(this.#doc, { x: first[0], y: first[1] }, { x: last[0], y: last[1] }));
     if (tool === "ink") group.append(ink(this.#doc, points, INK_SIZE));
     this.#svg.append(group);
@@ -329,116 +318,146 @@ export class Overlay {
 
   /* ---------------------------------------------------------------- tools */
 
-  #listen(): void {
-    const win = this.#doc.defaultView!;
-    const on = <K extends keyof WindowEventMap>(target: Window | Document | HTMLElement, type: K, fn: (e: WindowEventMap[K]) => void, capture = true) => {
-      target.addEventListener(type, fn as EventListener, capture);
-      this.#cleanup.push(() => target.removeEventListener(type, fn as EventListener, capture));
-    };
+  /** Adds an event listener that's removed again by destroy(). */
+  #on<K extends keyof WindowEventMap>(
+    target: Window | Document | HTMLElement,
+    type: K,
+    fn: (e: WindowEventMap[K]) => void,
+    capture = true,
+  ): void {
+    target.addEventListener(type, fn as EventListener, capture);
+    this.#cleanup.push(() => target.removeEventListener(type, fn as EventListener, capture));
+  }
 
-    on(win, "resize", this.render, false);
-    // Marks on position:fixed or sticky elements move when the page scrolls.
-    on(win, "scroll", this.render, false);
+  #listen(): void {
+    this.#followLayout();
+    this.#listenPicking();
+    this.#listenHighlighting();
+    this.#listenDrawing();
+    this.#on(this.#window, "keydown", (e) => {
+      if (e.key !== "Escape") return;
+      this.#preview = null;
+      this.#draft = null;
+      this.render();
+    });
+  }
+
+  get #window(): Window {
+    const win = this.#doc.defaultView;
+    if (!win) throw new Error("The overlay's document has no window.");
+    return win;
+  }
+
+  /** Redraws when the page's layout changes: resizing, scrolling (fixed and sticky elements move), fonts loading. */
+  #followLayout(): void {
+    this.#on(this.#window, "resize", this.render, false);
+    this.#on(this.#window, "scroll", this.render, false);
     const observer = new ResizeObserver(this.render);
     observer.observe(this.#doc.documentElement);
     if (this.#within) observer.observe(this.#within);
     this.#cleanup.push(() => observer.disconnect());
     void this.#doc.fonts?.ready.then(this.render);
+  }
 
-    // Pin and element tools: hover outline and click on page elements.
-    on(this.#doc, "pointermove", (e) => {
-      if ((this.#tool !== "pin" && this.#tool !== "element") || this.#isIgnored(e)) return;
+  /** Pin and element tools: outline the element under the pointer, and click to comment on it. */
+  #listenPicking(): void {
+    const picking = (e: Event) => (this.#tool === "pin" || this.#tool === "element") && !this.#isIgnored(e);
+    this.#on(this.#doc, "pointermove", (e) => {
+      if (!picking(e)) return;
       const el = this.#elementAt(e.clientX, e.clientY);
       if (!this.#inScope(el)) {
         this.#hover.style.display = "none";
         return;
       }
       const box = documentBox(el);
-      Object.assign(this.#hover.style, { display: "block", left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
+      Object.assign(this.#hover.style, {
+        display: "block",
+        left: `${box.x}px`,
+        top: `${box.y}px`,
+        width: `${box.width}px`,
+        height: `${box.height}px`,
+      });
     });
-    on(this.#doc, "click", (e) => {
-      if ((this.#tool !== "pin" && this.#tool !== "element") || this.#isIgnored(e)) return;
+    this.#on(this.#doc, "click", (e) => {
+      if (!picking(e)) return;
       const el = this.#elementAt(e.clientX, e.clientY);
       if (!this.#inScope(el)) return;
       e.preventDefault();
       e.stopPropagation();
-      const point = { x: e.pageX, y: e.pageY };
-      this.#emitDraft(this.#tool === "pin"
-        ? { kind: "Pin", anchor: anchorFor(el), geometry: { kind: "Pin", point: toFraction(point, documentBox(el)) } }
-        : { kind: "Element", anchor: anchorFor(el), geometry: { kind: "Element" } });
+      const anchor = anchorFor(el);
+      if (this.#tool === "element") {
+        this.#emitDraft({ kind: "Element", anchor, geometry: { kind: "Element" } });
+        return;
+      }
+      const point = toFraction({ x: e.pageX, y: e.pageY }, documentBox(el));
+      this.#emitDraft({ kind: "Pin", anchor, geometry: { kind: "Pin", point } });
     });
+  }
 
-    // Highlight tool: select text normally, and the selection becomes a highlight.
-    on(this.#doc, "mouseup", (e) => {
+  /** Highlight tool: select text normally, and the selection becomes a highlight. */
+  #listenHighlighting(): void {
+    const onMouseUp = (e: MouseEvent) => {
       if (this.#tool !== "highlight" || this.#isIgnored(e)) return;
-      const selection = win.getSelection();
+      const selection = this.#window.getSelection();
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
       const range = selection.getRangeAt(0);
       const container = range.commonAncestorContainer;
-      const root = container.nodeType === 1 ? (container as Element) : container.parentElement;
+      const root = container.nodeType === Node.ELEMENT_NODE ? (container as Element) : container.parentElement;
       if (!this.#inScope(root)) return;
       const anchor = anchorFor(root, range);
       selection.removeAllRanges();
       if (anchor.text) this.#emitDraft({ kind: "Highlight", anchor, geometry: { kind: "Highlight" } });
-    }, false);
+    };
+    this.#on(this.#doc, "mouseup", onMouseUp, false);
+  }
 
-    // Drawing tools: the surface layer captures the pointer while a drawing tool is active.
-    on(this.#surface, "pointerdown", (e) => {
-      if (!DRAWING_TOOLS.has(this.#tool) || e.button !== 0) return;
-      e.preventDefault();
-      this.#surface.setPointerCapture(e.pointerId);
-      this.#preview = { tool: this.#tool, points: [[e.pageX, e.pageY, pressure(e)]] };
-      this.render();
-    }, false);
-    on(this.#surface, "pointermove", (e) => {
-      if (!this.#preview) return;
-      const point: [number, number, number] = [e.pageX, e.pageY, pressure(e)];
-      if (this.#preview.tool === "ink") this.#preview.points.push(point);
-      else this.#preview.points[1] = point;
-      this.render();
-    }, false);
-    on(this.#surface, "pointerup", () => this.#finishDrawing(), false);
-    on(this.#surface, "pointercancel", () => {
+  /** Drawing tools: the surface layer captures the pointer while a drawing tool is active. */
+  #listenDrawing(): void {
+    const surface = this.#surface;
+    this.#on(
+      surface,
+      "pointerdown",
+      (e) => {
+        if (!DRAWING_TOOLS.has(this.#tool) || e.button !== 0) return;
+        e.preventDefault();
+        surface.setPointerCapture(e.pointerId);
+        this.#preview = { tool: this.#tool, points: [[e.pageX, e.pageY, pressure(e)]] };
+        this.render();
+      },
+      false,
+    );
+    this.#on(
+      surface,
+      "pointermove",
+      (e) => {
+        if (!this.#preview) return;
+        const point: [number, number, number] = [e.pageX, e.pageY, pressure(e)];
+        // Ink keeps every point; boxes and arrows only need where they started and where the pointer is now.
+        if (this.#preview.tool === "ink") this.#preview.points.push(point);
+        else this.#preview.points[1] = point;
+        this.render();
+      },
+      false,
+    );
+    this.#on(surface, "pointerup", () => this.#finishDrawing(), false);
+    const cancel = () => {
       this.#preview = null;
       this.render();
-    }, false);
-
-    on(win, "keydown", (e) => {
-      if (e.key === "Escape") {
-        this.#preview = null;
-        this.#draft = null;
-        this.render();
-      }
-    });
+    };
+    this.#on(surface, "pointercancel", cancel, false);
   }
 
   #finishDrawing(): void {
-    const preview = this.#preview;
+    const stroke = this.#preview;
     this.#preview = null;
-    if (!preview || preview.points.length < 2) return this.render();
-
-    const points = preview.points.map(([x, y]) => ({ x, y }));
-    const bounds = boundsOf(points);
-    if (bounds.width < 4 && bounds.height < 4) return this.render(); // a click, not a drawing
-
-    const container = this.#containerFor(bounds);
-    const box = documentBox(container);
-    const anchor = anchorFor(container);
-    const [first, last] = [points[0]!, points[points.length - 1]!];
-
-    if (preview.tool === "ink") {
-      this.#emitDraft({
-        kind: "Ink",
-        anchor,
-        geometry: { kind: "Ink", size: INK_SIZE, points: preview.points.map(([x, y, p]) => {
-          const f = toFraction({ x, y }, box);
-          return [round(f.x), round(f.y), round(p)];
-        }) },
-      });
-    } else {
-      const kind = preview.tool === "rect" ? "Rect" : "Arrow";
-      this.#emitDraft({ kind, anchor, geometry: { kind, from: toFraction(first, box), to: toFraction(last, box) } });
+    const bounds = stroke && strokeBounds(stroke);
+    if (!stroke || !bounds) {
+      this.render(); // a click, not a drawing
+      return;
     }
+    const container = this.#containerFor(bounds);
+    const geometry = strokeGeometry(stroke, documentBox(container));
+    this.#emitDraft({ kind: geometry.kind, anchor: anchorFor(container), geometry });
   }
 
   #emitDraft(draft: Omit<Draft, "viewportWidth">): void {
@@ -452,8 +471,10 @@ export class Overlay {
   #elementAt(clientX: number, clientY: number): Element | null {
     let scope: Document | ShadowRoot = this.#doc;
     let el: Element | null = null;
-    for (let depth = 0; depth < 32; depth++) {
-      const hit: Element | undefined = scope.elementsFromPoint(clientX, clientY).find((candidate) => candidate !== this.#host && !this.#ignored.includes(candidate));
+    for (let depth = 0; depth < MAX_SHADOW_DEPTH; depth++) {
+      const hit: Element | undefined = scope
+        .elementsFromPoint(clientX, clientY)
+        .find((candidate) => candidate !== this.#host && !this.#ignored.includes(candidate));
       if (!hit || hit === el) break;
       el = hit;
       if (!hit.shadowRoot) break;
@@ -468,104 +489,8 @@ export class Overlay {
     let el = this.#elementAt(bounds.x + bounds.width / 2 - win.scrollX, bounds.y + bounds.height / 2 - win.scrollY);
     if (this.#within && !this.#inScope(el)) return this.#within;
     while (el && el !== this.#doc.body && el !== this.#within && !contains(documentBox(el), bounds)) {
-      el = el.parentElement ?? ((el.getRootNode() as ShadowRoot).host ?? null);
+      el = el.parentElement ?? (el.getRootNode() as ShadowRoot).host ?? null;
     }
     return el ?? this.#within ?? this.#doc.body ?? this.#doc.documentElement;
   }
 }
-
-/* -------------------------------------------------------------------- drawing helpers */
-
-function rect(doc: Document, box: Box, className: string): SVGRectElement {
-  const r = doc.createElementNS(SVG_NS, "rect");
-  r.setAttribute("class", className);
-  r.setAttribute("x", String(box.x));
-  r.setAttribute("y", String(box.y));
-  r.setAttribute("width", String(Math.max(1, box.width)));
-  r.setAttribute("height", String(Math.max(1, box.height)));
-  r.setAttribute("rx", className === "highlight" ? "2" : "4");
-  return r;
-}
-
-function arrow(doc: Document, from: Point, to: Point): SVGGElement {
-  const g = doc.createElementNS(SVG_NS, "g");
-  const angle = Math.atan2(to.y - from.y, to.x - from.x);
-  const size = 14;
-  // The shaft stops inside the head: run to the tip, its thick round end would stick out past the head's narrow point.
-  const shaft = Math.min(size * 0.6, Math.hypot(to.x - from.x, to.y - from.y));
-  const line = doc.createElementNS(SVG_NS, "line");
-  line.setAttribute("class", "arrow");
-  line.setAttribute("x1", String(from.x));
-  line.setAttribute("y1", String(from.y));
-  line.setAttribute("x2", String(to.x - shaft * Math.cos(angle)));
-  line.setAttribute("y2", String(to.y - shaft * Math.sin(angle)));
-  const head = doc.createElementNS(SVG_NS, "polygon");
-  head.setAttribute("class", "arrowhead");
-  head.setAttribute("points", [
-    [to.x, to.y],
-    [to.x - size * Math.cos(angle - Math.PI / 7), to.y - size * Math.sin(angle - Math.PI / 7)],
-    [to.x - size * Math.cos(angle + Math.PI / 7), to.y - size * Math.sin(angle + Math.PI / 7)],
-  ].map((p) => p.join(",")).join(" "));
-  g.append(line, head);
-  return g;
-}
-
-function ink(doc: Document, points: [number, number, number][], size: number): SVGPathElement {
-  const path = doc.createElementNS(SVG_NS, "path");
-  path.setAttribute("class", "ink");
-  path.setAttribute("d", svgPath(getStroke(points, { size, thinning: 0.5, smoothing: 0.5, streamline: 0.5, simulatePressure: points.every((p) => p[2] === 0.5) })));
-  return path;
-}
-
-/** perfect-freehand's outline -> a smooth SVG path (quadratic curves through midpoints). */
-export function svgPath(outline: number[][]): string {
-  if (outline.length < 2) return "";
-  const mid = (a: number[], b: number[]) => [(a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2];
-  let d = `M${outline[0]![0]!.toFixed(1)},${outline[0]![1]!.toFixed(1)} Q`;
-  for (let i = 0; i < outline.length; i++) {
-    const p = outline[i]!;
-    const m = mid(p, outline[(i + 1) % outline.length]!);
-    d += `${p[0]!.toFixed(1)},${p[1]!.toFixed(1)} ${m[0]!.toFixed(1)},${m[1]!.toFixed(1)} `;
-  }
-  return `${d}Z`;
-}
-
-function clientRectsToDocument(doc: Document, range: Range): Box[] {
-  const win = doc.defaultView!;
-  return Array.from(range.getClientRects())
-    .filter((r) => r.width > 0 && r.height > 0)
-    .map((r) => ({ x: r.left + win.scrollX, y: r.top + win.scrollY, width: r.width, height: r.height }));
-}
-
-function pressure(e: PointerEvent): number {
-  return e.pointerType === "pen" && e.pressure > 0 ? e.pressure : 0.5;
-}
-
-function round(n: number): number {
-  return Math.round(n * 10_000) / 10_000;
-}
-
-// Colours follow the Inklayer theme (packages/ui tokens): --primary for hover, --foreground for drafts and selection.
-const STYLES = `
-  :host { all: initial; }
-  .shapes { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
-  .surface { position: absolute; top: 0; left: 0; pointer-events: none; cursor: crosshair; touch-action: none; }
-  .hover { position: absolute; display: none; pointer-events: none; outline: 2px dashed oklch(0.491 0.27 292.581); outline-offset: 1px; background: oklch(0.491 0.27 292.581 / 0.06); border-radius: 2px; }
-  .mark { pointer-events: visiblePainted; cursor: pointer; }
-  .mark .outline { fill: none; stroke: var(--c); stroke-width: 2; stroke-dasharray: 6 4; }
-  .mark .highlight { fill: color-mix(in srgb, var(--c) 35%, transparent); stroke: none; mix-blend-mode: multiply; }
-  .mark .rect { fill: color-mix(in srgb, var(--c) 10%, transparent); stroke: var(--c); stroke-width: 2.5; }
-  .mark .arrow { stroke: var(--c); stroke-width: 3; stroke-linecap: round; }
-  .mark .arrowhead, .mark .ink { fill: var(--c); stroke: none; }
-  .mark.selected .rect, .mark.selected .outline, .mark.selected .arrow { stroke-width: 4; }
-  .mark.selected { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 70%, transparent)); }
-  .mark.faded, .badge.faded { opacity: 0.35; }
-  .mark.orphaned .rect, .mark.orphaned .outline { stroke-dasharray: 2 4; }
-  .mark.draft { opacity: 0.85; }
-  .badge { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box;
-    border-radius: 11px; background: var(--c); color: #fff; font: 600 12px/22px "Inklayer Outfit", system-ui, -apple-system, sans-serif; text-align: center;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 2px #fff; pointer-events: auto; cursor: pointer; user-select: none; }
-  .badge.pin { transform: translate(-50%, -100%); border-bottom-left-radius: 2px; }
-  .badge.selected { box-shadow: 0 1px 3px rgb(0 0 0 / 0.35), 0 0 0 3px oklch(0.145 0.008 326); }
-  .badge.draft { background: oklch(0.145 0.008 326); }
-`;

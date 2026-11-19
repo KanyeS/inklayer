@@ -1,12 +1,14 @@
+import { extractLinks, extractTags, headings, relinkEdits } from "@inklayer/docs/docMarkdown";
+import { renderMarkdown } from "@inklayer/docs/reading";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { extractLinks, extractTags, headings, relinkEdits } from "../src/docs/docMarkdown";
 import { fuzzyScore } from "../src/docs/fuzzy";
-import { renderMarkdown } from "../src/docs/reading";
 
 describe("doc links and tags (same rules as the server)", () => {
   it("parses Obsidian links", () => {
-    const links = extractLinks("See [[Roadmap]], [[Research/Interviews|the interviews]], [[Launch plan#Risks]] and ![[Diagram]].");
+    const links = extractLinks(
+      "See [[Roadmap]], [[Research/Interviews|the interviews]], [[Launch plan#Risks]] and ![[Diagram]].",
+    );
     expect(links.map((l) => l.target)).toEqual(["Roadmap", "Research/Interviews", "Launch plan", "Diagram"]);
     expect(links[1]!.alias).toBe("the interviews");
     expect(links[2]!.heading).toBe("Risks");
@@ -45,7 +47,11 @@ describe("doc links and tags (same rules as the server)", () => {
   it("rewrites links after a rename, keeping headings and aliases", () => {
     const text = "[[Plan]] and [[Plan#Risks|risks]] and [[Old/Plan]] but not [[Planning]]";
     let result = text;
-    for (const e of relinkEdits(text, (key) => key === "plan" || key === "old/plan", (l) => (l.target!.includes("/") ? "New/Roadmap" : "Roadmap"))) {
+    for (const e of relinkEdits(
+      text,
+      (key) => key === "plan" || key === "old/plan",
+      (l) => (l.target!.includes("/") ? "New/Roadmap" : "Roadmap"),
+    )) {
       result = result.slice(0, e.from) + e.insert + result.slice(e.to);
     }
     expect(result).toBe("[[Roadmap]] and [[Roadmap#Risks|risks]] and [[New/Roadmap]] but not [[Planning]]");
@@ -53,7 +59,8 @@ describe("doc links and tags (same rules as the server)", () => {
 });
 
 describe("reading view", () => {
-  const render = (text: string) => renderMarkdown(text, { doc: (l) => (l.target === "Roadmap" ? { href: "/orgs/o/docs/1" } : null) });
+  const render = (text: string) =>
+    renderMarkdown(text, { doc: (l) => (l.target === "Roadmap" ? { href: "/orgs/o/docs/1" } : null) });
 
   it("never passes raw HTML or unsafe links through", () => {
     const html = render(`<img src=x onerror=alert(1)> [x](javascript:alert(1)) ![y](javascript:alert(2))`);
@@ -75,10 +82,15 @@ describe("reading view", () => {
 
 describe("public docs (guests on a share link)", () => {
   const render = (text: string) =>
-    renderMarkdown(text, { guest: true, doc: (l) => (l.target?.toLowerCase() === "style guide" ? { href: "/s/abc" } : null) });
+    renderMarkdown(text, {
+      guest: true,
+      doc: (l) => (l.target?.toLowerCase() === "style guide" ? { href: "/s/abc" } : null),
+    });
 
   it("links only to other public docs; the rest is plain text", () => {
-    const html = render("See [[Style guide]], [[Secrets]] and #launch. [[comment:0190a1b2-0000-7000-8000-000000000000|the bug]]");
+    const html = render(
+      "See [[Style guide]], [[Secrets]] and #launch. [[comment:0190a1b2-0000-7000-8000-000000000000|the bug]]",
+    );
     expect(html).toContain('<a class="doc-wikilink" href="/s/abc">Style guide</a>');
     expect(html).toContain('<span class="doc-wikilink-text">Secrets</span>');
     expect(html).not.toContain("data-create");
@@ -186,11 +198,15 @@ describe("co-editing through the server's rules", () => {
 describe("editor", () => {
   it("keeps CodeMirror and the shared text in step both ways", async () => {
     const { Awareness } = await import("y-protocols/awareness");
-    const { createEditor } = await import("../src/docs/editor");
+    const { createEditor } = await import("@inklayer/docs/editor");
     const doc = new Y.Doc();
     const text = doc.getText("content");
     text.insert(0, "# Plan\nSee [[Roadmap]] #idea");
-    const session = { text, awareness: new Awareness(doc), canEdit: true } as unknown as import("../src/docs/collab").DocSession;
+    const session = {
+      text,
+      awareness: new Awareness(doc),
+      canEdit: true,
+    } as unknown as import("../src/docs/collab").DocSession;
     const parent = document.createElement("div");
     document.body.append(parent);
     const editor = createEditor(parent, session, {
@@ -223,7 +239,8 @@ describe("editor", () => {
 
 describe("edits made on the server (YDotNet / yrs)", () => {
   // The same document as the server's YjsCompatibilityTests, and an edit YDotNet made to it: "!" after the emoji.
-  const fromYjs = "AQOSIQAEAQdjb250ZW50AiMggZIhAQGEkiECKMOpbGxvIPCfkYsgd29ybGQKU2Vjb25kIGxpbmUgW1tSb2FkbWFwXV0BkiEBAgE=";
+  const fromYjs =
+    "AQOSIQAEAQdjb250ZW50AiMggZIhAQGEkiECKMOpbGxvIPCfkYsgd29ybGQKU2Vjb25kIGxpbmUgW1tSb2FkbWFwXV0BkiEBAgE=";
   const fromServer = "AQGxndT844CqCwDEkiEJkiEKASEBkiEBAgE=";
   const bytes = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 

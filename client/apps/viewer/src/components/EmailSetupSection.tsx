@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
+import { useState } from "react";
 import { SectionTitle } from "@/components/Layout";
 import { get, post } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
@@ -20,13 +20,16 @@ export function EmailSetupSection() {
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <Badge variant="secondary">Set up</Badge>
           <span className="text-muted-foreground">Sending as {setup.data.from}</span>
-          <Button variant="outline" size="sm" onClick={() => void test()}>Send me a test email</Button>
+          <Button variant="outline" size="sm" onClick={() => void test()}>
+            Send me a test email
+          </Button>
           {result && <span>{result}</span>}
         </div>
       ) : (
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Not set up. To let organisations email notifications, set <code>INKLAYER_SMTP_HOST</code>, <code>INKLAYER_SMTP_PORT</code>,{" "}
-          <code>INKLAYER_SMTP_USERNAME</code>, <code>INKLAYER_SMTP_PASSWORD</code> and <code>INKLAYER_SMTP_FROM</code> on the server (Amazon SES works), then restart.
+          Not set up. To let organisations email notifications, set <code>INKLAYER_SMTP_HOST</code>,{" "}
+          <code>INKLAYER_SMTP_PORT</code>, <code>INKLAYER_SMTP_USERNAME</code>, <code>INKLAYER_SMTP_PASSWORD</code> and{" "}
+          <code>INKLAYER_SMTP_FROM</code> on the server (Amazon SES works), then restart.
         </p>
       )}
     </section>

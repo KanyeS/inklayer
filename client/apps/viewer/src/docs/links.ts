@@ -1,6 +1,6 @@
+import { relinkEdits, type WikiLink } from "@inklayer/docs/docMarkdown";
 import { editDoc } from "./collab";
-import { docsApi, type DocSummary } from "./docsApi";
-import { relinkEdits, type WikiLink } from "./docMarkdown";
+import { type DocSummary, docsApi } from "./docsApi";
 
 /** Finds the doc a link means, with the server's rules: [[Folder/Title]] by path; [[Title]] by title, top level first. */
 export function resolveLink(docs: DocSummary[], link: WikiLink): DocSummary | null {
@@ -8,7 +8,11 @@ export function resolveLink(docs: DocSummary[], link: WikiLink): DocSummary | nu
   const key = link.target.toLowerCase();
   if (key.includes("/")) return docs.find((d) => pathOf(d).toLowerCase() === key) ?? null;
   const matches = docs.filter((d) => d.title.toLowerCase() === key);
-  return matches.sort((a, b) => Number(a.folder !== "") - Number(b.folder !== "") || pathOf(a).localeCompare(pathOf(b)))[0] ?? null;
+  return (
+    matches.sort(
+      (a, b) => Number(a.folder !== "") - Number(b.folder !== "") || pathOf(a).localeCompare(pathOf(b)),
+    )[0] ?? null
+  );
 }
 
 export const pathOf = (d: { folder: string; title: string }) => (d.folder ? `${d.folder}/${d.title}` : d.title);
@@ -23,9 +27,14 @@ export function createFromLink(orgId: string, target: string): Promise<DocSummar
  * After docs were renamed or moved, rewrites the links in the docs the server listed, so they keep pointing at them.
  * `moves` maps each doc's old place to its new one. Links by path follow the new path; links by title follow a new title.
  */
-export async function rewriteLinks(relinkDocs: string[], moves: { from: { folder: string; title: string }; to: { folder: string; title: string } }[]): Promise<void> {
+export async function rewriteLinks(
+  relinkDocs: string[],
+  moves: { from: { folder: string; title: string }; to: { folder: string; title: string } }[],
+): Promise<void> {
   const byPath = new Map(moves.map((m) => [pathOf(m.from).toLowerCase(), m.to]));
-  const byTitle = new Map(moves.filter((m) => m.from.title !== m.to.title).map((m) => [m.from.title.toLowerCase(), m.to]));
+  const byTitle = new Map(
+    moves.filter((m) => m.from.title !== m.to.title).map((m) => [m.from.title.toLowerCase(), m.to]),
+  );
   const targetFor = (link: WikiLink) => {
     const key = link.target!.toLowerCase();
     const to = key.includes("/") ? byPath.get(key) : byTitle.get(key);

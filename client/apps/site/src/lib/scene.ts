@@ -9,7 +9,7 @@ export const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matc
 /** Thrown inside a script when its scene is stopped or restarted; the runner swallows it. */
 const STOPPED = Symbol("stopped");
 
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const nextFrame = () => new Promise<number>((resolve) => requestAnimationFrame(resolve));
 
 /** One run of a scene's script. Every wait checks that the run is still wanted. */
@@ -96,7 +96,11 @@ export class Scene {
   #waiting: (() => void)[] = [];
   #run: Ctx | null = null;
 
-  constructor(readonly root: Element, readonly script: (ctx: Ctx) => Promise<void>, readonly options: SceneOptions = {}) {
+  constructor(
+    readonly root: Element,
+    readonly script: (ctx: Ctx) => Promise<void>,
+    readonly options: SceneOptions = {},
+  ) {
     visibility.observe(root);
     scenes.set(root, this);
   }
@@ -133,13 +137,13 @@ export class Scene {
     void (async () => {
       const { gap = 2400, once = false, reset } = this.options;
       try {
-        do {
+        for (;;) {
           await ctx.onScreen();
           await this.script(ctx);
           if (reducedMotion || once) break;
           await ctx.sleep(gap);
           reset?.();
-        } while (true);
+        }
       } catch (error) {
         if (error !== STOPPED) console.debug("[inklayer demo]", error);
       }
@@ -148,9 +152,12 @@ export class Scene {
 }
 
 const scenes = new Map<Element, Scene>();
-const visibility = new IntersectionObserver((entries) => {
-  for (const entry of entries) scenes.get(entry.target)?.setOnScreen(entry.isIntersecting);
-}, { threshold: 0.12 });
+const visibility = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) scenes.get(entry.target)?.setOnScreen(entry.isIntersecting);
+  },
+  { threshold: 0.12 },
+);
 
 let paused = false;
 

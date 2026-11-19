@@ -5,8 +5,25 @@
 import "./styles.css";
 import outfit from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url";
 import {
-  ArrowLeftRight, Bell, Bug, CircleX, FileCheck, Hash, Keyboard, Link, Lock, LogIn, Mail, MessagesSquare, MousePointerClick, RefreshCw, RotateCcw, Shield, Star, Webhook,
+  ArrowLeftRight,
+  Bell,
+  Bug,
+  CircleX,
   createIcons,
+  FileCheck,
+  Hash,
+  Keyboard,
+  Link,
+  Lock,
+  LogIn,
+  Mail,
+  MessagesSquare,
+  MousePointerClick,
+  RefreshCw,
+  RotateCcw,
+  Shield,
+  Star,
+  Webhook,
 } from "lucide";
 import { exposeColors } from "./lib/people";
 import { address } from "./sections/address";
@@ -23,11 +40,32 @@ import { threads } from "./sections/threads";
 import { tools } from "./sections/tools";
 
 // The overlay's badges and cards use the extension's font name for Outfit.
-void new FontFace("Inklayer Outfit", `url(${outfit})`, { weight: "100 900", display: "swap" }).load().then((face) => document.fonts.add(face));
+void new FontFace("Inklayer Outfit", `url(${outfit})`, { weight: "100 900", display: "swap" })
+  .load()
+  .then((face) => document.fonts.add(face));
 
 // Icons: Lucide, the set the shadcn components use. Each `<i data-lucide="name">` in the page becomes its SVG.
 createIcons({
-  icons: { ArrowLeftRight, Bell, Bug, CircleX, FileCheck, Hash, Keyboard, Link, Lock, LogIn, Mail, MessagesSquare, MousePointerClick, RefreshCw, RotateCcw, Shield, Star, Webhook },
+  icons: {
+    ArrowLeftRight,
+    Bell,
+    Bug,
+    CircleX,
+    FileCheck,
+    Hash,
+    Keyboard,
+    Link,
+    Lock,
+    LogIn,
+    Mail,
+    MessagesSquare,
+    MousePointerClick,
+    RefreshCw,
+    RotateCcw,
+    Shield,
+    Star,
+    Webhook,
+  },
 });
 
 exposeColors();
@@ -50,10 +88,13 @@ mcp();
 function whenNear(selector: string, load: () => Promise<unknown>): void {
   const el = document.querySelector(selector);
   if (!el) return;
-  const observer = new IntersectionObserver((entries) => {
-    if (!entries.some((e) => e.isIntersecting)) return;
-    observer.disconnect();
-    void load();
-  }, { rootMargin: "100% 0px" });
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      observer.disconnect();
+      void load();
+    },
+    { rootMargin: "100% 0px" },
+  );
   observer.observe(el);
 }

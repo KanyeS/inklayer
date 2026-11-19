@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from "react";
-import { BookText } from "lucide-react";
-import { useMe } from "@/App";
-import { ConfirmButton } from "@/components/ConfirmButton";
-import { ErrorText, Loading, Page, PageTitle, SectionTitle } from "@/components/Layout";
-import { LinkCards } from "@/components/LinkCards";
 import { Badge } from "@inklayer/ui/components/badge";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@inklayer/ui/components/breadcrumb";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@inklayer/ui/components/breadcrumb";
 import { Button } from "@inklayer/ui/components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
@@ -13,34 +14,72 @@ import { Input } from "@inklayer/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@inklayer/ui/components/tabs";
-import { ROLES, atLeast, del, get, patch, post, put, type Invitation, type Member, type Organization, type Project, type Role } from "@/lib/api";
+import { BookText } from "lucide-react";
+import { type FormEvent, useState } from "react";
+import { useMe } from "@/App";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { IntegrationsSection } from "@/components/IntegrationsSection";
+import { ErrorText, Loading, Page, PageTitle, SectionTitle } from "@/components/Layout";
+import { LinkCards } from "@/components/LinkCards";
+import {
+  atLeast,
+  del,
+  get,
+  type Invitation,
+  type Member,
+  type Organization,
+  type Project,
+  patch,
+  post,
+  put,
+  ROLES,
+  type Role,
+} from "@/lib/api";
 import { dateTime } from "@/lib/format";
+import { personTitle } from "@/lib/people";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
-import { IntegrationsSection } from "@/components/IntegrationsSection";
-import { personTitle } from "@/lib/people";
 
 export function OrganizationPage({ orgId }: { orgId: string }) {
   const { me } = useMe();
   const org = useAsync(() => get<Organization>(`/api/orgs/${orgId}`), [orgId]);
   const projects = useAsync(() => get<Project[]>(`/api/orgs/${orgId}/projects`), [orgId]);
 
-  if (org.error) return <Page><ErrorText error={org.error} /></Page>;
-  if (!org.data) return <Page><Loading /></Page>;
+  if (org.error)
+    return (
+      <Page>
+        <ErrorText error={org.error} />
+      </Page>
+    );
+  if (!org.data)
+    return (
+      <Page>
+        <Loading />
+      </Page>
+    );
   const isAdmin = atLeast(org.data.myRole, "Admin");
 
   return (
     <Page>
       <Breadcrumb>
         <BreadcrumbList>
-          <BreadcrumbItem><BreadcrumbLink render={<Link to="/" />}>Organisations</BreadcrumbLink></BreadcrumbItem>
+          <BreadcrumbItem>
+            <BreadcrumbLink render={<Link to="/" />}>Organisations</BreadcrumbLink>
+          </BreadcrumbItem>
           <BreadcrumbSeparator />
-          <BreadcrumbItem><BreadcrumbPage>{org.data.name}</BreadcrumbPage></BreadcrumbItem>
+          <BreadcrumbItem>
+            <BreadcrumbPage>{org.data.name}</BreadcrumbPage>
+          </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageTitle badge={<Badge variant="secondary">{org.data.myRole}</Badge>}>{org.data.name}</PageTitle>
-        {me.features.docs && <Button variant="outline" nativeButton={false} render={<Link to={`/orgs/${orgId}/docs`} />}><BookText data-icon="inline-start" />Docs</Button>}
+        {me.features.docs && (
+          <Button variant="outline" nativeButton={false} render={<Link to={`/orgs/${orgId}/docs`} />}>
+            <BookText data-icon="inline-start" />
+            Docs
+          </Button>
+        )}
       </div>
       <Tabs defaultValue="projects">
         <TabsList variant="line" className="mb-4">
@@ -53,15 +92,31 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
           {isAdmin && <CreateProject orgId={orgId} />}
           <ErrorText error={projects.error} />
           {projects.data?.length === 0 && (
-            <Empty className="border"><EmptyHeader><EmptyTitle>No projects yet</EmptyTitle></EmptyHeader></Empty>
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyTitle>No projects yet</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           )}
           {projects.data && (
-            <LinkCards items={projects.data.map((p) => ({ key: p.id, to: `/projects/${p.id}`, title: p.name, badge: p.myRole }))} />
+            <LinkCards
+              items={projects.data.map((p) => ({ key: p.id, to: `/projects/${p.id}`, title: p.name, badge: p.myRole }))}
+            />
           )}
         </TabsContent>
-        <TabsContent value="members"><Members org={org.data} /></TabsContent>
-        {isAdmin && <TabsContent value="integrations"><IntegrationsSection orgId={orgId} /></TabsContent>}
-        {isAdmin && <TabsContent value="settings"><Settings org={org.data} onSaved={org.reload} /></TabsContent>}
+        <TabsContent value="members">
+          <Members org={org.data} />
+        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="integrations">
+            <IntegrationsSection orgId={orgId} />
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value="settings">
+            <Settings org={org.data} onSaved={org.reload} />
+          </TabsContent>
+        )}
       </Tabs>
     </Page>
   );
@@ -81,7 +136,15 @@ function CreateProject({ orgId }: { orgId: string }) {
   };
   return (
     <form className="flex flex-wrap items-center gap-2" onSubmit={submit}>
-      <Input className="w-64" aria-label="New project name" placeholder="New project name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
+      <Input
+        className="w-64"
+        aria-label="New project name"
+        placeholder="New project name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        required
+        maxLength={200}
+      />
       <Button type="submit">Create project</Button>
       <ErrorText error={error} />
     </form>
@@ -93,7 +156,10 @@ function Members({ org }: { org: Organization }) {
   const isAdmin = atLeast(org.myRole, "Admin");
   const isOwner = org.myRole === "Owner";
   const members = useAsync(() => get<Member[]>(`/api/orgs/${org.id}/members`), [org.id]);
-  const invitations = useAsync(() => (isAdmin ? get<Invitation[]>(`/api/orgs/${org.id}/invitations`) : Promise.resolve([])), [org.id, isAdmin]);
+  const invitations = useAsync(
+    () => (isAdmin ? get<Invitation[]>(`/api/orgs/${org.id}/invitations`) : Promise.resolve([])),
+    [org.id, isAdmin],
+  );
   const [error, setError] = useState<Error | null>(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("Commenter");
@@ -119,10 +185,29 @@ function Members({ org }: { org: Organization }) {
     <div className="space-y-4">
       <ErrorText error={error ?? members.error} />
       {isAdmin && (
-        <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void act(async () => { await post(`/api/orgs/${org.id}/invitations`, { email, role }); setEmail(""); }); }}>
-          <Input className="w-64" type="email" aria-label="Email" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void act(async () => {
+              await post(`/api/orgs/${org.id}/invitations`, { email, role });
+              setEmail("");
+            });
+          }}
+        >
+          <Input
+            className="w-64"
+            type="email"
+            aria-label="Email"
+            placeholder="name@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
           <NativeSelect aria-label="Role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            {assignable.map((r) => <NativeSelectOption key={r}>{r}</NativeSelectOption>)}
+            {assignable.map((r) => (
+              <NativeSelectOption key={r}>{r}</NativeSelectOption>
+            ))}
           </NativeSelect>
           <Button type="submit">Invite</Button>
           <span className="text-xs text-muted-foreground">They join when they next sign in with this address.</span>
@@ -130,7 +215,12 @@ function Members({ org }: { org: Organization }) {
       )}
       <Table>
         <TableHeader>
-          <TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead /></TableRow>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead />
+          </TableRow>
         </TableHeader>
         <TableBody>
           {members.data?.map((m) => {
@@ -138,14 +228,30 @@ function Members({ org }: { org: Organization }) {
             const isMe = m.userId === me.id;
             return (
               <TableRow key={m.userId}>
-                <TableCell title={personTitle(m)}>{m.displayName}{m.fullName && m.fullName !== m.displayName && <span className="ml-1 text-muted-foreground">({m.fullName})</span>}</TableCell>
+                <TableCell title={personTitle(m)}>
+                  {m.displayName}
+                  {m.fullName && m.fullName !== m.displayName && (
+                    <span className="ml-1 text-muted-foreground">({m.fullName})</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-muted-foreground">{m.email}</TableCell>
                 <TableCell>
                   {canManage ? (
-                    <NativeSelect size="sm" aria-label={`Role for ${m.displayName}`} value={m.role} onChange={(e) => void act(() => put(`/api/orgs/${org.id}/members/${m.userId}`, { role: e.target.value }))}>
-                      {assignable.map((r) => <NativeSelectOption key={r}>{r}</NativeSelectOption>)}
+                    <NativeSelect
+                      size="sm"
+                      aria-label={`Role for ${m.displayName}`}
+                      value={m.role}
+                      onChange={(e) =>
+                        void act(() => put(`/api/orgs/${org.id}/members/${m.userId}`, { role: e.target.value }))
+                      }
+                    >
+                      {assignable.map((r) => (
+                        <NativeSelectOption key={r}>{r}</NativeSelectOption>
+                      ))}
                     </NativeSelect>
-                  ) : m.role}
+                  ) : (
+                    m.role
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   {(isMe || canManage) && (
@@ -153,7 +259,9 @@ function Members({ org }: { org: Organization }) {
                       title={isMe ? "Leave this organisation?" : `Remove ${m.displayName}?`}
                       confirmLabel={isMe ? "Leave" : "Remove"}
                       onConfirm={() => void remove(m)}
-                    >{isMe ? "Leave" : "Remove"}</ConfirmButton>
+                    >
+                      {isMe ? "Leave" : "Remove"}
+                    </ConfirmButton>
                   )}
                 </TableCell>
               </TableRow>
@@ -172,7 +280,13 @@ function Members({ org }: { org: Organization }) {
                   <TableCell>{i.role}</TableCell>
                   <TableCell className="text-muted-foreground">expires {dateTime(i.expiresAt)}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="destructive" size="sm" onClick={() => void act(() => del(`/api/orgs/${org.id}/invitations/${i.id}`))}>Revoke</Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => void act(() => del(`/api/orgs/${org.id}/invitations/${i.id}`))}
+                    >
+                      Revoke
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -195,7 +309,11 @@ function Settings({ org, onSaved }: { org: Organization; onSaved: () => Promise<
     setError(null);
     setSaved(false);
     try {
-      await patch(`/api/orgs/${org.id}`, { name, defaultRole, allowedDomains: domains.split(/[\s,]+/).filter(Boolean) });
+      await patch(`/api/orgs/${org.id}`, {
+        name,
+        defaultRole,
+        allowedDomains: domains.split(/[\s,]+/).filter(Boolean),
+      });
       await onSaved();
       setSaved(true);
     } catch (err) {
@@ -211,13 +329,24 @@ function Settings({ org, onSaved }: { org: Organization; onSaved: () => Promise<
         </Field>
         <Field>
           <FieldLabel htmlFor="org-domains">Email domains that join automatically</FieldLabel>
-          <Input id="org-domains" value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="acme.com, acme.co.uk" />
+          <Input
+            id="org-domains"
+            value={domains}
+            onChange={(e) => setDomains(e.target.value)}
+            placeholder="acme.com, acme.co.uk"
+          />
           <FieldDescription>Google Workspace, or a domain your SSO provider is verified for.</FieldDescription>
         </Field>
         <Field>
           <FieldLabel htmlFor="org-default-role">Role for people who join through a domain</FieldLabel>
-          <NativeSelect id="org-default-role" value={defaultRole} onChange={(e) => setDefaultRole(e.target.value as Role)}>
-            {(["Viewer", "Commenter", "Editor"] as Role[]).map((r) => <NativeSelectOption key={r}>{r}</NativeSelectOption>)}
+          <NativeSelect
+            id="org-default-role"
+            value={defaultRole}
+            onChange={(e) => setDefaultRole(e.target.value as Role)}
+          >
+            {(["Viewer", "Commenter", "Editor"] as Role[]).map((r) => (
+              <NativeSelectOption key={r}>{r}</NativeSelectOption>
+            ))}
           </NativeSelect>
         </Field>
         <div className="flex items-center gap-3">

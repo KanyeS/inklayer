@@ -3,20 +3,25 @@
  * comment around them, and a line for every [[link]] and #tag. Built from the notes' text with the viewer's own parser,
  * so links and tags typed in the editor show up. Click a note to open it.
  */
+
+import { extractLinks, extractTags } from "@inklayer/docs/docMarkdown";
 import type { IconNode } from "lucide";
-import { extractLinks, extractTags } from "../../../../viewer/src/docs/docMarkdown";
 import { $ } from "../../lib/dom";
 import { reducedMotion } from "../../lib/scene";
 import { iconNode } from "./icons";
-import { TAG_STYLES, type Note } from "./notes";
+import { type Note, TAG_STYLES } from "./notes";
 
 const SVG = "http://www.w3.org/2000/svg";
 const CENTRE = { x: 200, y: 175 };
 
 /** Where each note sits; tags and the comment go on a ring around them. */
 const SPOTS: Record<string, { x: number; y: number }> = {
-  qa: { x: 200, y: 170 }, banner: { x: 95, y: 120 }, spec: { x: 300, y: 110 },
-  release: { x: 120, y: 245 }, payments: { x: 295, y: 245 }, design: { x: 345, y: 175 },
+  qa: { x: 200, y: 170 },
+  banner: { x: 95, y: 120 },
+  spec: { x: 300, y: 110 },
+  release: { x: 120, y: 245 },
+  payments: { x: 295, y: 245 },
+  design: { x: 345, y: 175 },
 };
 
 interface GraphNode {
@@ -59,10 +64,18 @@ export function linkGraph(onOpen: (noteId: string) => void) {
     const size = r * 1.15;
     n.g.style.setProperty("--c", n.color);
     n.g.classList.toggle("active", n.key === `note:${active}`);
-    n.g.innerHTML = `<circle r="${r}" class="gtile"></circle><circle r="${r}" class="gring"></circle>`
-      + `<svg x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="gicon">`
-      + n.icon.map(([tag, attrs]) => `<${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${String(v)}"`).join(" ")}/>`).join("")
-      + `</svg><text y="${r + 12}" text-anchor="middle"></text>`;
+    n.g.innerHTML =
+      `<circle r="${r}" class="gtile"></circle><circle r="${r}" class="gring"></circle>` +
+      `<svg x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="gicon">` +
+      n.icon
+        .map(
+          ([tag, attrs]) =>
+            `<${tag} ${Object.entries(attrs)
+              .map(([k, v]) => `${k}="${String(v)}"`)
+              .join(" ")}/>`,
+        )
+        .join("") +
+      `</svg><text y="${r + 12}" text-anchor="middle"></text>`;
     n.g.querySelector("text")!.textContent = n.label;
   };
 
@@ -74,7 +87,14 @@ export function linkGraph(onOpen: (noteId: string) => void) {
     for (const note of notes) {
       const key = `note:${note.id}`;
       shown.add(key);
-      tile({ key, label: note.title.replace(/:.*/, ""), kind: "note", icon: iconNode(note.icon), color: note.color, ...SPOTS[note.id]! });
+      tile({
+        key,
+        label: note.title.replace(/:.*/, ""),
+        kind: "note",
+        icon: iconNode(note.icon),
+        color: note.color,
+        ...SPOTS[note.id]!,
+      });
       for (const link of extractLinks(note.content)) {
         if (link.commentId) {
           shown.add("comment");
@@ -94,11 +114,19 @@ export function linkGraph(onOpen: (noteId: string) => void) {
     outer.forEach((key, i) => {
       const angle = -Math.PI * 0.9 + (i / Math.max(outer.length, 1)) * Math.PI * 2;
       const spot = { x: CENTRE.x + Math.cos(angle) * 170, y: CENTRE.y + Math.sin(angle) * 140 };
-      if (key === "comment") tile({ key, label: "#4 Rosie", kind: "comment", icon: iconNode("message-square"), color: "#ef4444", ...spot });
+      if (key === "comment")
+        tile({ key, label: "#4 Rosie", kind: "comment", icon: iconNode("message-square"), color: "#ef4444", ...spot });
       else {
         const tag = key.slice(4);
         const style = TAG_STYLES[tag] ?? {};
-        tile({ key, label: `#${tag}`, kind: "tag", icon: iconNode(style.icon ?? "hash"), color: style.color ?? "#10b981", ...spot });
+        tile({
+          key,
+          label: `#${tag}`,
+          kind: "tag",
+          icon: iconNode(style.icon ?? "hash"),
+          color: style.color ?? "#10b981",
+          ...spot,
+        });
       }
     });
     for (const [key, n] of nodes) {
@@ -109,13 +137,15 @@ export function linkGraph(onOpen: (noteId: string) => void) {
     }
     for (const e of edges) e.line.remove();
     const seen = new Set<string>();
-    edges = pairs.filter(([a, b]) => a !== b && nodes.has(a) && nodes.has(b) && !seen.has(`${a}>${b}`) && seen.add(`${a}>${b}`)).map(([a, b]) => {
-      const line = document.createElementNS(SVG, "line");
-      const lit = a === `note:${active}` || b === `note:${active}`;
-      line.setAttribute("class", lit ? "edge hot" : "edge");
-      edgeLayer.append(line);
-      return { a: nodes.get(a)!, b: nodes.get(b)!, line };
-    });
+    edges = pairs
+      .filter(([a, b]) => a !== b && nodes.has(a) && nodes.has(b) && !seen.has(`${a}>${b}`) && seen.add(`${a}>${b}`))
+      .map(([a, b]) => {
+        const line = document.createElementNS(SVG, "line");
+        const lit = a === `note:${active}` || b === `note:${active}`;
+        line.setAttribute("class", lit ? "edge hot" : "edge");
+        edgeLayer.append(line);
+        return { a: nodes.get(a)!, b: nodes.get(b)!, line };
+      });
   };
 
   // Nodes drift a little, like the app's graph settling.

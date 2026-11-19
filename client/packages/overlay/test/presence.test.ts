@@ -1,13 +1,39 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { PresenceLayer, commentParts, commentToOpen, decodeMentions, encodeMentions, cursorPositionAt, initials, openOnPageUrl, placeCursor, selectionAnchor } from "../src";
+import {
+  commentParts,
+  commentToOpen,
+  cursorPositionAt,
+  decodeMentions,
+  encodeMentions,
+  initials,
+  openOnPageUrl,
+  PresenceLayer,
+  placeCursor,
+  selectionAnchor,
+} from "../src";
+import { glide, isCursorPosition } from "../src/cursors";
+import { avatarPill, cursorElement, realName, safeColor, statusLabel } from "../src/people";
 
 const HTML = `<main id="article"><p>One</p><p>Two, the paragraph under the pointer.</p><p>Three</p></main>`;
-const page = () => new JSDOM(`<!DOCTYPE html><html><body>${HTML}</body></html>`, { pretendToBeVisual: true }).window.document;
+const page = () =>
+  new JSDOM(`<!DOCTYPE html><html><body>${HTML}</body></html>`, { pretendToBeVisual: true }).window.document;
 
 /** jsdom has no layout: give an element a box, and the page a width. */
-function layout(doc: Document, el: Element, box: { left: number; top: number; width: number; height: number }, pageWidth: number) {
-  el.getBoundingClientRect = () => ({ ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height, toJSON: () => box });
+function layout(
+  doc: Document,
+  el: Element,
+  box: { left: number; top: number; width: number; height: number },
+  pageWidth: number,
+) {
+  el.getBoundingClientRect = () => ({
+    ...box,
+    x: box.left,
+    y: box.top,
+    right: box.left + box.width,
+    bottom: box.top + box.height,
+    toJSON: () => box,
+  });
   Object.defineProperty(doc.documentElement, "scrollWidth", { configurable: true, value: pageWidth });
 }
 
@@ -88,10 +114,12 @@ describe("presence layer", () => {
   });
 });
 
-
 describe("comment links", () => {
   it("splits a body into text and doc links", () => {
-    const parts = commentParts("See [[Spec#Errors|the spec]] and [[Missing]].", [{ text: "Spec", docId: "d1" }, { text: "Missing", docId: null }]);
+    const parts = commentParts("See [[Spec#Errors|the spec]] and [[Missing]].", [
+      { text: "Spec", docId: "d1" },
+      { text: "Missing", docId: null },
+    ]);
     expect(parts).toEqual([
       { text: "See " },
       { link: "Spec", shown: "the spec", docId: "d1" },
@@ -129,5 +157,58 @@ describe("mentions", () => {
     const shown = decodeMentions(`<@${ana.id}> and <@${anaLee.id}>`, [ana, anaLee], picked);
     expect(shown).toBe("@Ana and @Ana Lee");
     expect(encodeMentions(shown, picked)).toBe(`<@${ana.id}> and <@${anaLee.id}>`);
+  });
+});
+
+describe("people and cursors (helpers)", () => {
+  it("names people by their chosen name, with the real one when it differs", () => {
+    expect(realName({ id: "1", name: "Ana", color: "#000000", fullName: "Ana Lee" })).toBe("Ana (Ana Lee)");
+    expect(realName({ id: "1", name: "Ana", color: "#000000", fullName: "Ana" })).toBe("Ana");
+    expect(realName({ id: "1", name: "Ana", color: "#000000" })).toBe("Ana");
+  });
+
+  it("lets only plain hex colours through", () => {
+    expect(safeColor("#12abEF")).toBe("#12abEF");
+    expect(safeColor("red; background:url(x)")).toBe("#7c3aed");
+  });
+
+  it("says how live presence is", () => {
+    expect(statusLabel("live", 0)).toBe("Live · just you");
+    expect(statusLabel("live", 2)).toBe("Live");
+    expect(statusLabel("connecting", 0)).toBe("Connecting…");
+    expect(statusLabel("offline", 0)).toBe("Offline");
+    expect(statusLabel("offline", 0, "Reconnecting in 5s")).toBe("Reconnecting in 5s");
+  });
+
+  it("shows five faces, then +N", () => {
+    const peers = Array.from({ length: 7 }, (_, i) => ({ id: `${i}`, name: `P${i}`, color: "#112233" }));
+    const pill = avatarPill(document, { status: "live", text: "" }, peers, () => undefined);
+    expect(pill.querySelectorAll("button.face")).toHaveLength(5);
+    expect(pill.querySelector(".more")?.textContent).toBe("+2");
+    expect(pill.querySelector(".more")?.getAttribute("title")).toBe("P5, P6");
+  });
+
+  it("builds the cursor arrow without parsing markup", () => {
+    const { cursor, label } = cursorElement(document, { id: "1", name: "Ana", color: "#112233" });
+    expect(cursor.querySelector("svg path")?.getAttribute("fill")).toBe("var(--c)");
+    expect(label.textContent).toBe("Ana");
+    expect(cursor.hidden).toBe(true);
+  });
+
+  it("accepts only well-formed positions from others", () => {
+    expect(isCursorPosition({ dx: 0.1, dy: 0.2 })).toBe(true);
+    expect(isCursorPosition({ dx: 0.1, dy: 0.2, a: { path: ["main"], tag: "main" }, fx: 0.5, fy: 0.5 })).toBe(true);
+    expect(isCursorPosition({ dx: 0.1, dy: 0.2, a: { path: ["main"], tag: "main" } })).toBe(false);
+    expect(isCursorPosition({ dx: "x", dy: 0 })).toBe(false);
+    expect(isCursorPosition(null)).toBe(false);
+  });
+
+  it("glides towards the target, jumping when it's new or far", () => {
+    expect(glide(null, { x: 10, y: 10 })).toEqual({ at: { x: 10, y: 10 }, moving: false });
+    expect(glide({ x: 0, y: 0 }, { x: 5000, y: 0 })).toEqual({ at: { x: 5000, y: 0 }, moving: false });
+    const step = glide({ x: 0, y: 0 }, { x: 100, y: 0 });
+    expect(step.moving).toBe(true);
+    expect(step.at.x).toBeCloseTo(35);
+    expect(glide({ x: 99.8, y: 0 }, { x: 100, y: 0 })).toEqual({ at: { x: 100, y: 0 }, moving: false });
   });
 });

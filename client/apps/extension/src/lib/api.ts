@@ -1,8 +1,12 @@
-import { NotSignedInError, getAccessToken } from "./auth";
+import { getAccessToken, NotSignedInError } from "./auth";
 import { getSettings } from "./settings";
 
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string, readonly body: unknown) {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly body: unknown,
+  ) {
     super(message);
   }
 }
@@ -23,7 +27,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body: unknown = text ? safeJson(text) : null;
   if (!response.ok) {
     const problem = body as { title?: string; detail?: string } | null;
-    throw new ApiError(response.status, problem?.detail ?? problem?.title ?? `Request failed (${response.status}).`, body);
+    throw new ApiError(
+      response.status,
+      problem?.detail ?? problem?.title ?? `Request failed (${response.status}).`,
+      body,
+    );
   }
   return body as T;
 }
@@ -32,7 +40,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 export async function apiBytes(path: string): Promise<{ bytes: ArrayBuffer; type: string } | null> {
   const { serverUrl } = await getSettings();
   if (!serverUrl) throw new NotSignedInError();
-  const send = async (token: string) => fetch(new URL(path, serverUrl), { headers: { Authorization: `Bearer ${token}` } });
+  const send = async (token: string) =>
+    fetch(new URL(path, serverUrl), { headers: { Authorization: `Bearer ${token}` } });
   let response = await send(await getAccessToken());
   if (response.status === 401) response = await send(await getAccessToken(true));
   if (response.status === 401) throw new NotSignedInError();

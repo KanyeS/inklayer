@@ -23,7 +23,12 @@ export interface TextPointer {
 }
 
 /** Each person's awareness `user`, as the viewer sets it (AwarenessUser): y-codemirror draws carets with it. */
-const userFor = (person: Person) => ({ name: person.name, color: person.color, colorLight: `${person.color}33`, peerId: person.id });
+const userFor = (person: Person) => ({
+  name: person.name,
+  color: person.color,
+  colorLight: `${person.color}33`,
+  peerId: person.id,
+});
 
 /** One end of the in-memory link: a doc and its awareness. */
 interface Replica {
@@ -82,7 +87,7 @@ export class Room implements Replica {
     member.doc.on("update", (update: Uint8Array, origin: unknown) => {
       if (origin === RELAY) return;
       pending.push(update);
-      timer ||= window.setTimeout(flush, FLUSH_MS);
+      if (!timer) timer = window.setTimeout(flush, FLUSH_MS);
     });
     member.awareness.on("update", ({ added, updated, removed }: AwarenessChanges, origin: unknown) => {
       if (origin === RELAY) return;
@@ -137,11 +142,15 @@ export class Teammate implements Replica {
     const start = this.text.toString().indexOf(phrase);
     if (start < 0) return;
     this.placeCaret(start);
-    await ctx.animate(ms, (t) => {
-      const head = start + Math.round(phrase.length * t);
-      this.placeCaret(start, head);
-      this.pointAt(head);
-    }, true);
+    await ctx.animate(
+      ms,
+      (t) => {
+        const head = start + Math.round(phrase.length * t);
+        this.placeCaret(start, head);
+        this.pointAt(head);
+      },
+      true,
+    );
     await ctx.sleep(600);
     this.pointAt(null);
   }
@@ -149,12 +158,16 @@ export class Teammate implements Replica {
   /** Types at the caret, a character at a time. */
   async type(ctx: Ctx, text: string, charsPerSecond = 22): Promise<void> {
     let typed = 0;
-    await ctx.type(text, (soFar) => {
-      const index = this.caret;
-      this.text.insert(index, soFar.slice(typed));
-      typed = soFar.length;
-      this.placeCaret(index + 1);
-    }, charsPerSecond);
+    await ctx.type(
+      text,
+      (soFar) => {
+        const index = this.caret;
+        this.text.insert(index, soFar.slice(typed));
+        typed = soFar.length;
+        this.placeCaret(index + 1);
+      },
+      charsPerSecond,
+    );
   }
 
   /** Inserts a piece in one go (a mention, which someone would pick from the suggestions rather than type). */

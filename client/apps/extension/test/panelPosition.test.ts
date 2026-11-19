@@ -15,7 +15,10 @@ describe("panel position", () => {
   });
 
   it("pins to the bottom right when the window is smaller than the panel", () => {
-    expect(clampPosition({ right: 300, bottom: 300 }, panel, { width: 300, height: 400 })).toEqual({ right: 8, bottom: 8 });
+    expect(clampPosition({ right: 300, bottom: 300 }, panel, { width: 300, height: 400 })).toEqual({
+      right: 8,
+      bottom: 8,
+    });
   });
 
   it("ignores saved values that aren't positions", () => {

@@ -46,9 +46,20 @@ export const QA_NOTES = `Release blocker: the pay button sits under the cookie b
 `;
 
 export const NOTES: Note[] = [
-  { id: "qa", title: "Checkout redesign: QA notes", folder: "QA", icon: "clipboard-check", color: "#7c3aed", content: QA_NOTES },
   {
-    id: "banner", title: "Cookie banner", folder: "QA", icon: "cookie", color: "#e8a100",
+    id: "qa",
+    title: "Checkout redesign: QA notes",
+    folder: "QA",
+    icon: "clipboard-check",
+    color: "#7c3aed",
+    content: QA_NOTES,
+  },
+  {
+    id: "banner",
+    title: "Cookie banner",
+    folder: "QA",
+    icon: "cookie",
+    color: "#e8a100",
     content: `> [!bug] Covers the pay button
 > On screens under 700 px tall the banner sits on top of **Place order**.
 
@@ -63,7 +74,11 @@ It's \`position: fixed\` with \`z-index: 1000\`. Fix tracked in [[Checkout redes
 #checkout #mobile`,
   },
   {
-    id: "spec", title: "Checkout spec", folder: "Product", icon: "shopping-cart", color: "#2563eb",
+    id: "spec",
+    title: "Checkout spec",
+    folder: "Product",
+    icon: "shopping-cart",
+    color: "#2563eb",
     content: `How an order goes through. Look and feel in [[Design system]]; card payments in [[Payment providers]].
 
 \`\`\`mermaid
@@ -80,7 +95,11 @@ The total is ==always worked out on the server==, never trusted from the browser
 #checkout`,
   },
   {
-    id: "release", title: "Release checklist", folder: "Product", icon: "list-checks", color: "#16a34a",
+    id: "release",
+    title: "Release checklist",
+    folder: "Product",
+    icon: "list-checks",
+    color: "#16a34a",
     content: `> [!warning] Before Friday
 > Nothing ships until every box is ticked.
 
@@ -94,7 +113,11 @@ Switch to **Read** to tick them off.
 #release #checkout`,
   },
   {
-    id: "payments", title: "Payment providers", folder: "Product", icon: "credit-card", color: "#0891b2",
+    id: "payments",
+    title: "Payment providers",
+    folder: "Product",
+    icon: "credit-card",
+    color: "#0891b2",
     content: `We charge through one provider, with a fallback.[^1]
 
 | Provider | Fee | Payout |
@@ -113,7 +136,11 @@ $$
 #checkout`,
   },
   {
-    id: "design", title: "Design system", folder: "Design", icon: "palette", color: "#db2777",
+    id: "design",
+    title: "Design system",
+    folder: "Design",
+    icon: "palette",
+    color: "#db2777",
     content: `Buttons, colours and type for the shop. Used by [[Checkout spec]].
 
 \`\`\`css

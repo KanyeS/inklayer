@@ -1,0 +1,113 @@
+/* Marks, badges and the drawing surface (Overlay). Colours follow the Inklayer theme (packages/ui tokens): --primary for
+   hover, --foreground for drafts and selection. --c is each mark's own colour. */
+:host {
+  all: initial;
+}
+.shapes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.surface {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  cursor: crosshair;
+  touch-action: none;
+}
+.hover {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  outline: 2px dashed oklch(0.491 0.27 292.581);
+  outline-offset: 1px;
+  background: oklch(0.491 0.27 292.581 / 0.06);
+  border-radius: 2px;
+}
+.mark {
+  pointer-events: visiblePainted;
+  cursor: pointer;
+}
+.mark .outline {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+.mark .highlight {
+  fill: color-mix(in srgb, var(--c) 35%, transparent);
+  stroke: none;
+  mix-blend-mode: multiply;
+}
+.mark .rect {
+  fill: color-mix(in srgb, var(--c) 10%, transparent);
+  stroke: var(--c);
+  stroke-width: 2.5;
+}
+.mark .arrow {
+  stroke: var(--c);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.mark .arrowhead,
+.mark .ink {
+  fill: var(--c);
+  stroke: none;
+}
+.mark.selected .rect,
+.mark.selected .outline,
+.mark.selected .arrow {
+  stroke-width: 4;
+}
+.mark.selected {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 70%, transparent));
+}
+.mark.faded,
+.badge.faded {
+  opacity: 0.35;
+}
+.mark.orphaned .rect,
+.mark.orphaned .outline {
+  stroke-dasharray: 2 4;
+}
+.mark.draft {
+  opacity: 0.85;
+}
+.badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 11px;
+  background: var(--c);
+  color: #fff;
+  font:
+    600 12px / 22px "Inklayer Outfit",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  text-align: center;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.35),
+    0 0 0 2px #fff;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+}
+.badge.pin {
+  transform: translate(-50%, -100%);
+  border-bottom-left-radius: 2px;
+}
+.badge.selected {
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.35),
+    0 0 0 3px oklch(0.145 0.008 326);
+}
+.badge.draft {
+  background: oklch(0.145 0.008 326);
+}

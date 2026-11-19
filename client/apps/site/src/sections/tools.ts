@@ -4,9 +4,9 @@
  */
 import type { Draft, Point, Tool } from "@inklayer/overlay";
 import { $, $$, h } from "../lib/dom";
-import { JOHN, LEO, MICHAEL, ROSIE, YOU, type Person } from "../lib/people";
+import { JOHN, LEO, MICHAEL, type Person, ROSIE, YOU } from "../lib/people";
 import { type Ctx, scene } from "../lib/scene";
-import { type Comment, type Cursor, type Mark, Stage, marks } from "../lib/stage";
+import { type Comment, type Cursor, type Mark, marks, Stage } from "../lib/stage";
 
 const HINTS: Record<Tool, string> = {
   select: "Click a mark to find its comment.",
@@ -32,8 +32,13 @@ export function tools(): void {
     cardsToggle: $<HTMLButtonElement>("#cards-toggle"),
   };
   const page = {
-    shop: $("#shop"), price: $("#shop-price"), cart: $("#shop-cart"), sizes: $("#shop-sizes"), photo: $("#shop-photo"),
-    stars: $("#shop-stars"), description: $("#shop-desc"),
+    shop: $("#shop"),
+    price: $("#shop-price"),
+    cart: $("#shop-cart"),
+    sizes: $("#shop-sizes"),
+    photo: $("#shop-photo"),
+    stars: $("#shop-stars"),
+    description: $("#shop-desc"),
   };
 
   let pending: Draft | null = null;
@@ -57,12 +62,18 @@ export function tools(): void {
     panel.hint.textContent = HINTS[tool];
   };
   const addToList = (c: Comment) => {
-    const item = h("li", { className: "item" },
-      h("div", { className: "meta" },
+    const item = h(
+      "li",
+      { className: "item" },
+      h(
+        "div",
+        { className: "meta" },
         h("span", { className: "badge", style: { "--c": c.person.color }, textContent: String(c.label) }),
         h("b", { textContent: c.person.name }),
-        h("span", { textContent: `· ${c.time}` })),
-      h("p", { className: "body", textContent: c.body }));
+        h("span", { textContent: `· ${c.time}` }),
+      ),
+      h("p", { className: "body", textContent: c.body }),
+    );
     item.dataset.id = c.id;
     if (c.person.id !== YOU.id) item.dataset.demo = "";
     item.addEventListener("click", () => {
@@ -92,7 +103,13 @@ export function tools(): void {
   /* ---------------------------------------------------------------- the demo */
 
   /** One teammate using one tool: pick it in the panel, mark the page, write the comment, save. */
-  const demo = async (ctx: Ctx, cursor: Cursor, tool: Tool, comment: string, draw: (person: Person) => Promise<Comment>) => {
+  const demo = async (
+    ctx: Ctx,
+    cursor: Cursor,
+    tool: Tool,
+    comment: string,
+    draw: (person: Person) => Promise<Comment>,
+  ) => {
     const person = cursor.person;
     await cursor.moveTo(ctx, { el: chip(tool) }, 900);
     setTool(tool, person.color);
@@ -114,49 +131,69 @@ export function tools(): void {
   const michael = stage.person(MICHAEL);
   const draft = (person: Person, mark: Mark) => stage.add(person, mark, "", { draft: true });
 
-  const demoScene = scene($("#tools"), async (ctx) => {
-    reset();
-    await demo(ctx, rosie, "pin", "Show the sale price in red, like the card on the home page.", async (person) => {
-      await rosie.moveTo(ctx, { el: page.price, x: 0.22, y: 0.45 }, 1000);
-      return draft(person, marks.pin(page.price, 0.22, 0.45));
-    });
-    await demo(ctx, john, "element", "Make this full width on mobile.", async (person) => {
-      await john.moveTo(ctx, { el: page.cart, x: 0.6, y: 0.5 }, 1000);
-      return draft(person, marks.element(page.cart));
-    });
-    await demo(ctx, leo, "highlight", "Is this still right for orders to Australia?", async (person) => {
-      await leo.select(ctx, page.description, "ships in 3–5 days", 800);
-      leo.clearSelection();
-      return draft(person, marks.highlight(page.description, "ships in 3–5 days"));
-    });
-    await demo(ctx, michael, "rect", "Size 11 wraps onto two lines in Safari.", async (person) => {
-      const from = { x: -0.03, y: -0.2 };
-      const c = draft(person, marks.rect(page.sizes, from, from));
-      await michael.drag(ctx, page.sizes, from, { x: 1.03, y: 1.2 }, (to) => stage.update(c, { geometry: { kind: "Rect", from, to } }), 900);
-      return c;
-    });
-    await demo(ctx, john, "arrow", "Swap in the new colourway photo here.", async (person) => {
-      const from = { x: 1.25, y: 1.15 };
-      const c = draft(person, marks.arrow(page.photo, from, from));
-      await john.drag(ctx, page.photo, from, { x: 0.8, y: 0.8 }, (to) => stage.update(c, { geometry: { kind: "Arrow", from, to } }), 700);
-      return c;
-    });
-    await demo(ctx, rosie, "ink", "The stars sit 2px lower than the review count.", async (person) => {
-      const loop = circle(46);
-      const c = draft(person, marks.ink(page.stars, loop.slice(0, 1)));
-      await rosie.trace(ctx, page.stars, loop, (soFar) => stage.update(c, { geometry: marks.ink(page.stars, soFar).geometry }));
-      return c;
-    });
+  const demoScene = scene(
+    $("#tools"),
+    async (ctx) => {
+      reset();
+      await demo(ctx, rosie, "pin", "Show the sale price in red, like the card on the home page.", async (person) => {
+        await rosie.moveTo(ctx, { el: page.price, x: 0.22, y: 0.45 }, 1000);
+        return draft(person, marks.pin(page.price, 0.22, 0.45));
+      });
+      await demo(ctx, john, "element", "Make this full width on mobile.", async (person) => {
+        await john.moveTo(ctx, { el: page.cart, x: 0.6, y: 0.5 }, 1000);
+        return draft(person, marks.element(page.cart));
+      });
+      await demo(ctx, leo, "highlight", "Is this still right for orders to Australia?", async (person) => {
+        await leo.select(ctx, page.description, "ships in 3–5 days", 800);
+        leo.clearSelection();
+        return draft(person, marks.highlight(page.description, "ships in 3–5 days"));
+      });
+      await demo(ctx, michael, "rect", "Size 11 wraps onto two lines in Safari.", async (person) => {
+        const from = { x: -0.03, y: -0.2 };
+        const c = draft(person, marks.rect(page.sizes, from, from));
+        await michael.drag(
+          ctx,
+          page.sizes,
+          from,
+          { x: 1.03, y: 1.2 },
+          (to) => stage.update(c, { geometry: { kind: "Rect", from, to } }),
+          900,
+        );
+        return c;
+      });
+      await demo(ctx, john, "arrow", "Swap in the new colourway photo here.", async (person) => {
+        const from = { x: 1.25, y: 1.15 };
+        const c = draft(person, marks.arrow(page.photo, from, from));
+        await john.drag(
+          ctx,
+          page.photo,
+          from,
+          { x: 0.8, y: 0.8 },
+          (to) => stage.update(c, { geometry: { kind: "Arrow", from, to } }),
+          700,
+        );
+        return c;
+      });
+      await demo(ctx, rosie, "ink", "The stars sit 2px lower than the review count.", async (person) => {
+        const loop = circle(46);
+        const c = draft(person, marks.ink(page.stars, loop.slice(0, 1)));
+        await rosie.trace(ctx, page.stars, loop, (soFar) =>
+          stage.update(c, { geometry: marks.ink(page.stars, soFar).geometry }),
+        );
+        return c;
+      });
 
-    // Select: clicking a comment in the list finds its mark.
-    for (const c of [stage.comments[1]!, stage.comments[4]!]) {
-      await michael.moveTo(ctx, { el: $(`[data-id="${c.id}"]`, panel.list), x: 0.4 }, 900);
-      stage.select(c.id);
-      showSelected(c.id);
-      await ctx.sleep(1500);
-    }
-    await ctx.sleep(2500);
-  }, { reset, gap: 400 });
+      // Select: clicking a comment in the list finds its mark.
+      for (const c of [stage.comments[1]!, stage.comments[4]!]) {
+        await michael.moveTo(ctx, { el: $(`[data-id="${c.id}"]`, panel.list), x: 0.4 }, 900);
+        stage.select(c.id);
+        showSelected(c.id);
+        await ctx.sleep(1500);
+      }
+      await ctx.sleep(2500);
+    },
+    { reset, gap: 400 },
+  );
 
   /* ---------------------------------------------------------------- the visitor tries it */
 

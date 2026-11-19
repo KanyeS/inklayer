@@ -1,4 +1,6 @@
-/** Small DOM helpers for the demo scripts. */
+/** Small DOM helpers for the demo scripts. `h` and `followColorScheme` are shared with the extension (@inklayer/overlay). */
+
+export { followColorScheme, h } from "@inklayer/overlay";
 
 /** The element matching `selector`; throws if the page doesn't have it, so a typo fails loudly. */
 export function $<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T {
@@ -9,21 +11,6 @@ export function $<T extends Element = HTMLElement>(selector: string, root: Paren
 
 export function $$<T extends Element = HTMLElement>(selector: string, root: ParentNode = document): T[] {
   return Array.from(root.querySelectorAll<T>(selector));
-}
-
-type Child = Node | string | null | undefined | false;
-type Props<K extends keyof HTMLElementTagNameMap> = Partial<Omit<HTMLElementTagNameMap[K], "style">> & {
-  style?: Record<string, string>;
-};
-
-/** Creates an element: `h("span", { className: "badge", style: { "--c": color } }, "4")`. */
-export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props<K> = {}, ...children: Child[]): HTMLElementTagNameMap[K] {
-  const el = document.createElement(tag);
-  const { style, ...rest } = props;
-  Object.assign(el, rest);
-  for (const [name, value] of Object.entries(style ?? {})) el.style.setProperty(name, value);
-  for (const child of children) if (child) el.append(child);
-  return el;
 }
 
 /** A Range over the first occurrence of `phrase` in one of root's text nodes. */
@@ -46,12 +33,4 @@ export function replay(el: Element, className: string): void {
   el.classList.remove(className);
   void el.getBoundingClientRect();
   el.classList.add(className);
-}
-
-/** Applies the theme's dark palette to a shadow host (tokens live under :host(.dark)), following the system setting. */
-export function followColorScheme(el: HTMLElement): void {
-  const dark = matchMedia("(prefers-color-scheme: dark)");
-  const apply = () => el.classList.toggle("dark", dark.matches);
-  apply();
-  dark.addEventListener("change", apply);
 }

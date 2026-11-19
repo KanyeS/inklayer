@@ -7,7 +7,7 @@ import type { AnchorQuality } from "@inklayer/overlay";
 import { $, h } from "../lib/dom";
 import { JOHN, LEO, MICHAEL, ROSIE } from "../lib/people";
 import { scene } from "../lib/scene";
-import { type Comment, Stage, marks } from "../lib/stage";
+import { type Comment, marks, Stage } from "../lib/stage";
 
 const QUALITY: Record<AnchorQuality, string> = {
   exact: "found exactly",
@@ -38,12 +38,21 @@ export function anchors(): void {
     shown = c;
     if (!c) return readout.replaceChildren();
     const { path, xpath, text, box } = c.anchor.element;
-    const row = (term: string, value: string) => [h("dt", { textContent: term }), h("dd", { textContent: value, title: value })];
+    const row = (term: string, value: string) => [
+      h("dt", { textContent: term }),
+      h("dd", { textContent: value, title: value }),
+    ];
     readout.replaceChildren(
       ...row("css", path.join(" ⟩ ")),
       ...row("xpath", xpath ?? "none"),
-      ...row("text", c.anchor.text ? `“${c.anchor.text.exact}”` : `“${text.slice(0, 40)}${text.length > 40 ? "…" : ""}”`),
-      ...row("saved at", `${Math.round(box.x)}, ${Math.round(box.y)} · ${Math.round(box.width)}×${Math.round(box.height)} px`),
+      ...row(
+        "text",
+        c.anchor.text ? `“${c.anchor.text.exact}”` : `“${text.slice(0, 40)}${text.length > 40 ? "…" : ""}”`,
+      ),
+      ...row(
+        "saved at",
+        `${Math.round(box.x)}, ${Math.round(box.y)} · ${Math.round(box.width)}×${Math.round(box.height)} px`,
+      ),
       ...row("now", QUALITY[quality[c.id] ?? "exact"]),
     );
   };
@@ -64,37 +73,49 @@ export function anchors(): void {
   layoutButton.addEventListener("click", () => setLayout(!site.classList.contains("alt")));
   bannerButton.addEventListener("click", () => setBanner(!promo.isConnected));
 
-  scene($("#anchors"), async (ctx) => {
-    stage.clear();
-    setLayout(false);
-    setBanner(true);
-    const buy = stage.add(MICHAEL, marks.pin($("#mini-buy")), "Buy buttons should say “Add to cart”.");
-    await ctx.sleep(350);
-    const title = stage.add(JOHN, marks.element($("#mini-h1")), "Title wraps on small cards.");
-    await ctx.sleep(350);
-    const banner = stage.add(ROSIE, marks.rect(promo, { x: -0.01, y: -0.12 }, { x: 1.01, y: 1.12 }), "Remove after Sunday.");
-    await ctx.sleep(350);
-    const water = stage.add(LEO, marks.highlight($("#mini-p2"), "Water-resistant"), "Not waterproof? Check with the supplier.");
+  scene(
+    $("#anchors"),
+    async (ctx) => {
+      stage.clear();
+      setLayout(false);
+      setBanner(true);
+      const buy = stage.add(MICHAEL, marks.pin($("#mini-buy")), "Buy buttons should say “Add to cart”.");
+      await ctx.sleep(350);
+      const title = stage.add(JOHN, marks.element($("#mini-h1")), "Title wraps on small cards.");
+      await ctx.sleep(350);
+      const banner = stage.add(
+        ROSIE,
+        marks.rect(promo, { x: -0.01, y: -0.12 }, { x: 1.01, y: 1.12 }),
+        "Remove after Sunday.",
+      );
+      await ctx.sleep(350);
+      const water = stage.add(
+        LEO,
+        marks.highlight($("#mini-p2"), "Water-resistant"),
+        "Not waterproof? Check with the supplier.",
+      );
 
-    select(buy);
-    await ctx.sleep(1800);
-    setLayout(true);
-    await ctx.sleep(2200);
-    select(title);
-    await ctx.sleep(1600);
-    setLayout(false);
-    await ctx.sleep(1800);
-    select(water);
-    await ctx.sleep(1200);
-    setLayout(true);
-    await ctx.sleep(1800);
-    select(banner);
-    await ctx.sleep(900);
-    setBanner(false);
-    await ctx.sleep(3200);
-    setLayout(false);
-    await ctx.sleep(2400);
-    setBanner(true);
-    await ctx.sleep(1800);
-  }, { gap: 300 });
+      select(buy);
+      await ctx.sleep(1800);
+      setLayout(true);
+      await ctx.sleep(2200);
+      select(title);
+      await ctx.sleep(1600);
+      setLayout(false);
+      await ctx.sleep(1800);
+      select(water);
+      await ctx.sleep(1200);
+      setLayout(true);
+      await ctx.sleep(1800);
+      select(banner);
+      await ctx.sleep(900);
+      setBanner(false);
+      await ctx.sleep(3200);
+      setLayout(false);
+      await ctx.sleep(2400);
+      setBanner(true);
+      await ctx.sleep(1800);
+    },
+    { gap: 300 },
+  );
 }

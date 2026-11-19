@@ -1,4 +1,4 @@
-import { PresenceLayer, cursorPositionAt, selectionAnchor, type Anchor, type CursorPosition } from "@inklayer/overlay";
+import { type Anchor, type CursorPosition, cursorPositionAt, PresenceLayer, selectionAnchor } from "@inklayer/overlay";
 import { PRESENCE_PORT, type PresenceDown, type PresenceUp } from "./lib/presence-protocol";
 
 /**
@@ -121,7 +121,9 @@ export class PresenceClient {
     if (!this.#layer) return;
     let on = false;
     try {
-      const response = (await chrome.runtime.sendMessage({ type: "presence.status" })) as { ok: boolean; value?: boolean } | undefined;
+      const response = (await chrome.runtime.sendMessage({ type: "presence.status" })) as
+        | { ok: boolean; value?: boolean }
+        | undefined;
       on = response?.ok === true && response.value === true;
     } catch {
       this.#layer.setStatus("offline", "Reload the page to go live again");
@@ -172,7 +174,8 @@ export class PresenceClient {
     this.#cursorTimer = window.setTimeout(() => {
       this.#cursorTimer = 0;
       this.#lastCursorAt = Date.now();
-      if (this.#pointer) this.#post({ t: "cursor", data: cursorPositionAt(document, this.#pointer.x, this.#pointer.y, this.#isOwn) });
+      if (this.#pointer)
+        this.#post({ t: "cursor", data: cursorPositionAt(document, this.#pointer.x, this.#pointer.y, this.#isOwn) });
     }, wait);
   }
 
@@ -193,7 +196,11 @@ export class PresenceClient {
 
   #on<K extends keyof DocumentEventMap>(target: Document, type: K, listener: (e: DocumentEventMap[K]) => void): void;
   #on<K extends keyof WindowEventMap>(target: Window, type: K, listener: (e: WindowEventMap[K]) => void): void;
-  #on<K extends keyof HTMLElementEventMap>(target: HTMLElement, type: K, listener: (e: HTMLElementEventMap[K]) => void): void;
+  #on<K extends keyof HTMLElementEventMap>(
+    target: HTMLElement,
+    type: K,
+    listener: (e: HTMLElementEventMap[K]) => void,
+  ): void;
   #on(target: EventTarget, type: string, listener: (e: Event) => void): void {
     target.addEventListener(type, listener, { passive: true });
     this.#listeners.push(() => target.removeEventListener(type, listener));

@@ -11,6 +11,7 @@
  */
 
 import { innerOrigin } from "./anchoring";
+import BUBBLE_STYLES from "./styles/bubbles.css?inline";
 
 export interface BubblePosition {
   x: number;
@@ -35,13 +36,17 @@ export class BubbleLayer {
     this.host = document.createElement("inklayer-bubbles");
     this.host.setAttribute("style", "all:initial;position:absolute;top:0;left:0;width:0;height:0;z-index:2147483647;");
     const shadow = this.host.attachShadow({ mode: "closed" });
-    shadow.innerHTML = `<style>${styles}${BUBBLE_STYLES}</style>`;
+    const style = document.createElement("style");
+    style.textContent = styles + BUBBLE_STYLES;
+    shadow.append(style);
     this.#root = document.createElement("div");
     this.#root.className = "bubbles";
+    this.#root.style.setProperty("--bubble-width", `${WIDTH}px`);
     this.#root.addEventListener("mouseover", onEnter);
     this.#root.addEventListener("mouseleave", onLeave);
     // Typing in a bubble shouldn't trigger the page's keyboard shortcuts.
-    for (const type of ["keydown", "keyup", "keypress"] as const) this.#root.addEventListener(type, (e) => e.stopPropagation());
+    for (const type of ["keydown", "keyup", "keypress"] as const)
+      this.#root.addEventListener(type, (e) => e.stopPropagation());
     shadow.append(this.#root);
     this.#parent.append(this.host);
   }
@@ -65,8 +70,12 @@ export class BubbleLayer {
 
   /** Shows a card for each id (in that order), with content from `build`; removes the rest. */
   show(ids: string[], build: (id: string) => Node[]): void {
-    const active = this.#root.getRootNode() instanceof ShadowRoot ? (this.#root.getRootNode() as ShadowRoot).activeElement : null;
-    const focus = active instanceof HTMLTextAreaElement ? { el: active, start: active.selectionStart, end: active.selectionEnd } : null;
+    const active =
+      this.#root.getRootNode() instanceof ShadowRoot ? (this.#root.getRootNode() as ShadowRoot).activeElement : null;
+    const focus =
+      active instanceof HTMLTextAreaElement
+        ? { el: active, start: active.selectionStart, end: active.selectionEnd }
+        : null;
 
     const wanted = new Set(ids.filter((id) => this.#positions[id]));
     for (const [id, card] of this.#cards) {
@@ -105,10 +114,11 @@ export class BubbleLayer {
   }
 
   #layoutSoon(): void {
-    if (!this.#frame) this.#frame = requestAnimationFrame(() => {
-      this.#frame = 0;
-      this.#layout();
-    });
+    if (!this.#frame)
+      this.#frame = requestAnimationFrame(() => {
+        this.#frame = 0;
+        this.#layout();
+      });
   }
 
   /** Beside each badge; cards on the same side are pushed down until they don't overlap. Reads all sizes before writing. */
@@ -119,11 +129,13 @@ export class BubbleLayer {
     const pageWidth = this.#within
       ? origin.x + this.#within.clientWidth
       : Math.max(document.documentElement.scrollWidth, document.documentElement.clientWidth);
-    const cards = [...this.#cards].map(([id, card]) => {
-      const at = this.#positions[id]!;
-      const right = at.x + OFFSET_X + WIDTH + GAP <= pageWidth;
-      return { card, at, right, height: card.offsetHeight, top: at.y - OFFSET_Y };
-    }).sort((a, b) => a.at.y - b.at.y);
+    const cards = [...this.#cards]
+      .map(([id, card]) => {
+        const at = this.#positions[id]!;
+        const right = at.x + OFFSET_X + WIDTH + GAP <= pageWidth;
+        return { card, at, right, height: card.offsetHeight, top: at.y - OFFSET_Y };
+      })
+      .sort((a, b) => a.at.y - b.at.y);
 
     const placed: { left: number; top: number; bottom: number }[] = [];
     for (const c of cards) {
@@ -138,26 +150,3 @@ export class BubbleLayer {
     }
   }
 }
-
-const BUBBLE_STYLES = `
-  .bubbles { position: absolute; top: 0; left: 0; width: 0; height: 0; }
-  .bubble { position: absolute; top: 0; left: 0; width: ${WIDTH}px; box-sizing: border-box; max-height: 360px; overflow-y: auto;
-    padding: 10px 12px; border-radius: 16px; background: var(--popover, var(--background)); color: var(--popover-foreground, var(--foreground));
-    border: 1px solid var(--border); box-shadow: 0 1px 3px rgb(0 0 0 / .12), 0 10px 30px rgb(0 0 0 / .14);
-    font: 13px/1.45 "Inklayer Outfit", system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; gap: 6px;
-    animation: bubble-in .12s ease-out; }
-  .bubble.resolved { opacity: .8; }
-  @keyframes bubble-in { from { opacity: 0; transform-origin: left top; } to { opacity: 1; } }
-  .bubble-head { display: flex; align-items: center; gap: 6px; }
-  .bubble-head .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-  .bubble-head .grow { flex: 1; }
-  .pin-toggle { border: none; background: none; padding: 3px; border-radius: 8px; cursor: pointer; color: var(--muted-foreground); display: grid; place-items: center; }
-  .pin-toggle:hover { background: var(--muted); color: var(--foreground); }
-  .pin-toggle.on { color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
-  .pin-toggle svg { width: 15px; height: 15px; }
-  .replies { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 0; padding: 6px 0 0 10px; border-top: 1px solid var(--border); list-style: none; }
-  .reply { display: flex; flex-direction: column; gap: 1px; }
-  .reply .meta { font-size: 12px; }
-  .reply-box { width: 100%; box-sizing: border-box; resize: none; min-height: 34px; }
-  .bubble .row { display: flex; gap: 4px; align-items: center; }
-`;

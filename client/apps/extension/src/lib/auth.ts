@@ -1,4 +1,4 @@
-import { getSettings, updateSettings, type Tokens } from "./settings";
+import { getSettings, type Tokens, updateSettings } from "./settings";
 
 export const CLIENT_ID = "inklayer-extension";
 const SCOPES = "openid email profile offline_access";
@@ -20,7 +20,9 @@ export function redirectUri(): string {
  */
 export async function signIn(serverUrl: string): Promise<void> {
   const verifier = randomBase64Url(32);
-  const challenge = base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+  const challenge = base64Url(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))),
+  );
   const state = randomBase64Url(16);
 
   const authorize = new URL("/connect/authorize", serverUrl);
@@ -42,13 +44,15 @@ export async function signIn(serverUrl: string): Promise<void> {
   const code = params.get("code");
   if (!code) throw new Error("Sign-in failed: no authorization code was returned.");
 
-  await storeTokens(await tokenRequest(serverUrl, {
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: redirectUri(),
-    client_id: CLIENT_ID,
-    code_verifier: verifier,
-  }));
+  await storeTokens(
+    await tokenRequest(serverUrl, {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri(),
+      client_id: CLIENT_ID,
+      code_verifier: verifier,
+    }),
+  );
 }
 
 export async function signOut(): Promise<void> {
@@ -69,7 +73,11 @@ export async function getAccessToken(forceRefresh = false): Promise<string> {
 
   refreshing ??= (async () => {
     try {
-      const refreshed = await tokenRequest(serverUrl, { grant_type: "refresh_token", refresh_token: tokens.refreshToken!, client_id: CLIENT_ID });
+      const refreshed = await tokenRequest(serverUrl, {
+        grant_type: "refresh_token",
+        refresh_token: tokens.refreshToken!,
+        client_id: CLIENT_ID,
+      });
       await storeTokens(refreshed);
       return refreshed.accessToken;
     } catch (error) {
@@ -95,7 +103,8 @@ async function tokenRequest(serverUrl: string, form: Record<string, string>): Pr
     body: new URLSearchParams(form),
   });
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) throw new TokenError(String(body.error_description ?? body.error ?? `Token request failed (${response.status}).`));
+  if (!response.ok)
+    throw new TokenError(String(body.error_description ?? body.error ?? `Token request failed (${response.status}).`));
   return {
     accessToken: String(body.access_token),
     refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,

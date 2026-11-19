@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from "react";
-import { CircleCheck, CircleDot, ExternalLink, Plus } from "lucide-react";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
+import { CircleCheck, CircleDot, ExternalLink, Plus } from "lucide-react";
+import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
 import { del, get, patch, post } from "@/lib/api";
@@ -52,8 +52,19 @@ export function IssueChips({ issues }: { issues: Issue[] }) {
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       {issues.map((i) => (
-        <a key={i.id} href={i.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-sm hover:bg-muted" title={`${TRACKER_NAMES[i.kind]} ${i.key} (${i.state})`}>
-          {i.state === "open" ? <CircleDot className="size-3.5 text-green-600" /> : <CircleCheck className="size-3.5 text-purple-600" />}
+        <a
+          key={i.id}
+          href={i.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-sm hover:bg-muted"
+          title={`${TRACKER_NAMES[i.kind]} ${i.key} (${i.state})`}
+        >
+          {i.state === "open" ? (
+            <CircleDot className="size-3.5 text-green-600" />
+          ) : (
+            <CircleCheck className="size-3.5 text-purple-600" />
+          )}
           {TRACKER_NAMES[i.kind]} {i.key}
           <ExternalLink className="size-3 text-muted-foreground" />
         </a>
@@ -63,8 +74,19 @@ export function IssueChips({ issues }: { issues: Issue[] }) {
 }
 
 /** "Create issue" for a comment, in one of the project's connected trackers. Hidden when none are connected. */
-export function CreateIssueButton({ commentId, projectId, onCreated }: { commentId: string; projectId: string; onCreated: () => Promise<void> }) {
-  const choices = useAsync(() => get<{ id: string; kind: TrackerKind; name: string }[]>(`/api/projects/${projectId}/issue-trackers/choices`), [projectId]);
+export function CreateIssueButton({
+  commentId,
+  projectId,
+  onCreated,
+}: {
+  commentId: string;
+  projectId: string;
+  onCreated: () => Promise<void>;
+}) {
+  const choices = useAsync(
+    () => get<{ id: string; kind: TrackerKind; name: string }[]>(`/api/projects/${projectId}/issue-trackers/choices`),
+    [projectId],
+  );
   const [open, setOpen] = useState(false);
   const [connectionId, setConnectionId] = useState("");
   const [title, setTitle] = useState("");
@@ -76,7 +98,12 @@ export function CreateIssueButton({ commentId, projectId, onCreated }: { comment
   const chosen = connectionId || first.id;
 
   if (!open) {
-    return <Button variant="outline" onClick={() => setOpen(true)}><Plus data-icon="inline-start" />Create issue</Button>;
+    return (
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <Plus data-icon="inline-start" />
+        Create issue
+      </Button>
+    );
   }
 
   const create = async (e: FormEvent) => {
@@ -100,15 +127,32 @@ export function CreateIssueButton({ commentId, projectId, onCreated }: { comment
       <div className="flex flex-wrap gap-2">
         {choices.data.length > 1 && (
           <NativeSelect aria-label="Tracker" value={chosen} onChange={(e) => setConnectionId(e.target.value)}>
-            {choices.data.map((c) => <NativeSelectOption key={c.id} value={c.id}>{TRACKER_NAMES[c.kind]}: {c.name}</NativeSelectOption>)}
+            {choices.data.map((c) => (
+              <NativeSelectOption key={c.id} value={c.id}>
+                {TRACKER_NAMES[c.kind]}: {c.name}
+              </NativeSelectOption>
+            ))}
           </NativeSelect>
         )}
-        <Input className="min-w-48 flex-1" aria-label="Issue title" placeholder="Title (defaults to the comment's first line)" value={title} maxLength={120} onChange={(e) => setTitle(e.target.value)} />
+        <Input
+          className="min-w-48 flex-1"
+          aria-label="Issue title"
+          placeholder="Title (defaults to the comment's first line)"
+          value={title}
+          maxLength={120}
+          onChange={(e) => setTitle(e.target.value)}
+        />
       </div>
-      <p className="text-xs text-muted-foreground">The issue gets the comment, its replies, the page and its details. Closing the issue resolves the comment.</p>
+      <p className="text-xs text-muted-foreground">
+        The issue gets the comment, its replies, the page and its details. Closing the issue resolves the comment.
+      </p>
       <div className="flex items-center gap-2">
-        <Button type="submit" disabled={busy}>Create in {choices.data.length === 1 ? first.name : "tracker"}</Button>
-        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+        <Button type="submit" disabled={busy}>
+          Create in {choices.data.length === 1 ? first.name : "tracker"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
         <ErrorText error={error} />
       </div>
     </form>
@@ -118,7 +162,8 @@ export function CreateIssueButton({ commentId, projectId, onCreated }: { comment
 const HELP: Record<TrackerKind, string> = {
   github: "A fine-grained personal access token with Issues: read and write on the repository.",
   jira: "An Atlassian API token (id.atlassian.com → Security → API tokens) for the account email below.",
-  linear: "A personal API key (Linear → Settings → Security & access). The team id is in the team's settings, or copy it with Cmd/Ctrl+K → “Copy model UUID”.",
+  linear:
+    "A personal API key (Linear → Settings → Security & access). The team id is in the team's settings, or copy it with Cmd/Ctrl+K → “Copy model UUID”.",
 };
 
 /** A project's connected issue trackers, for project Admins: any number of GitHub repositories, Jira projects and Linear teams. */
@@ -138,7 +183,9 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
   };
 
   const test = async (t: Tracker) => {
-    const result = await post<{ ok: boolean; error: string | null }>(`/api/projects/${projectId}/issue-trackers/${t.id}/test`);
+    const result = await post<{ ok: boolean; error: string | null }>(
+      `/api/projects/${projectId}/issue-trackers/${t.id}/test`,
+    );
     setTested((s) => ({ ...s, [t.id]: result.ok ? "Connected ✓" : `Failed: ${result.error}` }));
   };
 
@@ -147,7 +194,8 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
       <div>
         <h2 className="font-heading text-base font-semibold">Issue trackers</h2>
         <p className="text-sm text-muted-foreground">
-          Commenters can turn comments into issues. Inklayer checks linked issues every few minutes: closing one resolves its comment, reopening it reopens the comment.
+          Commenters can turn comments into issues. Inklayer checks linked issues every few minutes: closing one
+          resolves its comment, reopening it reopens the comment.
         </p>
       </div>
       <ErrorText error={error ?? trackers.error} />
@@ -155,20 +203,47 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
         {trackers.data?.map((t) => (
           <li key={t.id} className="flex flex-wrap items-start gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="flex flex-wrap items-center gap-2 font-medium">{t.name} <Badge variant="outline">{TRACKER_NAMES[t.kind]}</Badge></p>
-              <p className="text-sm text-muted-foreground">
-                Token {t.tokenHint} · {t.closeIssueOnResolve ? "Closes issues when comments are resolved" : "Leaves issues open when comments are resolved"}
+              <p className="flex flex-wrap items-center gap-2 font-medium">
+                {t.name} <Badge variant="outline">{TRACKER_NAMES[t.kind]}</Badge>
               </p>
-              {t.lastError && t.lastErrorAt && <p className="text-sm text-destructive">{timeAgo(t.lastErrorAt)}: {t.lastError}</p>}
+              <p className="text-sm text-muted-foreground">
+                Token {t.tokenHint} ·{" "}
+                {t.closeIssueOnResolve
+                  ? "Closes issues when comments are resolved"
+                  : "Leaves issues open when comments are resolved"}
+              </p>
+              {t.lastError && t.lastErrorAt && (
+                <p className="text-sm text-destructive">
+                  {timeAgo(t.lastErrorAt)}: {t.lastError}
+                </p>
+              )}
               {tested[t.id] && <p className="text-xs">{tested[t.id]}</p>}
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" onClick={() => void test(t)}>Test</Button>
-              <Button variant="ghost" size="sm" onClick={() => void run(() => patch(`/api/projects/${projectId}/issue-trackers/${t.id}`, { closeIssueOnResolve: !t.closeIssueOnResolve }))}>
+              <Button variant="ghost" size="sm" onClick={() => void test(t)}>
+                Test
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  void run(() =>
+                    patch(`/api/projects/${projectId}/issue-trackers/${t.id}`, {
+                      closeIssueOnResolve: !t.closeIssueOnResolve,
+                    }),
+                  )
+                }
+              >
                 {t.closeIssueOnResolve ? "Don't close issues" : "Close issues"}
               </Button>
-              <ConfirmButton title={`Disconnect ${t.name}?`} description="Issues already created stay in the tracker; their links are removed from comments." confirmLabel="Disconnect"
-                onConfirm={() => void run(() => del(`/api/projects/${projectId}/issue-trackers/${t.id}`))}>Disconnect</ConfirmButton>
+              <ConfirmButton
+                title={`Disconnect ${t.name}?`}
+                description="Issues already created stay in the tracker; their links are removed from comments."
+                confirmLabel="Disconnect"
+                onConfirm={() => void run(() => del(`/api/projects/${projectId}/issue-trackers/${t.id}`))}
+              >
+                Disconnect
+              </ConfirmButton>
             </div>
           </li>
         ))}
@@ -186,13 +261,20 @@ function AddTracker({ projectId, onAdded }: { projectId: string; onAdded: () => 
   const [closeIssueOnResolve, setClose] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const set = (key: keyof TrackerSettings) => (e: { target: { value: string } }) => setSettings((s) => ({ ...s, [key]: e.target.value }));
+  const set = (key: keyof TrackerSettings) => (e: { target: { value: string } }) =>
+    setSettings((s) => ({ ...s, [key]: e.target.value }));
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      await post(`/api/projects/${projectId}/issue-trackers`, { kind, name: name || undefined, token, settings, closeIssueOnResolve });
+      await post(`/api/projects/${projectId}/issue-trackers`, {
+        kind,
+        name: name || undefined,
+        token,
+        settings,
+        closeIssueOnResolve,
+      });
       setSettings({});
       setToken("");
       setName("");
@@ -208,7 +290,13 @@ function AddTracker({ projectId, onAdded }: { projectId: string; onAdded: () => 
   const text = (id: keyof TrackerSettings, label: string, placeholder: string, required = true) => (
     <Field key={id}>
       <FieldLabel htmlFor={`tracker-${id}`}>{label}</FieldLabel>
-      <Input id={`tracker-${id}`} required={required} placeholder={placeholder} value={settings[id] ?? ""} onChange={set(id)} />
+      <Input
+        id={`tracker-${id}`}
+        required={required}
+        placeholder={placeholder}
+        value={settings[id] ?? ""}
+        onChange={set(id)}
+      />
     </Field>
   );
 
@@ -217,32 +305,71 @@ function AddTracker({ projectId, onAdded }: { projectId: string; onAdded: () => 
       <h3 className="font-heading font-semibold">Connect a tracker</h3>
       <div className="flex flex-wrap gap-2">
         {(Object.keys(TRACKER_NAMES) as TrackerKind[]).map((k) => (
-          <Button key={k} type="button" variant={kind === k ? "default" : "outline"} size="sm" onClick={() => { setKind(k); setSettings({}); }}>{TRACKER_NAMES[k]}</Button>
+          <Button
+            key={k}
+            type="button"
+            variant={kind === k ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setKind(k);
+              setSettings({});
+            }}
+          >
+            {TRACKER_NAMES[k]}
+          </Button>
         ))}
       </div>
-      {kind === "github" && <div className="grid gap-4 sm:grid-cols-2">{text("owner", "Owner", "acme")}{text("repo", "Repository", "website")}</div>}
+      {kind === "github" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {text("owner", "Owner", "acme")}
+          {text("repo", "Repository", "website")}
+        </div>
+      )}
       {kind === "jira" && (
         <div className="grid gap-4 sm:grid-cols-2">
-          {text("site", "Site", "https://acme.atlassian.net")}{text("projectKey", "Project key", "WEB")}
-          {text("email", "Account email", "bot@acme.com")}{text("issueType", "Issue type", "Bug", false)}
+          {text("site", "Site", "https://acme.atlassian.net")}
+          {text("projectKey", "Project key", "WEB")}
+          {text("email", "Account email", "bot@acme.com")}
+          {text("issueType", "Issue type", "Bug", false)}
         </div>
       )}
       {kind === "linear" && text("teamId", "Team id", "a1b2c3d4-…")}
       <Field>
-        <FieldLabel htmlFor="tracker-token">{kind === "linear" ? "API key" : kind === "jira" ? "API token" : "Token"}</FieldLabel>
-        <Input id="tracker-token" type="password" required autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
-        <FieldDescription>{HELP[kind]} Stored encrypted; only its last four characters are shown again.</FieldDescription>
+        <FieldLabel htmlFor="tracker-token">
+          {kind === "linear" ? "API key" : kind === "jira" ? "API token" : "Token"}
+        </FieldLabel>
+        <Input
+          id="tracker-token"
+          type="password"
+          required
+          autoComplete="off"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+        <FieldDescription>
+          {HELP[kind]} Stored encrypted; only its last four characters are shown again.
+        </FieldDescription>
       </Field>
-      {kind === "github" && text("apiUrl", "API address (GitHub Enterprise only)", "https://github.acme.com/api/v3", false)}
+      {kind === "github" &&
+        text("apiUrl", "API address (GitHub Enterprise only)", "https://github.acme.com/api/v3", false)}
       <Field>
         <FieldLabel htmlFor="tracker-name">Name</FieldLabel>
-        <Input id="tracker-name" placeholder="Shown to commenters" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
+        <Input
+          id="tracker-name"
+          placeholder="Shown to commenters"
+          value={name}
+          maxLength={100}
+          onChange={(e) => setName(e.target.value)}
+        />
       </Field>
       <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={closeIssueOnResolve} onCheckedChange={(on) => setClose(on === true)} />Close the issue when its comment is resolved
+        <Checkbox checked={closeIssueOnResolve} onCheckedChange={(on) => setClose(on === true)} />
+        Close the issue when its comment is resolved
       </label>
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={busy}>{busy ? "Checking…" : `Connect ${TRACKER_NAMES[kind]}`}</Button>
+        <Button type="submit" disabled={busy}>
+          {busy ? "Checking…" : `Connect ${TRACKER_NAMES[kind]}`}
+        </Button>
         <ErrorText error={error} />
       </div>
     </form>

@@ -1,6 +1,10 @@
 /** Same-origin API client. The session cookie authenticates; writes carry the CSRF header the server requires. */
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string, readonly body: unknown) {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly body: unknown,
+  ) {
     super(message);
   }
 }
@@ -15,15 +19,20 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     const problem = body as { title?: string; detail?: string; errors?: Record<string, string[]> } | null;
     const details = problem?.errors ? Object.values(problem.errors).flat().join(" ") : "";
-    throw new ApiError(response.status, [problem?.detail ?? problem?.title ?? `Request failed (${response.status})`, details].filter(Boolean).join(" "), body);
+    throw new ApiError(
+      response.status,
+      [problem?.detail ?? problem?.title ?? `Request failed (${response.status})`, details].filter(Boolean).join(" "),
+      body,
+    );
   }
   return body as T;
 }
 
-export const get = <T,>(path: string) => api<T>(path);
-export const post = <T,>(path: string, body?: unknown) => api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
-export const put = <T,>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) });
-export const patch = <T,>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+export const get = <T>(path: string) => api<T>(path);
+export const post = <T>(path: string, body?: unknown) =>
+  api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+export const put = <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) });
+export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 export const del = (path: string) => api<null>(path, { method: "DELETE" });
 
 function tryJson(text: string): unknown {

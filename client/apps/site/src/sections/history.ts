@@ -3,7 +3,7 @@
  * second save is refused instead of overwriting the first.
  */
 import { $, h } from "../lib/dom";
-import { JOHN, LEO, MICHAEL, ROSIE, type Person } from "../lib/people";
+import { JOHN, LEO, MICHAEL, type Person, ROSIE } from "../lib/people";
 import { scene, together } from "../lib/scene";
 
 type Diff = (Node | string)[];
@@ -12,7 +12,12 @@ const ins = (text: string) => h("ins", { textContent: text });
 
 const REVISIONS: [Person, string, string, Diff?][] = [
   [ROSIE, "09:58", "commented", ["Checkout button hidden on iPhone"]],
-  [ROSIE, "10:03", "edited", ["Checkout button ", del("hidden"), " ", ins("is hidden behind the cookie banner"), " on iPhone", ins(" SE")]],
+  [
+    ROSIE,
+    "10:03",
+    "edited",
+    ["Checkout button ", del("hidden"), " ", ins("is hidden behind the cookie banner"), " on iPhone", ins(" SE")],
+  ],
   [MICHAEL, "11:20", "created GitHub issue #482"],
   [MICHAEL, "14:02", "resolved"],
   [ROSIE, "14:30", "reopened", ["Still happens in landscape."]],
@@ -37,14 +42,28 @@ export function history(): void {
   };
 
   const face = (p: Person) => h("span", { className: "face", style: { "--c": p.color }, textContent: p.name[0]! });
-  const revision = (p: Person, time: string, what: string, diff?: Diff) => h("li", {},
-    face(p),
-    h("div", { className: "what" }, h("b", { textContent: p.name }), ` ${what} `, h("time", { textContent: time })),
-    diff && h("div", { className: "diff" }, ...diff));
-  const event = (p: Person, what: string, where: string, time: string) => h("li", {},
-    face(p),
-    h("span", {}, h("b", { textContent: p.name }), ` ${what} `, h("span", { className: "where", textContent: where })),
-    h("time", { textContent: time }));
+  const revision = (p: Person, time: string, what: string, diff?: Diff) =>
+    h(
+      "li",
+      {},
+      face(p),
+      h("div", { className: "what" }, h("b", { textContent: p.name }), ` ${what} `, h("time", { textContent: time })),
+      diff && h("div", { className: "diff" }, ...diff),
+    );
+  const event = (p: Person, what: string, where: string, time: string) =>
+    h(
+      "li",
+      {},
+      face(p),
+      h(
+        "span",
+        {},
+        h("b", { textContent: p.name }),
+        ` ${what} `,
+        h("span", { className: "where", textContent: where }),
+      ),
+      h("time", { textContent: time }),
+    );
   const result = (el: HTMLElement, ok: boolean, text: string) => {
     el.className = `res ${ok ? "ok" : "no"}`;
     el.textContent = text;
@@ -60,25 +79,33 @@ export function history(): void {
   };
   reset();
 
-  scene($("#history"), async (ctx) => {
-    reset();
-    for (const r of REVISIONS) {
-      timeline.append(revision(...r));
-      await ctx.sleep(700);
-    }
+  scene(
+    $("#history"),
+    async (ctx) => {
+      reset();
+      for (const r of REVISIONS) {
+        timeline.append(revision(...r));
+        await ctx.sleep(700);
+      }
 
-    // Both start from the same version and type at once.
-    await ctx.sleep(400);
-    await together(
-      ctx.type(" Also on Pixel 4a.", (s) => (editors.leo.text.textContent = TEXT + s), 18),
-      ctx.sleep(400).then(() => ctx.type(" Blocks release.", (s) => (editors.john.text.textContent = TEXT + s), 16)),
-    );
-    await ctx.sleep(400);
-    result(editors.leo.result, true, "Saved as revision 7.");
-    timeline.append(revision(LEO, "15:41", "edited", ["on iPhone SE.", ins(" Also on Pixel 4a.")]));
-    activity.prepend(event(LEO, "edited #4", "/checkout", "now"));
-    await ctx.sleep(900);
-    result(editors.john.result, false, "Not saved: Leo changed this comment while you were editing. Your text is kept so you can merge it.");
-    await ctx.sleep(5000);
-  }, { gap: 400, reset });
+      // Both start from the same version and type at once.
+      await ctx.sleep(400);
+      await together(
+        ctx.type(" Also on Pixel 4a.", (s) => (editors.leo.text.textContent = TEXT + s), 18),
+        ctx.sleep(400).then(() => ctx.type(" Blocks release.", (s) => (editors.john.text.textContent = TEXT + s), 16)),
+      );
+      await ctx.sleep(400);
+      result(editors.leo.result, true, "Saved as revision 7.");
+      timeline.append(revision(LEO, "15:41", "edited", ["on iPhone SE.", ins(" Also on Pixel 4a.")]));
+      activity.prepend(event(LEO, "edited #4", "/checkout", "now"));
+      await ctx.sleep(900);
+      result(
+        editors.john.result,
+        false,
+        "Not saved: Leo changed this comment while you were editing. Your text is kept so you can merge it.",
+      );
+      await ctx.sleep(5000);
+    },
+    { gap: 400, reset },
+  );
 }

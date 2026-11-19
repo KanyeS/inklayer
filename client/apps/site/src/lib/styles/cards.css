@@ -1,0 +1,20 @@
+/* The demo's comment cards (the extension's BubbleLayer, in a shadow root). The theme tokens are prepended at runtime
+   by shadowTokens, as the extension's panel does; these are the few classes the cards use. */
+:host {
+  all: initial;
+}
+.muted {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.meta {
+  color: var(--muted-foreground);
+}
+.meta strong {
+  color: var(--foreground);
+}

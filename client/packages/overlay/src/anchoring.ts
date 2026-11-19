@@ -20,13 +20,17 @@ export function describeElement(el: Element): ElementAnchor {
  * Finds the anchored element again. Each anchor is tried in turn, and the result says how reliable the match is:
  * the CSS path (`exact`); the XPath or a unique text match (`fallback`); otherwise null (`orphaned`).
  */
-export function resolveElement(doc: Document, anchor: ElementAnchor): { element: Element | null; quality: AnchorQuality } {
+export function resolveElement(
+  doc: Document,
+  anchor: ElementAnchor,
+): { element: Element | null; quality: AnchorQuality } {
   const byPath = resolvePath(doc, anchor.path);
   if (byPath && matchesTag(byPath, anchor)) return { element: byPath, quality: "exact" };
 
   if (anchor.xpath) {
     const byXPath = evaluateXPath(doc, anchor.xpath);
-    if (byXPath && matchesTag(byXPath, anchor) && textSimilar(byXPath, anchor)) return { element: byXPath, quality: "fallback" };
+    if (byXPath && matchesTag(byXPath, anchor) && textSimilar(byXPath, anchor))
+      return { element: byXPath, quality: "fallback" };
   }
 
   if (anchor.text.length >= 3) {
@@ -35,7 +39,9 @@ export function resolveElement(doc: Document, anchor: ElementAnchor): { element:
     if (matches.length === 1) return { element: matches[0]!, quality: "fallback" };
     if (matches.length > 1) {
       // Several elements have the same text; take the one closest to where the original was.
-      const closest = matches.map((m) => ({ m, d: distance(documentBox(m), anchor.box) })).sort((a, b) => a.d - b.d)[0]!;
+      const closest = matches
+        .map((m) => ({ m, d: distance(documentBox(m), anchor.box) }))
+        .sort((a, b) => a.d - b.d)[0]!;
       return { element: closest.m, quality: "fallback" };
     }
   }
@@ -200,13 +206,17 @@ export function resolveRange(root: Element, anchor: TextAnchor): { range: Range 
 
   let best: { start: number; score: number } | null = null;
   for (let i = text.indexOf(anchor.exact); i >= 0; i = text.indexOf(anchor.exact, i + 1)) {
-    const score = commonSuffix(text.slice(Math.max(0, i - anchor.prefix.length), i), anchor.prefix)
-      + commonPrefix(text.slice(i + anchor.exact.length, i + anchor.exact.length + anchor.suffix.length), anchor.suffix)
-      - Math.abs(i - anchor.start) / 10_000;
+    const score =
+      commonSuffix(text.slice(Math.max(0, i - anchor.prefix.length), i), anchor.prefix) +
+      commonPrefix(text.slice(i + anchor.exact.length, i + anchor.exact.length + anchor.suffix.length), anchor.suffix) -
+      Math.abs(i - anchor.start) / 10_000;
     if (!best || score > best.score) best = { start: i, score };
   }
   if (!best) return { range: null, quality: "orphaned" };
-  return { range: rangeFor(root.ownerDocument, nodes, best.start, best.start + anchor.exact.length), quality: "fallback" };
+  return {
+    range: rangeFor(root.ownerDocument, nodes, best.start, best.start + anchor.exact.length),
+    quality: "fallback",
+  };
 }
 
 interface IndexedText {
@@ -242,7 +252,9 @@ function rangeFor(doc: Document, nodes: IndexedText[], start: number, end: numbe
   const locate = (offset: number, preferEnd: boolean) => {
     for (const entry of nodes) {
       const length = entry.node.data.length;
-      const within = preferEnd ? offset > entry.start && offset <= entry.start + length : offset >= entry.start && offset < entry.start + length;
+      const within = preferEnd
+        ? offset > entry.start && offset <= entry.start + length
+        : offset >= entry.start && offset < entry.start + length;
       if (within) return { node: entry.node, offset: offset - entry.start };
     }
     return null;
@@ -283,7 +295,12 @@ export function anchorFor(el: Element, range?: Range): Anchor {
 export function documentBox(el: Element): Box {
   const rect = el.getBoundingClientRect();
   const win = el.ownerDocument.defaultView;
-  return { x: rect.left + (win?.scrollX ?? 0), y: rect.top + (win?.scrollY ?? 0), width: rect.width, height: rect.height };
+  return {
+    x: rect.left + (win?.scrollX ?? 0),
+    y: rect.top + (win?.scrollY ?? 0),
+    width: rect.width,
+    height: rect.height,
+  };
 }
 
 /**

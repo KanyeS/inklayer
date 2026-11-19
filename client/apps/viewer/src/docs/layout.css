@@ -1,0 +1,48 @@
+/* Named classes for the docs area's layout: the long, one-off Tailwind class lists that made the components hard to
+   read. Each is used in one place; the name says what the element is. Built with @apply so they follow the theme, and
+   in the components layer so a utility class on the same element still wins. */
+
+@layer components {
+  /* The docs page: sidebar | doc | info panel (the panel only on wide screens). DocsPage.tsx */
+  .docs-layout {
+    @apply grid min-h-[calc(100svh-3.5rem)] grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_300px];
+  }
+
+  /* The tree of docs on the left; scrolls on its own beside the doc on wider screens. DocsPage.tsx */
+  .docs-sidebar {
+    @apply border-b bg-muted/30 md:sticky md:top-14 md:h-[calc(100svh-3.5rem)] md:overflow-y-auto md:border-r md:border-b-0;
+  }
+
+  /* The title, edited in place. doc-view/DocHeader.tsx */
+  .doc-title-input {
+    @apply w-full min-w-0 bg-transparent font-heading text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground disabled:opacity-100;
+  }
+
+  /* The links and outline beside a doc, on wide screens. doc-view/DocInfoPanel.tsx */
+  .doc-info-panel {
+    @apply hidden border-l px-5 py-6 text-sm xl:sticky xl:top-14 xl:block xl:h-[calc(100svh-3.5rem)] xl:overflow-y-auto;
+  }
+
+  .doc-panel-heading {
+    @apply mb-2 flex items-center gap-1.5 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase;
+  }
+
+  .doc-panel-link {
+    @apply block truncate rounded-md px-2 py-1 hover:bg-muted;
+  }
+
+  /* A heading in the outline; indented by level with an inline padding-left. */
+  .doc-outline-item {
+    @apply block w-full truncate rounded-md px-2 py-0.5 text-left text-muted-foreground hover:bg-muted hover:text-foreground;
+  }
+
+  /* The formatting toolbar, stuck under the app's header while scrolling. FormatToolbar.tsx */
+  .doc-format-toolbar {
+    @apply sticky top-14 z-10 -mx-2 mb-2 flex flex-wrap items-center gap-0.5 rounded-xl border bg-background/95 px-1.5 py-1 backdrop-blur;
+  }
+
+  /* The filters floating over the graph. GraphPage.tsx */
+  .graph-controls {
+    @apply absolute top-4 left-4 z-10 flex w-64 flex-col gap-3 rounded-2xl border bg-background/90 p-4 shadow-sm backdrop-blur;
+  }
+}

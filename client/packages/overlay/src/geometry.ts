@@ -17,7 +17,12 @@ export function fromFraction(fraction: Point, box: Box): Point {
 }
 
 export function contains(outer: Box, inner: Box): boolean {
-  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
+  return (
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
+  );
 }
 
 export function boundsOf(points: Point[]): Box {

@@ -28,7 +28,11 @@ export const MENTION_PATTERN = /<@([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-
  * Splits a comment body into text, [[links]] (with the doc each opens, from the server's docLinks) and @mentions (with
  * names, from the server's people).
  */
-export function commentParts(body: string, docLinks: { text: string; docId: string | null }[] = [], people: MentionPerson[] = []): CommentPart[] {
+export function commentParts(
+  body: string,
+  docLinks: { text: string; docId: string | null }[] = [],
+  people: MentionPerson[] = [],
+): CommentPart[] {
   return linkParts(body, docLinks).flatMap((part) => ("text" in part ? mentionParts(part.text, people) : [part]));
 }
 
@@ -40,7 +44,11 @@ export function mentionParts(text: string, people: MentionPerson[]): CommentPart
   for (const m of text.matchAll(MENTION_PATTERN)) {
     if (m.index > last) parts.push({ text: text.slice(last, m.index) });
     const person = byId.get(m[1]!.toLowerCase());
-    parts.push({ mention: person?.displayName ?? "someone", userId: m[1]!.toLowerCase(), fullName: person?.fullName ?? null });
+    parts.push({
+      mention: person?.displayName ?? "someone",
+      userId: m[1]!.toLowerCase(),
+      fullName: person?.fullName ?? null,
+    });
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push({ text: text.slice(last) });
@@ -51,7 +59,8 @@ export function mentionParts(text: string, people: MentionPerson[]): CommentPart
 export function encodeMentions(text: string, picked: Map<string, string>): string {
   let result = text;
   // Longest names first, so "@Ana Lee" isn't taken for "@Ana".
-  for (const [name, id] of [...picked].sort((a, b) => b[0].length - a[0].length)) result = result.split(`@${name}`).join(`<@${id}>`);
+  for (const [name, id] of [...picked].sort((a, b) => b[0].length - a[0].length))
+    result = result.split(`@${name}`).join(`<@${id}>`);
   return result;
 }
 
@@ -79,7 +88,11 @@ function linkParts(body: string, docLinks: { text: string; docId: string | null 
       inner = inner.slice(0, pipe);
     }
     const hash = inner.indexOf("#");
-    const target = (hash >= 0 ? inner.slice(0, hash) : inner).split("/").map((s) => s.trim()).filter(Boolean).join("/");
+    const target = (hash >= 0 ? inner.slice(0, hash) : inner)
+      .split("/")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join("/");
     if (!target || target.toLowerCase().startsWith("comment:")) continue;
     if (m.index > last) parts.push({ text: body.slice(last, m.index) });
     parts.push({ link: target, shown: alias ?? inner.trim(), docId: byKey.get(target.toLowerCase()) ?? null });

@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,9 +10,16 @@ import {
   AlertDialogTrigger,
 } from "@inklayer/ui/components/alert-dialog";
 import { Button } from "@inklayer/ui/components/button";
+import type { ReactNode } from "react";
 
 /** A destructive action behind a confirmation dialog. */
-export function ConfirmButton({ children, title, description, confirmLabel, onConfirm }: {
+export function ConfirmButton({
+  children,
+  title,
+  description,
+  confirmLabel,
+  onConfirm,
+}: {
   children: ReactNode;
   title: string;
   description?: string;
@@ -30,7 +36,9 @@ export function ConfirmButton({ children, title, description, confirmLabel, onCo
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+            {confirmLabel}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

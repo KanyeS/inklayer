@@ -9,7 +9,6 @@
  */
 
 declare global {
-  // eslint-disable-next-line no-var
   var __inklayerCapture: boolean | undefined;
 }
 
@@ -35,7 +34,7 @@ if (!globalThis.__inklayerCapture) {
   const consoleEntries: ConsoleEntry[] = [];
   const networkEntries: NetworkEntry[] = [];
   const now = () => new Date().toISOString();
-  const push = <T,>(list: T[], entry: T) => {
+  const push = <T>(list: T[], entry: T) => {
     list.push(entry);
     if (list.length > KEEP) list.shift();
   };
@@ -61,6 +60,7 @@ if (!globalThis.__inklayerCapture) {
 
   // Console errors and warnings, passed on to the page's console as before.
   for (const level of ["error", "warn"] as const) {
+    // biome-ignore lint/suspicious/noConsole: wraps the page's console to record errors, then passes them on
     const original = console[level].bind(console);
     console[level] = (...args: unknown[]) => {
       push(consoleEntries, { level, message: describe(args), at: now() });
@@ -73,7 +73,11 @@ if (!globalThis.__inklayerCapture) {
     push(consoleEntries, { level: "error", message: `${e.message}${where}`.slice(0, MAX_MESSAGE), at: now() });
   });
   window.addEventListener("unhandledrejection", (e) => {
-    push(consoleEntries, { level: "error", message: `Unhandled rejection: ${text(e.reason)}`.slice(0, MAX_MESSAGE), at: now() });
+    push(consoleEntries, {
+      level: "error",
+      message: `Unhandled rejection: ${text(e.reason)}`.slice(0, MAX_MESSAGE),
+      at: now(),
+    });
   });
 
   // Failed fetches: HTTP errors (4xx/5xx) and network failures (status 0).
@@ -84,7 +88,14 @@ if (!globalThis.__inklayerCapture) {
     const url = withoutQuery(input instanceof Request ? input.url : String(input));
     try {
       const response = await originalFetch.call(this, input, init);
-      if (!response.ok) push(networkEntries, { method, url, status: response.status, ms: Math.round(performance.now() - started), at: now() });
+      if (!response.ok)
+        push(networkEntries, {
+          method,
+          url,
+          status: response.status,
+          ms: Math.round(performance.now() - started),
+          at: now(),
+        });
       return response;
     } catch (error) {
       push(networkEntries, { method, url, status: 0, ms: Math.round(performance.now() - started), at: now() });
@@ -96,7 +107,12 @@ if (!globalThis.__inklayerCapture) {
   const open = XMLHttpRequest.prototype.open;
   const send = XMLHttpRequest.prototype.send;
   const requests = new WeakMap<XMLHttpRequest, { method: string; url: string; started: number }>();
-  XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, method: string, url: string | URL, ...rest: unknown[]) {
+  XMLHttpRequest.prototype.open = function (
+    this: XMLHttpRequest,
+    method: string,
+    url: string | URL,
+    ...rest: unknown[]
+  ) {
     requests.set(this, { method: String(method).toUpperCase(), url: withoutQuery(String(url)), started: 0 });
     return (open as (...a: unknown[]) => void).call(this, method, url, ...rest);
   } as typeof XMLHttpRequest.prototype.open;
@@ -106,7 +122,13 @@ if (!globalThis.__inklayerCapture) {
       info.started = performance.now();
       this.addEventListener("loadend", () => {
         if (this.status === 0 || this.status >= 400) {
-          push(networkEntries, { method: info.method, url: info.url, status: this.status, ms: Math.round(performance.now() - info.started), at: now() });
+          push(networkEntries, {
+            method: info.method,
+            url: info.url,
+            status: this.status,
+            ms: Math.round(performance.now() - info.started),
+            at: now(),
+          });
         }
       });
     }
@@ -117,9 +139,11 @@ if (!globalThis.__inklayerCapture) {
   document.addEventListener("inklayer:context-request", (e) => {
     const nonce = (e as CustomEvent<unknown>).detail;
     if (typeof nonce !== "string") return;
-    document.dispatchEvent(new CustomEvent("inklayer:context-response", {
-      detail: JSON.stringify({ nonce, console: consoleEntries, network: networkEntries }),
-    }));
+    document.dispatchEvent(
+      new CustomEvent("inklayer:context-response", {
+        detail: JSON.stringify({ nonce, console: consoleEntries, network: networkEntries }),
+      }),
+    );
   });
 }
 

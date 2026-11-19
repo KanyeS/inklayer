@@ -8,8 +8,8 @@ on:
     paths:
       - "client/apps/site/**"
       - "client/packages/overlay/**"
+      - "client/packages/docs/**"
       - "client/packages/ui/src/styles/**"
-      - "client/apps/extension/src/lib/pageDetails.ts"
       - "client/package-lock.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:

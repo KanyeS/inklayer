@@ -1,0 +1,176 @@
+/* Other people's cursors, selections and the avatar pill (PresenceLayer). --c is each person's colour. */
+:host {
+  all: initial;
+}
+.cursors,
+.selections {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  transition: opacity 0.3s ease;
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.3));
+}
+.cursor[hidden] {
+  display: none;
+}
+.cursor.faded {
+  opacity: 0;
+}
+.cursor svg {
+  display: block;
+}
+.name {
+  position: absolute;
+  left: 14px;
+  top: 18px;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--c);
+  color: #fff;
+  border-radius: 3px 9px 9px 9px;
+  padding: 3px 8px;
+  font:
+    600 11.5px / 1.25 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  letter-spacing: 0.01em;
+}
+.mark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: color-mix(in srgb, var(--c) 24%, transparent);
+  border-radius: 2px;
+}
+.mark:first-child {
+  box-shadow: -2px 0 0 0 var(--c);
+}
+.flag {
+  position: absolute;
+  left: -2px;
+  bottom: 100%;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--c);
+  color: #fff;
+  border-radius: 3px 3px 3px 0;
+  padding: 1px 6px;
+  font:
+    600 10.5px / 1.4 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+.avatars {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  pointer-events: none;
+}
+:host(.within) .cursors,
+:host(.within) .selections,
+:host(.within) .avatars {
+  position: absolute;
+}
+.pill {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  min-height: 28px;
+  box-sizing: border-box;
+  background: #fff;
+  color: #1f2328;
+  border-radius: 999px;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.12),
+    0 4px 14px rgb(0 0 0 / 0.1);
+  font:
+    600 12px / 1 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+.pill:not(:has(.faces)) {
+  padding-right: 12px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0acf83;
+  box-shadow: 0 0 0 3px rgb(10 207 131 / 0.2);
+}
+.connecting .dot {
+  background: #e8a100;
+  box-shadow: 0 0 0 3px rgb(232 161 0 / 0.2);
+}
+.offline .dot {
+  background: #9ca3af;
+  box-shadow: none;
+}
+.faces {
+  display: flex;
+  flex-direction: row-reverse;
+}
+.face {
+  all: unset;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  margin-left: -6px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  background: var(--c, #6b7280);
+  color: #fff;
+  border: 2px solid #fff;
+  font:
+    700 10px / 1 system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  transition: transform 0.12s ease;
+}
+.face:hover,
+.face:focus-visible {
+  transform: translateY(-2px);
+  z-index: 1;
+  outline: none;
+}
+.face.more {
+  cursor: default;
+  background: #e5e7eb;
+  color: #374151;
+}
+@media (prefers-color-scheme: dark) {
+  .pill {
+    background: #1f2328;
+    color: #f3f4f6;
+  }
+  .face {
+    border-color: #1f2328;
+  }
+  .face.more {
+    background: #374151;
+    color: #e5e7eb;
+  }
+}

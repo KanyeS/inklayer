@@ -2,16 +2,17 @@
  * Tags as pills: a doc's #tags at the top of the doc. Tags live in the doc's text (so they're searchable and work wherever
  * tags do); each tag's icon and colour are optional and set once for the whole organisation.
  */
-import { useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
-import { Palette, Plus, X } from "lucide-react";
-import { cn } from "@inklayer/ui/lib/utils";
+
+import { addTag, extractTags, removeTag, textEdit } from "@inklayer/docs/docMarkdown";
 import { Button } from "@inklayer/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@inklayer/ui/components/dialog";
 import { Input } from "@inklayer/ui/components/input";
+import { cn } from "@inklayer/ui/lib/utils";
+import { Palette, Plus, X } from "lucide-react";
+import { type KeyboardEvent, type ReactNode, useState, useSyncExternalStore } from "react";
 import type { DocSession } from "./collab";
 import { IconSvg, useIcons } from "./docIcons";
-import { addTag, extractTags, removeTag, textEdit } from "./docMarkdown";
-import { docsApi, type DocTagInfo, type DocTree } from "./docsApi";
+import { type DocTagInfo, type DocTree, docsApi } from "./docsApi";
 import { IconPicker } from "./IconPicker";
 
 /** A tag that #tag extraction would find: letters, digits, _ / -, with at least one letter or _. */
@@ -22,10 +23,18 @@ export function toTag(text: string): string {
   return text.trim().replace(/^#+/, "").replace(/\s+/g, "-").replace(/\/+$/, "").toLowerCase();
 }
 
-export const tagOf = (tree: DocTree, tag: string): DocTagInfo => tree.tags?.find((t) => t.tag === tag) ?? { tag, count: 0 };
+export const tagOf = (tree: DocTree, tag: string): DocTagInfo =>
+  tree.tags?.find((t) => t.tag === tag) ?? { tag, count: 0 };
 
 /** One tag: its icon (if it has one) and #name, in its colour. */
-export function TagPill({ tag: info, active, onClick, onRemove, children, className }: {
+export function TagPill({
+  tag: info,
+  active,
+  onClick,
+  onRemove,
+  children,
+  className,
+}: {
   tag: DocTagInfo;
   active?: boolean;
   onClick?: () => void;
@@ -36,21 +45,44 @@ export function TagPill({ tag: info, active, onClick, onRemove, children, classN
   const library = useIcons();
   const icon = library?.get(info.icon);
   const style = info.color
-    ? { color: info.color, background: `color-mix(in oklab, ${info.color} ${active ? 26 : 13}%, transparent)`, boxShadow: active ? `inset 0 0 0 1px ${info.color}` : undefined }
+    ? {
+        color: info.color,
+        background: `color-mix(in oklab, ${info.color} ${active ? 26 : 13}%, transparent)`,
+        boxShadow: active ? `inset 0 0 0 1px ${info.color}` : undefined,
+      }
     : undefined;
   const Name = onClick ? "button" : "span";
   return (
-    <span className={cn("doc-tag-pill inline-flex max-w-full items-center rounded-full text-xs font-medium",
-      !info.color && (active ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"), className)} style={style}>
-      <Name type={onClick ? "button" : undefined} onClick={onClick} title={onClick ? `Docs tagged #${info.tag}` : undefined}
-        className={cn("inline-flex min-w-0 items-center gap-1 py-0.5 pl-2", onRemove ? "pr-1" : "pr-2", onClick && "cursor-pointer hover:opacity-80")}>
+    <span
+      className={cn(
+        "doc-tag-pill inline-flex max-w-full items-center rounded-full text-xs font-medium",
+        !info.color && (active ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"),
+        className,
+      )}
+      style={style}
+    >
+      <Name
+        type={onClick ? "button" : undefined}
+        onClick={onClick}
+        title={onClick ? `Docs tagged #${info.tag}` : undefined}
+        className={cn(
+          "inline-flex min-w-0 items-center gap-1 py-0.5 pl-2",
+          onRemove ? "pr-1" : "pr-2",
+          onClick && "cursor-pointer hover:opacity-80",
+        )}
+      >
         {icon && <IconSvg node={icon} className="size-3.5 shrink-0" />}
         <span className="truncate">#{info.tag}</span>
         {children}
       </Name>
       {onRemove && (
-        <button type="button" onClick={onRemove} title={`Remove #${info.tag} from this doc`} aria-label={`Remove #${info.tag}`}
-          className="mr-1 rounded-full p-0.5 opacity-60 hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10">
+        <button
+          type="button"
+          onClick={onRemove}
+          title={`Remove #${info.tag} from this doc`}
+          aria-label={`Remove #${info.tag}`}
+          className="mr-1 rounded-full p-0.5 opacity-60 hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+        >
           <X className="size-3" />
         </button>
       )}
@@ -81,7 +113,15 @@ function editText(session: DocSession, change: (text: string) => string) {
 }
 
 /** The tags at the top of a doc: click one to list docs with it; editors can add and remove them. */
-export function TagBar({ orgId, tree, session, fallback, canEdit, onTag, onTreeChanged }: {
+export function TagBar({
+  orgId,
+  tree,
+  session,
+  fallback,
+  canEdit,
+  onTag,
+  onTreeChanged,
+}: {
   orgId: string;
   tree: DocTree;
   session: DocSession;
@@ -98,24 +138,49 @@ export function TagBar({ orgId, tree, session, fallback, canEdit, onTag, onTreeC
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
       {tags.map((tag) => (
-        <TagPill key={tag} tag={tagOf(tree, tag)} onClick={() => onTag(tag)}
-          onRemove={canEdit ? () => editText(session, (t) => removeTag(t, tag)) : undefined} />
+        <TagPill
+          key={tag}
+          tag={tagOf(tree, tag)}
+          onClick={() => onTag(tag)}
+          onRemove={canEdit ? () => editText(session, (t) => removeTag(t, tag)) : undefined}
+        />
       ))}
       {canEdit && (
-        <Button variant="ghost" size="sm" className="h-6 rounded-full px-2 text-xs text-muted-foreground" onClick={() => setOpen(true)}>
-          <Plus data-icon="inline-start" />Tag
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 rounded-full px-2 text-xs text-muted-foreground"
+          onClick={() => setOpen(true)}
+        >
+          <Plus data-icon="inline-start" />
+          Tag
         </Button>
       )}
-      <TagDialog orgId={orgId} tree={tree} tags={tags} open={open} onOpenChange={setOpen}
+      <TagDialog
+        orgId={orgId}
+        tree={tree}
+        tags={tags}
+        open={open}
+        onOpenChange={setOpen}
         onAdd={(tag) => editText(session, (t) => addTag(t, tag))}
         onRemove={(tag) => editText(session, (t) => removeTag(t, tag))}
-        onTreeChanged={onTreeChanged} />
+        onTreeChanged={onTreeChanged}
+      />
     </div>
   );
 }
 
 /** Add tags (with suggestions from tags in use), remove them, and set each one's icon and colour. */
-function TagDialog({ orgId, tree, tags, open, onOpenChange, onAdd, onRemove, onTreeChanged }: {
+function TagDialog({
+  orgId,
+  tree,
+  tags,
+  open,
+  onOpenChange,
+  onAdd,
+  onRemove,
+  onTreeChanged,
+}: {
   orgId: string;
   tree: DocTree;
   tags: string[];
@@ -129,7 +194,9 @@ function TagDialog({ orgId, tree, tags, open, onOpenChange, onAdd, onRemove, onT
   const [styling, setStyling] = useState<DocTagInfo | null>(null);
   const [error, setError] = useState("");
   const typed = toTag(input);
-  const suggestions = (tree.tags ?? []).filter((l) => !tags.includes(l.tag) && (!typed || l.tag.includes(typed))).slice(0, 12);
+  const suggestions = (tree.tags ?? [])
+    .filter((l) => !tags.includes(l.tag) && (!typed || l.tag.includes(typed)))
+    .slice(0, 12);
 
   const add = (tag: string) => {
     if (!VALID_TAG.test(tag)) {
@@ -155,25 +222,37 @@ function TagDialog({ orgId, tree, tags, open, onOpenChange, onAdd, onRemove, onT
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Tags</DialogTitle>
-          <DialogDescription>Tags are added to the doc's text as #tag, so they're searchable. A tag's icon and colour apply to every doc that has it.</DialogDescription>
+          <DialogDescription>
+            Tags are added to the doc's text as #tag, so they're searchable. A tag's icon and colour apply to every doc
+            that has it.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">
-          <Input autoFocus placeholder="Add a tag, e.g. launch" aria-label="New tag" value={input}
+          <Input
+            autoFocus
+            placeholder="Add a tag, e.g. launch"
+            aria-label="New tag"
+            value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
               if (e.key === "Enter" && typed) {
                 e.preventDefault();
                 add(typed);
               }
-            }} />
-          <Button disabled={!typed} onClick={() => add(typed)}>Add</Button>
+            }}
+          />
+          <Button disabled={!typed} onClick={() => add(typed)}>
+            Add
+          </Button>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {suggestions.map((l) => (
-              <TagPill key={l.tag} tag={l} onClick={() => add(l.tag)}><span className="opacity-60">{l.count}</span></TagPill>
+              <TagPill key={l.tag} tag={l} onClick={() => add(l.tag)}>
+                <span className="opacity-60">{l.count}</span>
+              </TagPill>
             ))}
           </div>
         )}
@@ -185,8 +264,20 @@ function TagDialog({ orgId, tree, tags, open, onOpenChange, onAdd, onRemove, onT
             return (
               <div key={tag} className="flex items-center gap-2 p-2 pl-3">
                 <TagPill tag={info} className="mr-auto" />
-                <Button variant="ghost" size="sm" onClick={() => setStyling(info)}><Palette data-icon="inline-start" />Icon and colour</Button>
-                <Button variant="ghost" size="icon" className="size-8" title={`Remove #${tag}`} aria-label={`Remove #${tag}`} onClick={() => onRemove(tag)}><X /></Button>
+                <Button variant="ghost" size="sm" onClick={() => setStyling(info)}>
+                  <Palette data-icon="inline-start" />
+                  Icon and colour
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  title={`Remove #${tag}`}
+                  aria-label={`Remove #${tag}`}
+                  onClick={() => onRemove(tag)}
+                >
+                  <X />
+                </Button>
               </div>
             );
           })}
@@ -197,10 +288,15 @@ function TagDialog({ orgId, tree, tags, open, onOpenChange, onAdd, onRemove, onT
         </div>
       </DialogContent>
       {styling && (
-        <IconPicker open onOpenChange={(o) => !o && setStyling(null)} defaultIcon={null}
-          title={`#${styling.tag}`} description="An icon and colour for this tag, wherever it's used in the organisation. Both are optional."
+        <IconPicker
+          open
+          onOpenChange={(o) => !o && setStyling(null)}
+          defaultIcon={null}
+          title={`#${styling.tag}`}
+          description="An icon and colour for this tag, wherever it's used in the organisation. Both are optional."
           value={{ icon: styling.icon ?? null, color: styling.color ?? null }}
-          onChange={(next) => void style(styling, next)} />
+          onChange={(next) => void style(styling, next)}
+        />
       )}
     </Dialog>
   );

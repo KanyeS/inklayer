@@ -13,24 +13,51 @@ let nextStart: (hub: FakeHub) => Promise<void> = () => Promise.resolve();
 
 vi.mock("@microsoft/signalr", () => {
   class HubConnectionBuilder {
-    withUrl() { return this; }
-    configureLogging() { return this; }
+    withUrl() {
+      return this;
+    }
+    configureLogging() {
+      return this;
+    }
     build() {
       const hub: FakeHub = {
         state: "Disconnected",
-        start: () => nextStart(hub).then(() => { hub.state = "Connected"; }),
+        start: () =>
+          nextStart(hub).then(() => {
+            hub.state = "Connected";
+          }),
         stop: vi.fn(() => new Promise(() => undefined)), // like a hub whose socket is stuck: never settles
         invoke: vi.fn(() => Promise.resolve([])),
         closeHandlers: [],
       };
       hubs.push(hub);
-      return { ...hub, get state() { return hub.state; }, on: () => undefined, onclose: (h: () => void) => hub.closeHandlers.push(h), start: hub.start, stop: hub.stop, invoke: hub.invoke };
+      return {
+        ...hub,
+        get state() {
+          return hub.state;
+        },
+        on: () => undefined,
+        onclose: (h: () => void) => hub.closeHandlers.push(h),
+        start: hub.start,
+        stop: hub.stop,
+        invoke: hub.invoke,
+      };
     }
   }
-  return { HubConnectionBuilder, HttpTransportType: { WebSockets: 1 }, HubConnectionState: { Connected: "Connected" }, LogLevel: { Warning: 3 } };
+  return {
+    HubConnectionBuilder,
+    HttpTransportType: { WebSockets: 1 },
+    HubConnectionState: { Connected: "Connected" },
+    LogLevel: { Warning: 3 },
+  };
 });
-vi.mock("../src/lib/api", () => ({ api: vi.fn(() => Promise.resolve({ liveCursors: true })), postJson: vi.fn(() => Promise.resolve({ ticket: "t" })) }));
-vi.mock("../src/lib/settings", () => ({ getSettings: () => Promise.resolve({ serverUrl: "https://inklayer.example.com", tokens: null }) }));
+vi.mock("../src/lib/api", () => ({
+  api: vi.fn(() => Promise.resolve({ liveCursors: true })),
+  postJson: vi.fn(() => Promise.resolve({ ticket: "t" })),
+}));
+vi.mock("../src/lib/settings", () => ({
+  getSettings: () => Promise.resolve({ serverUrl: "https://inklayer.example.com", tokens: null }),
+}));
 
 function fakePort() {
   const messages: unknown[] = [];
@@ -39,7 +66,11 @@ function fakePort() {
     sender: { id: "ext", tab: { id: 1 }, url: "https://site.example/page" },
     postMessage: (m: unknown) => messages.push(m),
     disconnect: vi.fn(),
-    onMessage: { addListener: (l: (m: unknown) => void) => { onMessage = l; } },
+    onMessage: {
+      addListener: (l: (m: unknown) => void) => {
+        onMessage = l;
+      },
+    },
     onDisconnect: { addListener: () => undefined },
   };
   return { port: port as unknown as chrome.runtime.Port, messages, send: (m: unknown) => onMessage(m) };
@@ -51,7 +82,8 @@ async function wait(ms: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(0);
 }
 
-const statuses = (messages: unknown[]) => messages.filter((m) => (m as { t: string }).t === "status").map((m) => (m as { status: string }).status);
+const statuses = (messages: unknown[]) =>
+  messages.filter((m) => (m as { t: string }).t === "status").map((m) => (m as { status: string }).status);
 
 describe("live cursors connection", () => {
   beforeEach(() => {

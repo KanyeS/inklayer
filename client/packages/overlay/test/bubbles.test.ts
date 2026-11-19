@@ -15,8 +15,17 @@ const position = (card: HTMLElement) => card.style.transform.match(/-?\d+/g)!.ma
 describe("comment bubbles", () => {
   it("sit beside their marks without overlapping, and flip left near the right edge", async () => {
     fakeLayout(1200, 100);
-    const layer = new BubbleLayer("", () => undefined, () => undefined);
-    layer.setPositions({ a: { x: 100, y: 200 }, b: { x: 110, y: 230 }, c: { x: 1100, y: 600 }, hidden: { x: 0, y: 0 } });
+    const layer = new BubbleLayer(
+      "",
+      () => undefined,
+      () => undefined,
+    );
+    layer.setPositions({
+      a: { x: 100, y: 200 },
+      b: { x: 110, y: 230 },
+      c: { x: 1100, y: 600 },
+      hidden: { x: 0, y: 0 },
+    });
     layer.show(["a", "b", "c", "nowhere"], (id) => [document.createTextNode(`comment ${id}`)]);
     await frame();
 
@@ -38,7 +47,12 @@ describe("comment bubbles", () => {
     document.body.append(within);
     within.getBoundingClientRect = () => ({ left: 100, top: 50, width: 400, height: 300 }) as DOMRect;
     Object.defineProperty(within, "clientWidth", { value: 400 });
-    const layer = new BubbleLayer("", () => undefined, () => undefined, { within });
+    const layer = new BubbleLayer(
+      "",
+      () => undefined,
+      () => undefined,
+      { within },
+    );
     layer.setPositions({ a: { x: 150, y: 100 }, b: { x: 450, y: 300 } });
     layer.show(["a", "b"], (id) => [document.createTextNode(`comment ${id}`)]);
     await frame();
@@ -54,7 +68,11 @@ describe("comment bubbles", () => {
 
   it("keeps a reply being typed when a card is rebuilt", () => {
     fakeLayout(1200, 100);
-    const layer = new BubbleLayer("", () => undefined, () => undefined);
+    const layer = new BubbleLayer(
+      "",
+      () => undefined,
+      () => undefined,
+    );
     layer.setPositions({ a: { x: 100, y: 200 } });
     const box = document.createElement("textarea");
     box.value = "half a reply";

@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from "react";
-import { useMe } from "@/App";
-import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { Button } from "@inklayer/ui/components/button";
+import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
-import { Checkbox } from "@inklayer/ui/components/checkbox";
-import { patch, type Me } from "@/lib/api";
+import { type FormEvent, useState } from "react";
+import { useMe } from "@/App";
+import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
+import { type Me, patch } from "@/lib/api";
 
 /** Your own settings: the name others see. */
 export function SettingsPage() {
@@ -34,9 +34,16 @@ export function SettingsPage() {
       <form className="flex max-w-md flex-col gap-3" onSubmit={save}>
         <Field>
           <FieldLabel htmlFor="preferred-name">Name shown to others</FieldLabel>
-          <Input id="preferred-name" value={name} maxLength={80} placeholder={me.fullName} onChange={(e) => setName(e.target.value)} />
+          <Input
+            id="preferred-name"
+            value={name}
+            maxLength={80}
+            placeholder={me.fullName}
+            onChange={(e) => setName(e.target.value)}
+          />
           <FieldDescription>
-            Leave empty to use your name from sign-in, <strong>{me.fullName}</strong>. People can still see that name, and your role, when they hover over yours.
+            Leave empty to use your name from sign-in, <strong>{me.fullName}</strong>. People can still see that name,
+            and your role, when they hover over yours.
           </FieldDescription>
         </Field>
         <div className="flex items-center gap-3">
@@ -48,13 +55,19 @@ export function SettingsPage() {
 
       <SectionTitle>Notifications</SectionTitle>
       <label className="flex max-w-md items-start gap-3 text-sm">
-        <Checkbox className="mt-0.5" checked={me.emailNotifications} onCheckedChange={async (checked) => {
-          await patch<Me>("/api/me", { emailNotifications: checked === true });
-          await reloadMe();
-        }} />
+        <Checkbox
+          className="mt-0.5"
+          checked={me.emailNotifications}
+          onCheckedChange={async (checked) => {
+            await patch<Me>("/api/me", { emailNotifications: checked === true });
+            await reloadMe();
+          }}
+        />
         <span>
           Email me when I'm mentioned, when someone replies in a thread I'm in, and when my comment is resolved.
-          <span className="block text-muted-foreground">Only if your organisation sends notifications by email. You always see them under the bell.</span>
+          <span className="block text-muted-foreground">
+            Only if your organisation sends notifications by email. You always see them under the bell.
+          </span>
         </span>
       </label>
     </Page>

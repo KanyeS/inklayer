@@ -1,6 +1,12 @@
-import { HttpTransportType, HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection } from "@microsoft/signalr";
-import * as Y from "yjs";
+import {
+  HttpTransportType,
+  type HubConnection,
+  HubConnectionBuilder,
+  HubConnectionState,
+  LogLevel,
+} from "@microsoft/signalr";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
+import * as Y from "yjs";
 import { post } from "@/lib/api";
 
 /**
@@ -100,11 +106,15 @@ class DocsHubConnection {
     hub.on("compact", (docId: string) => void to(docId)?.snapshot());
     hub.on("access", (docId: string, canEdit: boolean) => to(docId)?.setCanEdit(canEdit));
     hub.on("closed", (docId: string, reason: string) => to(docId)?.closedByServer(reason));
-    hub.onreconnecting(() => this.#sessions.forEach((s) => s.setStatus("connecting")));
-    hub.onreconnected(() => this.#sessions.forEach((s) => void s.open()));
+    hub.onreconnecting(() => {
+      for (const s of this.#sessions.values()) s.setStatus("connecting");
+    });
+    hub.onreconnected(() => {
+      for (const s of this.#sessions.values()) void s.open();
+    });
     hub.onclose(() => {
       if (this.#connection === hub) this.#connection = null;
-      this.#sessions.forEach((s) => s.setStatus("offline"));
+      for (const s of this.#sessions.values()) s.setStatus("offline");
       if (this.#sessions.size > 0) {
         clearTimeout(this.#retry);
         this.#retry = window.setTimeout(() => this.#sessions.forEach((s) => void s.open()), 5000);
@@ -164,12 +174,15 @@ export class DocSession {
       clearTimeout(this.#snapshotTimer);
       this.#snapshotTimer = window.setTimeout(() => void this.snapshot(), SNAPSHOT_IDLE_MS);
     });
-    this.awareness.on("update", ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
-      if (origin !== "local" || this.#closed) return;
-      if (![...added, ...updated, ...removed].includes(this.doc.clientID)) return;
-      clearTimeout(this.#awarenessTimer);
-      this.#awarenessTimer = window.setTimeout(() => void this.#sendAwareness(), AWARENESS_MS);
-    });
+    this.awareness.on(
+      "update",
+      ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+        if (origin !== "local" || this.#closed) return;
+        if (![...added, ...updated, ...removed].includes(this.doc.clientID)) return;
+        clearTimeout(this.#awarenessTimer);
+        this.#awarenessTimer = window.setTimeout(() => void this.#sendAwareness(), AWARENESS_MS);
+      },
+    );
     docsHub.register(this);
   }
 
@@ -217,7 +230,10 @@ export class DocSession {
     this.peers.clear();
     for (const peer of result.peers) this.peers.set(peer.id, peer);
     this.awareness.setLocalStateField("user", {
-      name: result.me.name, color: result.me.color, colorLight: `${result.me.color}33`, peerId: result.me.id,
+      name: result.me.name,
+      color: result.me.color,
+      colorLight: `${result.me.color}33`,
+      peerId: result.me.id,
     } satisfies AwarenessUser);
     this.loaded = true;
     this.error = "";
@@ -263,7 +279,13 @@ export class DocSession {
     if (this.#pending.length > 0) return;
     try {
       const hub = await docsHub.connection();
-      await hub.invoke<boolean>("Snapshot", this.docId, toBase64(Y.encodeStateAsUpdate(this.doc)), this.text.toString(), this.#contiguous);
+      await hub.invoke<boolean>(
+        "Snapshot",
+        this.docId,
+        toBase64(Y.encodeStateAsUpdate(this.doc)),
+        this.text.toString(),
+        this.#contiguous,
+      );
       this.#dirty = false;
     } catch (e) {
       this.error = cleanError(e);

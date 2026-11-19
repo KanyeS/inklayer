@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import { buttonVariants } from "@inklayer/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@inklayer/ui/components/card";
+import { useEffect, useState } from "react";
 import { get } from "@/lib/api";
 
 interface SignInProvider {
@@ -28,10 +28,14 @@ export function SignInPage() {
         <CardContent className="grid gap-2">
           {providers && providers.length > 0 ? (
             providers.map((p) => (
-              <a key={p.id} className={buttonVariants({ size: "lg" })} href={loginUrl(p.id)}>Sign in with {p.displayName}</a>
+              <a key={p.id} className={buttonVariants({ size: "lg" })} href={loginUrl(p.id)}>
+                Sign in with {p.displayName}
+              </a>
             ))
           ) : (
-            <a className={buttonVariants({ size: "lg" })} href={loginUrl()}>Sign in</a>
+            <a className={buttonVariants({ size: "lg" })} href={loginUrl()}>
+              Sign in
+            </a>
           )}
         </CardContent>
       </Card>

@@ -1,14 +1,51 @@
-export * from "./types";
-export { Overlay, type OverlayOptions } from "./overlay";
 export {
-  anchorFor, documentBox, innerOrigin, describeElement, describeRange, resolveElement, resolveRange, uniqueSelector, scopedSelectorPath,
-  xpathFor, isStableId, normaliseText, cssEscape,
+  anchorFor,
+  cssEscape,
+  describeElement,
+  describeRange,
+  documentBox,
+  innerOrigin,
+  isStableId,
+  normaliseText,
+  resolveElement,
+  resolveRange,
+  scopedSelectorPath,
+  uniqueSelector,
+  xpathFor,
 } from "./anchoring";
-export { toFraction, fromFraction } from "./geometry";
-export {
-  PresenceLayer, cursorPositionAt, selectionAnchor, placeCursor, findCursorElement, initials, type CursorPosition, type PresencePeerView,
-} from "./presence";
-export {
-  commentParts, mentionParts, encodeMentions, decodeMentions, openOnPageUrl, commentToOpen, MENTION_PATTERN, type CommentPart, type MentionPerson,
-} from "./commentLinks";
 export { BubbleLayer, type BubblePosition } from "./bubbles";
+export {
+  type CommentPart,
+  commentParts,
+  commentToOpen,
+  decodeMentions,
+  encodeMentions,
+  MENTION_PATTERN,
+  type MentionPerson,
+  mentionParts,
+  openOnPageUrl,
+} from "./commentLinks";
+export {
+  type CursorPosition,
+  cursorPositionAt,
+  findCursorElement,
+  placeCursor,
+  selectionAnchor,
+} from "./cursors";
+export {
+  type Child,
+  copyText,
+  followColorScheme,
+  h,
+  lineIcon,
+  nothing,
+  type Props,
+  shadowTokens,
+  stopPropagation,
+} from "./dom";
+export { fromFraction, toFraction } from "./geometry";
+export { Overlay, type OverlayOptions } from "./overlay";
+export { browserOf, elementHtml, osOf, type Rect, screenshotArea } from "./pageDetails";
+export { initials, type PresencePeerView } from "./people";
+export { PresenceLayer } from "./presence";
+export * from "./types";

@@ -45,7 +45,9 @@ export function address(): void {
     });
     bar.replaceChildren(h("span", { className: "keep", textContent: `https://${PAGE}` }), ...pieces);
 
-    const query = PARTS.filter((p, i) => kept(i) && !p.text.startsWith("#")).map((p) => p.text).join("&");
+    const query = PARTS.filter((p, i) => kept(i) && !p.text.startsWith("#"))
+      .map((p) => p.text)
+      .join("&");
     const hash = PARTS.find((p, i) => kept(i) && p.text.startsWith("#"))?.text ?? "";
     stored.textContent = PAGE + (query ? `?${query}` : "") + hash;
   };
@@ -61,17 +63,21 @@ export function address(): void {
     await ctx.sleep(1300);
   };
 
-  const demo = scene($("#address"), async (ctx) => {
-    await ctx.sleep(600);
-    await click(ctx, boxes[1]!);
-    await click(ctx, boxes[4]!);
-    await click(ctx, every);
-    await click(ctx, exact);
-    await click(ctx, boxes[1]!);
-    await click(ctx, boxes[4]!);
-    await leo.moveTo(ctx, { el: stored, x: 0.8, y: 1.6 }, 1000);
-    await ctx.sleep(2000);
-  }, { gap: 1000 });
+  const demo = scene(
+    $("#address"),
+    async (ctx) => {
+      await ctx.sleep(600);
+      await click(ctx, boxes[1]!);
+      await click(ctx, boxes[4]!);
+      await click(ctx, every);
+      await click(ctx, exact);
+      await click(ctx, boxes[1]!);
+      await click(ctx, boxes[4]!);
+      await leo.moveTo(ctx, { el: stored, x: 0.8, y: 1.6 }, 1000);
+      await ctx.sleep(2000);
+    },
+    { gap: 1000 },
+  );
 
   // The visitor clicked something: it's theirs now.
   card.addEventListener("change", (e) => {

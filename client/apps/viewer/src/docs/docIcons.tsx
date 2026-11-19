@@ -5,8 +5,9 @@
  * Icons are stored by a dashed lowercase name (`book-open`, `bar-chart-3`) worked out from Lucide's own names. The full
  * set is about 2,000 icons, so it's loaded only when a docs page first needs it; until then the default icon shows.
  */
-import { useEffect, useState, type SVGProps } from "react";
+
 import { FileText } from "lucide-react";
+import { type SVGProps, useEffect, useState } from "react";
 
 /** One icon's drawing, as Lucide describes it: SVG elements and their attributes on a 24×24 grid. */
 export type IconNode = [tag: string, attrs: Record<string, string | number | undefined>][];
@@ -30,13 +31,26 @@ export const DEFAULT_ICONS = { doc: "file-text", comment: "message-square", tag:
 
 /** Colours to pick from; any other #rrggbb works too. The first three are the graph's defaults for docs, comments and tags. */
 export const ICON_COLORS = [
-  "#7c3aed", "#e8a100", "#0acf83", "#2563eb", "#0891b2", "#16a34a", "#65a30d",
-  "#ea580c", "#dc2626", "#db2777", "#9333ea", "#475569",
+  "#7c3aed",
+  "#e8a100",
+  "#0acf83",
+  "#2563eb",
+  "#0891b2",
+  "#16a34a",
+  "#65a30d",
+  "#ea580c",
+  "#dc2626",
+  "#db2777",
+  "#9333ea",
+  "#475569",
 ];
 
 /** "BarChart3" → "bar-chart-3". Applied to every Lucide name, so lookups only ever compare names made the same way. */
 export function iconName(pascal: string): string {
-  return pascal.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/([a-zA-Z])(\d)/g, "$1-$2").toLowerCase();
+  return pascal
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([a-zA-Z])(\d)/g, "$1-$2")
+    .toLowerCase();
 }
 
 let loading: Promise<IconLibrary> | null = null;
@@ -75,15 +89,36 @@ export function useIcons(): IconLibrary | null {
 /** An icon from its drawing, sized and coloured like lucide-react's components. */
 export function IconSvg({ node, ...props }: { node: IconNode } & SVGProps<SVGSVGElement>) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      {node.map(([Tag, attrs], i) => <Tag key={i} {...reactAttrs(attrs)} />)}
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      {node.map(([Tag, attrs], i) => (
+        <Tag key={i} {...reactAttrs(attrs)} />
+      ))}
     </svg>
   );
 }
 
 /** A doc's chosen icon in its colour, or the default file icon. */
-export function DocIcon({ icon, color, className }: { icon?: string | null; color?: string | null; className?: string }) {
+export function DocIcon({
+  icon,
+  color,
+  className,
+}: {
+  icon?: string | null;
+  color?: string | null;
+  className?: string;
+}) {
   const library = useIcons();
   const node = library?.get(icon) ?? library?.get(DEFAULT_ICONS.doc);
   const style = color ? { color } : undefined;
@@ -132,7 +167,10 @@ export function iconPath(node: IconNode): Path2D {
         break;
       case "polyline":
       case "polygon": {
-        const points = String(a.points).trim().split(/[\s,]+/).map(Number);
+        const points = String(a.points)
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number);
         for (let i = 0; i + 1 < points.length; i += 2) {
           if (i === 0) path.moveTo(points[0]!, points[1]!);
           else path.lineTo(points[i]!, points[i + 1]!);

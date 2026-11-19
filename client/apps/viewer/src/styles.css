@@ -1,2 +1,3 @@
 @import "@inklayer/ui/globals.css";
-@import "./docs/reading.css";
+@import "@inklayer/docs/reading.css";
+@import "./docs/layout.css";

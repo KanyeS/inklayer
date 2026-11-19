@@ -10,7 +10,11 @@ export const DEFAULT_POSITION: PanelPosition = { right: 16, bottom: 16 };
 const MARGIN = 8;
 
 /** Keeps the panel fully inside the window (or as much of it as fits), e.g. after the window shrinks or the panel grows. */
-export function clampPosition(position: PanelPosition, size: { width: number; height: number }, viewport: { width: number; height: number }): PanelPosition {
+export function clampPosition(
+  position: PanelPosition,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+): PanelPosition {
   const clamp = (value: number, max: number) => Math.round(Math.min(Math.max(value, MARGIN), Math.max(MARGIN, max)));
   return {
     right: clamp(position.right, viewport.width - size.width - MARGIN),

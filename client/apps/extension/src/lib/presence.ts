@@ -1,7 +1,13 @@
-import { HttpTransportType, HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection } from "@microsoft/signalr";
-import { api, postJson, type Features } from "./api";
-import { getSettings } from "./settings";
+import {
+  HttpTransportType,
+  type HubConnection,
+  HubConnectionBuilder,
+  HubConnectionState,
+  LogLevel,
+} from "@microsoft/signalr";
+import { api, type Features, postJson } from "./api";
 import { PRESENCE_PORT, type PresenceDown, type PresencePeer, type PresenceUp } from "./presence-protocol";
+import { getSettings } from "./settings";
 
 export { PRESENCE_PORT };
 
@@ -281,7 +287,11 @@ async function joinPage(page: string): Promise<void> {
     toPage(page, { t: "peers", peers });
     toPage(page, { t: "status", status: "live" });
   } catch (error) {
-    toPage(page, { t: "status", status: "offline", error: error instanceof Error ? cleanError(error.message) : "Couldn't go live on this page." });
+    toPage(page, {
+      t: "status",
+      status: "offline",
+      error: error instanceof Error ? cleanError(error.message) : "Couldn't go live on this page.",
+    });
   }
 }
 

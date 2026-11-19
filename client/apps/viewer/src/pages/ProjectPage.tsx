@@ -1,17 +1,24 @@
-import { useState, type FormEvent } from "react";
-import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { Badge } from "@inklayer/ui/components/badge";
-import { useMe } from "@/App";
-import { IssueTrackersSection } from "@/components/Issues";
-import { ProjectSharesSection } from "@/components/Shares";
-import { PagesTable } from "@/components/PagesTable";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@inklayer/ui/components/breadcrumb";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@inklayer/ui/components/breadcrumb";
 import { Button } from "@inklayer/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
 import { Field, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@inklayer/ui/components/tabs";
-import { atLeast, get, patch, type LivePageSummary, type Project } from "@/lib/api";
+import { type FormEvent, useState } from "react";
+import { useMe } from "@/App";
+import { IssueTrackersSection } from "@/components/Issues";
+import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
+import { PagesTable } from "@/components/PagesTable";
+import { ProjectSharesSection } from "@/components/Shares";
+import { atLeast, get, type LivePageSummary, type Project, patch } from "@/lib/api";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 
@@ -19,8 +26,18 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const { me } = useMe();
   const project = useAsync(() => get<Project>(`/api/projects/${projectId}`), [projectId]);
 
-  if (project.error) return <Page><ErrorText error={project.error} /></Page>;
-  if (!project.data) return <Page><Loading /></Page>;
+  if (project.error)
+    return (
+      <Page>
+        <ErrorText error={project.error} />
+      </Page>
+    );
+  if (!project.data)
+    return (
+      <Page>
+        <Loading />
+      </Page>
+    );
   const isAdmin = atLeast(project.data.myRole, "Admin");
   const canShare = me.features.sharing && atLeast(project.data.myRole, "Commenter");
   const orgName = me.organizations.find((o) => o.id === project.data!.organizationId)?.name ?? "Organisation";
@@ -29,11 +46,17 @@ export function ProjectPage({ projectId }: { projectId: string }) {
     <Page>
       <Breadcrumb>
         <BreadcrumbList>
-          <BreadcrumbItem><BreadcrumbLink render={<Link to="/" />}>Organisations</BreadcrumbLink></BreadcrumbItem>
+          <BreadcrumbItem>
+            <BreadcrumbLink render={<Link to="/" />}>Organisations</BreadcrumbLink>
+          </BreadcrumbItem>
           <BreadcrumbSeparator />
-          <BreadcrumbItem><BreadcrumbLink render={<Link to={`/orgs/${project.data.organizationId}`} />}>{orgName}</BreadcrumbLink></BreadcrumbItem>
+          <BreadcrumbItem>
+            <BreadcrumbLink render={<Link to={`/orgs/${project.data.organizationId}`} />}>{orgName}</BreadcrumbLink>
+          </BreadcrumbItem>
           <BreadcrumbSeparator />
-          <BreadcrumbItem><BreadcrumbPage>{project.data.name}</BreadcrumbPage></BreadcrumbItem>
+          <BreadcrumbItem>
+            <BreadcrumbPage>{project.data.name}</BreadcrumbPage>
+          </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
       <PageTitle badge={<Badge variant="secondary">{project.data.myRole}</Badge>}>{project.data.name}</PageTitle>
@@ -43,8 +66,14 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           {canShare && <TabsTrigger value="sharing">Sharing</TabsTrigger>}
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
-        <TabsContent value="pages"><Pages project={project.data} /></TabsContent>
-        {canShare && <TabsContent value="sharing"><ProjectSharesSection projectId={project.data.id} /></TabsContent>}
+        <TabsContent value="pages">
+          <Pages project={project.data} />
+        </TabsContent>
+        {canShare && (
+          <TabsContent value="sharing">
+            <ProjectSharesSection projectId={project.data.id} />
+          </TabsContent>
+        )}
         {isAdmin && (
           <TabsContent value="settings">
             <Settings project={project.data} onSaved={project.reload} />
@@ -63,15 +92,17 @@ function Pages({ project }: { project: Project }) {
   return (
     <div className="space-y-4">
       <p className="text-muted-foreground">
-        Pages people have commented on with the Inklayer extension. Open one to see its comments on the page. An address without
-        a query string, like <code>/watch</code>, holds comments for every version of that page.
+        Pages people have commented on with the Inklayer extension. Open one to see its comments on the page. An address
+        without a query string, like <code>/watch</code>, holds comments for every version of that page.
       </p>
       <ErrorText error={pages.error} />
       {pages.data?.length === 0 && (
         <Empty className="border">
           <EmptyHeader>
             <EmptyTitle>No comments yet</EmptyTitle>
-            <EmptyDescription>On any website, click the Inklayer toolbar button and choose "Comment on this page".</EmptyDescription>
+            <EmptyDescription>
+              On any website, click the Inklayer toolbar button and choose "Comment on this page".
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       )}

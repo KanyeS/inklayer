@@ -1,17 +1,17 @@
-import { useState, type FormEvent } from "react";
-import { useMe } from "@/App";
-import { ConfirmButton } from "@/components/ConfirmButton";
-import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
+import { type FormEvent, useState } from "react";
+import { useMe } from "@/App";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { EmailSetupSection } from "@/components/EmailSetupSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
+import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { NetworkAccessSection } from "@/components/NetworkAccessSection";
 import { AdminSharesSection } from "@/components/Shares";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
-import { get, post, type AdminUser, type Organization } from "@/lib/api";
+import { type AdminUser, get, type Organization, post } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
@@ -23,12 +23,20 @@ export function AdminPage() {
   const [domains, setDomains] = useState("");
   const [error, setError] = useState<Error | null>(null);
 
-  if (!me.isSystemAdmin) return <Page><p className="text-destructive">Instance administrators only.</p></Page>;
+  if (!me.isSystemAdmin)
+    return (
+      <Page>
+        <p className="text-destructive">Instance administrators only.</p>
+      </Page>
+    );
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const org = await post<Organization>("/api/orgs", { name, allowedDomains: domains.split(/[\s,]+/).filter(Boolean) });
+      const org = await post<Organization>("/api/orgs", {
+        name,
+        allowedDomains: domains.split(/[\s,]+/).filter(Boolean),
+      });
       await reloadMe();
       navigate(`/orgs/${org.id}`);
     } catch (err) {
@@ -56,13 +64,24 @@ export function AdminPage() {
           </Field>
           <Field>
             <FieldLabel htmlFor="org-domains">Email domains that join automatically</FieldLabel>
-            <Input id="org-domains" value={domains} onChange={(e) => setDomains(e.target.value)} placeholder="acme.com" />
-            <FieldDescription>Optional. Google Workspace, or a domain your SSO provider is verified for.</FieldDescription>
+            <Input
+              id="org-domains"
+              value={domains}
+              onChange={(e) => setDomains(e.target.value)}
+              placeholder="acme.com"
+            />
+            <FieldDescription>
+              Optional. Google Workspace, or a domain your SSO provider is verified for.
+            </FieldDescription>
           </Field>
-          <div><Button type="submit">Create organisation</Button></div>
+          <div>
+            <Button type="submit">Create organisation</Button>
+          </div>
         </FieldGroup>
       </form>
-      <div className="mt-4"><ErrorText error={error ?? users.error} /></div>
+      <div className="mt-4">
+        <ErrorText error={error ?? users.error} />
+      </div>
       <FeaturesSection />
       <EmailSetupSection />
       <NetworkAccessSection />
@@ -75,14 +94,25 @@ export function AdminPage() {
       <SectionTitle>Users</SectionTitle>
       <Table>
         <TableHeader>
-          <TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Last sign-in</TableHead><TableHead /></TableRow>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Last sign-in</TableHead>
+            <TableHead />
+          </TableRow>
         </TableHeader>
         <TableBody>
           {users.data?.map((u) => (
             <TableRow key={u.id} className={u.isDisabled ? "opacity-50" : undefined}>
               <TableCell>
                 <span className="flex items-center gap-2">
-                  {u.preferredName ? <>{u.preferredName} <span className="text-muted-foreground">({u.displayName})</span></> : u.displayName}
+                  {u.preferredName ? (
+                    <>
+                      {u.preferredName} <span className="text-muted-foreground">({u.displayName})</span>
+                    </>
+                  ) : (
+                    u.displayName
+                  )}
                   {u.isSystemAdmin && <Badge variant="secondary">Admin</Badge>}
                   {u.isDisabled && <Badge variant="outline">Disabled</Badge>}
                 </span>
@@ -90,16 +120,21 @@ export function AdminPage() {
               <TableCell className="text-muted-foreground">{u.email}</TableCell>
               <TableCell className="text-muted-foreground">{timeAgo(u.lastSignInAt)}</TableCell>
               <TableCell className="text-right">
-                {u.id !== me.id && (u.isDisabled ? (
-                  <Button variant="outline" size="sm" onClick={() => void setDisabled(u, false)}>Enable</Button>
-                ) : (
-                  <ConfirmButton
-                    title={`Disable ${u.email}?`}
-                    description="They are signed out everywhere immediately."
-                    confirmLabel="Disable"
-                    onConfirm={() => void setDisabled(u, true)}
-                  >Disable</ConfirmButton>
-                ))}
+                {u.id !== me.id &&
+                  (u.isDisabled ? (
+                    <Button variant="outline" size="sm" onClick={() => void setDisabled(u, false)}>
+                      Enable
+                    </Button>
+                  ) : (
+                    <ConfirmButton
+                      title={`Disable ${u.email}?`}
+                      description="They are signed out everywhere immediately."
+                      confirmLabel="Disable"
+                      onConfirm={() => void setDisabled(u, true)}
+                    >
+                      Disable
+                    </ConfirmButton>
+                  ))}
               </TableCell>
             </TableRow>
           ))}
