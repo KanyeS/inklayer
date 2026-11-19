@@ -64,6 +64,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run build:site
       - name: Dependency licence check (permissive only)
         run: npm run licenses
       - uses: actions/upload-artifact@v4

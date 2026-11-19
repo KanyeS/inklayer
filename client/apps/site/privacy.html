@@ -6,9 +6,10 @@
 <title>Privacy policy · Inklayer</title>
 <meta name="description" content="What the Inklayer browser extension collects, where it sends it, and who is responsible for it.">
 <link rel="canonical" href="https://inklayer.online/privacy.html">
-<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5b21b6">
-<link rel="stylesheet" href="styles.css">
+<script>document.documentElement.classList.toggle("dark", matchMedia("(prefers-color-scheme: dark)").matches)</script>
+<link rel="stylesheet" href="/src/styles.css">
 <style>
   .policy { width: min(760px, 100% - 40px); margin: 48px auto 80px; }
   .policy h1 { font-size: clamp(32px, 5vw, 44px); margin-bottom: 8px; }
@@ -25,7 +26,7 @@
 
 <header class="nav">
   <div class="wrap">
-    <a class="brand" href="./"><img src="assets/icon.svg" alt="">Inklayer</a>
+    <a class="brand" href="./"><img src="/assets/icon.svg" alt="">Inklayer</a>
   </div>
 </header>
 
@@ -108,7 +109,7 @@
 
 <footer>
   <div class="wrap">
-    <a class="brand" href="./"><img src="assets/icon.svg" alt="">Inklayer</a>
+    <a class="brand" href="./"><img src="/assets/icon.svg" alt="">Inklayer</a>
     <span>Apache-2.0.</span>
     <nav>
       <a href="https://github.com/KanyeS/inklayer">GitHub</a>

@@ -1,5 +1,5 @@
 import {
-  Overlay, commentParts, commentToOpen, decodeMentions, encodeMentions, resolveElement, resolveRange, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
+  BubbleLayer, Overlay, commentParts, commentToOpen, decodeMentions, encodeMentions, resolveElement, resolveRange, type Anchor, type AnchorQuality, type AnnotationKind, type Draft, type Geometry, type OverlayAnnotation, type OverlayMessage, type Tool,
 } from "@inklayer/overlay";
 import type { ActivityItem, ActivityPage, DocLookup, LiveAnnotation, LiveInit, LivePage, LiveProject, LiveReply, LiveRequest, PageContext, PersonLookup, TrackerChoice } from "./lib/live";
 import type { Inbox, InboxItem } from "./lib/notifications";
@@ -8,7 +8,6 @@ import { clampPosition, DEFAULT_POSITION, parsePosition, type PanelPosition } fr
 import { sizeDiffers, windowSizeFor } from "./lib/viewportMatch";
 import type { Response } from "./lib/messages";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
-import { BubbleLayer } from "./bubbles";
 import { personTitle } from "./lib/people";
 import { PresenceClient } from "./presence-page";
 

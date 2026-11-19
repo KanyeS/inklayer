@@ -286,6 +286,15 @@ export function documentBox(el: Element): Box {
   return { x: rect.left + (win?.scrollX ?? 0), y: rect.top + (win?.scrollY ?? 0), width: rect.width, height: rect.height };
 }
 
+/**
+ * Where an element's padding box starts, in document coordinates: the origin of anything absolutely positioned inside it.
+ * Layers drawn `within` an element use it to turn document coordinates into the element's own.
+ */
+export function innerOrigin(el: HTMLElement): { x: number; y: number } {
+  const box = documentBox(el);
+  return { x: box.x + el.clientLeft - el.scrollLeft, y: box.y + el.clientTop - el.scrollTop };
+}
+
 function distance(a: Box, b: Box): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }

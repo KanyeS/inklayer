@@ -16,6 +16,7 @@ Comment on any web page, right on the page, with the browser extension (Chrome o
 | `client/apps/extension/` | Browser extension (Manifest V3, Chrome and Firefox) that shows and adds comments on pages |
 | `client/apps/viewer/` | Web app: organisations, members, projects and their commented pages (React) |
 | `client/packages/overlay/` | Annotation overlay drawn on pages: anchoring, drawing tools |
+| `client/apps/site/` | The showcase at [inklayer.online](https://inklayer.online), built on the overlay package (`npm run build:site`) |
 | `deploy/` | Dockerfile, docker-compose, reverse-proxy examples |
 
 ## Self-hosting

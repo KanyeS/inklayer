@@ -14,10 +14,9 @@
 <meta property="og:description" content="Open-source, self-hosted page annotation with live cursors, bug context, issue trackers and Claude (MCP).">
 <meta property="og:image" content="https://inklayer.online/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preload" href="fonts/outfit.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/plex.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="styles.css">
-<script defer src="demo.js"></script>
+<!-- The theme's dark palette applies under .dark; set it before anything paints. -->
+<script>document.documentElement.classList.toggle("dark", matchMedia("(prefers-color-scheme: dark)").matches)</script>
+<script type="module" src="/src/main.ts"></script>
 </head>
 <body>
 
@@ -97,10 +96,6 @@
           </div>
         </div>
       </div>
-      <div class="pill" style="position:absolute; top:-16px; right:18px; z-index:15">
-        <span class="dot"></span>Live
-        <span class="faces" id="hero-faces"></span>
-      </div>
     </div>
   </div>
 </section>
@@ -131,11 +126,10 @@
       <span class="eyebrow">Comment on anything</span>
       <h2>Six ways to point at the problem.</h2>
       <p>Open the panel on any website and pick a tool. Every mark gets a number, a comment thread and a place in the list. Click a mark to find its comment, or a comment to scroll to its mark. Viewers see everything but get no tools.</p>
-      <span class="try">👆 Click a tool in the panel to <b>try it yourself</b> on the shop page.</span>
+      <span class="try">👆 Click a tool in the panel to <b>try it yourself</b> on the shop page. Hover a number to see its comment.</span>
     </div>
     <div class="tools-stage reveal">
-      <div class="card shop stage" id="shop">
-        <div class="drive-note">You're drawing. Nothing is saved. <button type="button" id="resume-demo">Resume demo</button></div>
+      <div class="card shop" id="shop">
         <div class="crumbs">Shop › Footwear › Trail</div>
         <div class="product">
           <div class="photo" id="shop-photo"></div>
@@ -154,8 +148,8 @@
         <div class="header">
           <div class="tabs"><span class="tab active">Comments</span><span class="tab">Activity</span></div>
           <div class="actions">
+            <button type="button" class="icon on" id="cards-toggle" aria-pressed="true" title="Comments are open next to their marks. Click to show them only on hover."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></button>
             <span title="Share this page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-            <span title="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
           </div>
         </div>
         <div class="project"><span class="select">Northwind shop ▾</span></div>
@@ -163,19 +157,20 @@
           <button class="tool active" data-tool="select" type="button">Select</button>
           <button class="tool" data-tool="pin" type="button">Pin</button>
           <button class="tool" data-tool="element" type="button">Element</button>
-          <button class="tool" data-tool="text" type="button">Text</button>
-          <button class="tool" data-tool="box" type="button">Box</button>
+          <button class="tool" data-tool="highlight" type="button">Text</button>
+          <button class="tool" data-tool="rect" type="button">Box</button>
           <button class="tool" data-tool="arrow" type="button">Arrow</button>
-          <button class="tool" data-tool="draw" type="button">Draw</button>
+          <button class="tool" data-tool="ink" type="button">Draw</button>
         </div>
         <div class="colors" id="tool-colors">
           <span class="swatch active" style="--c:#f59e0b"></span><span class="swatch" style="--c:#ef4444"></span><span class="swatch" style="--c:#3b82f6"></span><span class="swatch" style="--c:#10b981"></span><span class="swatch" style="--c:#8b5cf6"></span>
         </div>
         <p class="hint" id="tool-hint">Click a mark to find its comment.</p>
+        <div class="driving" id="driving" hidden>You're trying it: nothing is saved. <button type="button" class="pbtn" id="resume-demo">Resume demo</button></div>
         <div class="draft" id="tool-draft" hidden>
-          <div class="ta" id="tool-ta"></div>
+          <textarea id="tool-ta" rows="2" placeholder="Add a comment…"></textarea>
           <span class="check"><i></i>Attach screenshot and page details</span>
-          <div class="row"><span class="pbtn primary" id="tool-save">Comment</span><span class="pbtn">Cancel</span></div>
+          <div class="row"><button type="button" class="pbtn primary" id="tool-save">Comment</button><button type="button" class="pbtn" id="tool-cancel">Cancel</button></div>
         </div>
         <ul class="list" id="tool-list"></ul>
       </div>
@@ -207,12 +202,7 @@
             <div class="tile"><div class="img" style="background:linear-gradient(135deg,#bfdbfe,#4f46e5)"></div><h4>Basecamp Tent</h4><p>Sleeps three</p></div>
           </div>
         </div>
-        <dl class="anchor-readout" id="anchor-readout">
-          <dt>css</dt><dd>.grid &gt; .tile:nth-child(1) &gt; .buy</dd>
-          <dt>xpath</dt><dd>/html/body/main/div[2]/div[1]/span</dd>
-          <dt>text</dt><dd>"Buy"</dd>
-          <dt>position</dt><dd>x 0.18 · y 0.62 of page width</dd>
-        </dl>
+        <dl class="anchor-readout" id="anchor-readout"></dl>
         <div class="anchor-controls">
           <button class="btn sm" type="button" id="relayout">Change the layout</button>
           <button class="btn sm" type="button" id="remove-promo">Remove the banner</button>
@@ -238,8 +228,7 @@
     <div class="stage reveal">
       <div class="browser presence-stage" id="presence-stage">
         <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url">northwind.example/journal/fastest-known-time</div></div>
-        <div class="pill chrome-pill"><span class="dot"></span>Live<span class="faces" id="presence-faces"></span></div>
-        <article class="doc-page">
+        <article class="doc-page" id="presence-page">
           <h3 id="pr-h">Chasing a fastest known time</h3>
           <div class="by">Northwind Journal · 6 min read</div>
           <p id="pr-p1">At 4:10 am the trailhead is silent except for the creek. You check your laces twice, then once more, because twelve hours from now that knot is the only thing you'll still trust.</p>
@@ -262,7 +251,7 @@
       <span class="try">🐞 The <b>Place order</b> button below is genuinely broken. Click it, then check the console, or comment on it with the extension.</span>
     </div>
     <div class="bug-grid reveal">
-      <div class="card checkout stage" id="checkout-card">
+      <div class="card checkout" id="checkout-card">
         <form id="checkout" onsubmit="return false">
           <h4>Checkout</h4>
           <label for="co-name">Name on card</label>
@@ -344,7 +333,7 @@
           </li>
         </ul>
         <div class="draft">
-          <div class="ta" id="thread-ta"></div>
+          <div class="compose" id="thread-ta" data-placeholder="Reply…"></div>
           <div class="row"><span class="pbtn primary" id="thread-send">Reply</span></div>
         </div>
       </div>

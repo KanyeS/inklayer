@@ -1,7 +1,7 @@
 export * from "./types";
 export { Overlay, type OverlayOptions } from "./overlay";
 export {
-  anchorFor, describeElement, describeRange, resolveElement, resolveRange, uniqueSelector, scopedSelectorPath,
+  anchorFor, documentBox, innerOrigin, describeElement, describeRange, resolveElement, resolveRange, uniqueSelector, scopedSelectorPath,
   xpathFor, isStableId, normaliseText, cssEscape,
 } from "./anchoring";
 export { toFraction, fromFraction } from "./geometry";
@@ -11,3 +11,4 @@ export {
 export {
   commentParts, mentionParts, encodeMentions, decodeMentions, openOnPageUrl, commentToOpen, MENTION_PATTERN, type CommentPart, type MentionPerson,
 } from "./commentLinks";
+export { BubbleLayer, type BubblePosition } from "./bubbles";

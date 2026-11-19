@@ -1,5 +1,5 @@
 import { getStroke } from "perfect-freehand";
-import { anchorFor, documentBox, resolveElement, resolveRange } from "./anchoring";
+import { anchorFor, documentBox, innerOrigin, resolveElement, resolveRange } from "./anchoring";
 import { boundsOf, contains, fromFraction, normaliseRect, toFraction } from "./geometry";
 import type { AnchorQuality, Box, Draft, Geometry, HostMessage, OverlayAnnotation, OverlayMessage, Point, Tool } from "./types";
 
@@ -17,6 +17,11 @@ interface Resolved {
 export interface OverlayOptions {
   /** Elements whose events the tools ignore, such as the extension's own panel. */
   ignoreEventsFrom?: Element[];
+  /**
+   * Draw inside this element, and take tool input only there, instead of across the whole page. It must be positioned
+   * (e.g. `position: relative`) and should clip its content. Annotations and drafts still use document coordinates.
+   */
+  within?: HTMLElement;
 }
 
 /**
@@ -35,6 +40,7 @@ export class Overlay {
   readonly #resolved = new Map<string, Resolved>();
   readonly #cleanup: (() => void)[] = [];
   readonly #ignored: Element[];
+  readonly #within: HTMLElement | null;
 
   #annotations: OverlayAnnotation[] = [];
   #tool: Tool = "select";
@@ -50,6 +56,7 @@ export class Overlay {
     this.#doc = doc;
     this.#send = send;
     this.#ignored = options.ignoreEventsFrom ?? [];
+    this.#within = options.within ?? null;
 
     this.#host = doc.createElement("inklayer-overlay");
     // Just under the top: comment bubbles, the panel (both 2147483647) and live cursors (2147483646) sit above the drawings.
@@ -64,7 +71,7 @@ export class Overlay {
     this.#surface = doc.createElement("div");
     this.#surface.className = "surface";
     shadow.append(this.#svg, this.#badges, this.#hover, this.#surface);
-    doc.documentElement.append(this.#host);
+    (this.#within ?? doc.documentElement).append(this.#host);
 
     this.#listen();
     this.render();
@@ -112,12 +119,17 @@ export class Overlay {
   /** Puts the overlay back if the page removed it (some apps replace html's children). Returns true if it had to. */
   ensureAttached(): boolean {
     if (this.#host.isConnected) return false;
-    this.#doc.documentElement.append(this.#host);
+    (this.#within ?? this.#doc.documentElement).append(this.#host);
     return true;
   }
 
   #isIgnored(event: Event): boolean {
     return this.#ignored.length > 0 && event.composedPath().some((node) => this.#ignored.includes(node as Element));
+  }
+
+  /** Whether an element is somewhere the tools work: anywhere, or inside `within`. */
+  #inScope(el: Element | null): el is Element {
+    return !!el && (!this.#within || this.#within.contains(el));
   }
 
   /** Shows or hides every mark without forgetting them. */
@@ -175,6 +187,14 @@ export class Overlay {
     this.#svg.setAttribute("height", String(height));
     this.#surface.style.width = `${width}px`;
     this.#surface.style.height = `${height}px`;
+    if (this.#within) {
+      // Shift the layer so its document coordinates line up inside the element, and let the tools capture only its area.
+      const origin = innerOrigin(this.#within);
+      this.#host.style.transform = `translate(${-origin.x}px, ${-origin.y}px)`;
+      Object.assign(this.#surface.style, {
+        left: `${origin.x}px`, top: `${origin.y}px`, width: `${this.#within.clientWidth}px`, height: `${this.#within.clientHeight}px`,
+      });
+    }
     this.#svg.replaceChildren();
     this.#badges.replaceChildren();
     this.#positions.clear();
@@ -321,6 +341,7 @@ export class Overlay {
     on(win, "scroll", this.render, false);
     const observer = new ResizeObserver(this.render);
     observer.observe(this.#doc.documentElement);
+    if (this.#within) observer.observe(this.#within);
     this.#cleanup.push(() => observer.disconnect());
     void this.#doc.fonts?.ready.then(this.render);
 
@@ -328,16 +349,19 @@ export class Overlay {
     on(this.#doc, "pointermove", (e) => {
       if ((this.#tool !== "pin" && this.#tool !== "element") || this.#isIgnored(e)) return;
       const el = this.#elementAt(e.clientX, e.clientY);
-      if (!el) return;
+      if (!this.#inScope(el)) {
+        this.#hover.style.display = "none";
+        return;
+      }
       const box = documentBox(el);
       Object.assign(this.#hover.style, { display: "block", left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px`, height: `${box.height}px` });
     });
     on(this.#doc, "click", (e) => {
       if ((this.#tool !== "pin" && this.#tool !== "element") || this.#isIgnored(e)) return;
+      const el = this.#elementAt(e.clientX, e.clientY);
+      if (!this.#inScope(el)) return;
       e.preventDefault();
       e.stopPropagation();
-      const el = this.#elementAt(e.clientX, e.clientY);
-      if (!el) return;
       const point = { x: e.pageX, y: e.pageY };
       this.#emitDraft(this.#tool === "pin"
         ? { kind: "Pin", anchor: anchorFor(el), geometry: { kind: "Pin", point: toFraction(point, documentBox(el)) } }
@@ -352,7 +376,7 @@ export class Overlay {
       const range = selection.getRangeAt(0);
       const container = range.commonAncestorContainer;
       const root = container.nodeType === 1 ? (container as Element) : container.parentElement;
-      if (!root) return;
+      if (!this.#inScope(root)) return;
       const anchor = anchorFor(root, range);
       selection.removeAllRanges();
       if (anchor.text) this.#emitDraft({ kind: "Highlight", anchor, geometry: { kind: "Highlight" } });
@@ -442,10 +466,11 @@ export class Overlay {
   #containerFor(bounds: Box): Element {
     const win = this.#doc.defaultView!;
     let el = this.#elementAt(bounds.x + bounds.width / 2 - win.scrollX, bounds.y + bounds.height / 2 - win.scrollY);
-    while (el && el !== this.#doc.body && !contains(documentBox(el), bounds)) {
+    if (this.#within && !this.#inScope(el)) return this.#within;
+    while (el && el !== this.#doc.body && el !== this.#within && !contains(documentBox(el), bounds)) {
       el = el.parentElement ?? ((el.getRootNode() as ShadowRoot).host ?? null);
     }
-    return el ?? this.#doc.body ?? this.#doc.documentElement;
+    return el ?? this.#within ?? this.#doc.body ?? this.#doc.documentElement;
   }
 }
 

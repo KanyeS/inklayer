@@ -1,4 +1,4 @@
-import { anchorFor, resolveElement, resolveRange, scopedSelectorPath } from "./anchoring";
+import { anchorFor, innerOrigin, resolveElement, resolveRange, scopedSelectorPath } from "./anchoring";
 import type { Anchor, ElementAnchor } from "./types";
 
 /**
@@ -96,24 +96,35 @@ export class PresenceLayer {
   readonly #cursors: HTMLDivElement;
   readonly #avatars: HTMLDivElement;
   readonly #peers = new Map<string, PeerState>();
+  readonly #within: HTMLElement | null;
   #frame = 0;
   #fadeTimer = 0;
   readonly #onViewportChange = () => this.#schedule();
   #status: "connecting" | "live" | "offline" = "connecting";
   #statusText = "";
 
-  constructor(doc: Document) {
+  /**
+   * With `within`, cursors, selections and the avatars are drawn inside that element (which must be positioned) and
+   * clipped to it, instead of over the whole window. Positions are still document coordinates.
+   * `avatars: false` leaves out the row of faces, for small areas where cursors are enough.
+   */
+  constructor(doc: Document, options: { within?: HTMLElement; avatars?: boolean } = {}) {
     this.#doc = doc;
+    this.#within = options.within ?? null;
     this.#host = doc.createElement("inklayer-presence");
-    this.#host.setAttribute("style", "all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483646;");
+    this.#host.setAttribute("style", this.#within
+      ? "all:initial;position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2147483646;"
+      : "all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483646;");
+    if (this.#within) this.#host.classList.add("within");
     this.#shadow = this.#host.attachShadow({ mode: "closed" });
     const style = doc.createElement("style");
     style.textContent = STYLES;
     this.#selections = div(doc, "selections");
     this.#cursors = div(doc, "cursors");
     this.#avatars = div(doc, "avatars");
-    this.#shadow.append(style, this.#selections, this.#cursors, this.#avatars);
-    doc.documentElement.append(this.#host);
+    this.#shadow.append(style, this.#selections, this.#cursors);
+    if (options.avatars !== false) this.#shadow.append(this.#avatars);
+    (this.#within ?? doc.documentElement).append(this.#host);
     // Positions are kept in document coordinates: redraw when the page scrolls (including inner scrollers) or resizes.
     doc.defaultView!.addEventListener("scroll", this.#onViewportChange, { capture: true, passive: true });
     doc.defaultView!.addEventListener("resize", this.#onViewportChange, { passive: true });
@@ -127,7 +138,12 @@ export class PresenceLayer {
 
   /** Puts the layer back if the page replaced the document's children. */
   ensureAttached(): void {
-    if (!this.#host.isConnected) this.#doc.documentElement.append(this.#host);
+    if (!this.#host.isConnected) (this.#within ?? this.#doc.documentElement).append(this.#host);
+  }
+
+  /** Shows or hides everyone's cursors, selections and the avatars, without forgetting them. */
+  setVisible(visible: boolean): void {
+    this.#host.style.display = visible ? "" : "none";
   }
 
   setStatus(status: "connecting" | "live" | "offline", text = ""): void {
@@ -256,6 +272,9 @@ export class PresenceLayer {
     const win = this.#doc.defaultView!;
     const now = Date.now();
     let moving = false;
+    // Where the layer's (0, 0) is: the window's top-left in document coordinates, or the `within` element's.
+    const origin = this.#within ? innerOrigin(this.#within) : { x: win.scrollX, y: win.scrollY };
+    const viewport = this.#within ? { x: origin.x - win.scrollX, y: origin.y - win.scrollY } : { x: 0, y: 0 };
 
     // Read layout for everyone first, then write, so the page is laid out once per frame.
     const frames = [...this.#peers.values()].map((state) => ({
@@ -276,7 +295,7 @@ export class PresenceLayer {
           else state.at = { ...target };
         }
         state.cursor.hidden = false;
-        state.cursor.style.transform = `translate(${state.at.x - win.scrollX}px, ${state.at.y - win.scrollY}px)`;
+        state.cursor.style.transform = `translate(${state.at.x - origin.x}px, ${state.at.y - origin.y}px)`;
       } else {
         state.cursor.hidden = true;
       }
@@ -284,7 +303,7 @@ export class PresenceLayer {
 
       state.selection.replaceChildren(...rects.map((r, i) => {
         const box = div(this.#doc, "mark");
-        box.style.transform = `translate(${r.left}px, ${r.top}px)`;
+        box.style.transform = `translate(${r.left - viewport.x}px, ${r.top - viewport.y}px)`;
         box.style.width = `${r.width}px`;
         box.style.height = `${r.height}px`;
         if (i === 0) {
@@ -425,6 +444,7 @@ const STYLES = `
   font: 600 10.5px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 .avatars { position: fixed; top: 12px; right: 12px; pointer-events: none; }
+:host(.within) .cursors, :host(.within) .selections, :host(.within) .avatars { position: absolute; }
 .pill {
   pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; min-height: 28px; box-sizing: border-box;
   background: #fff; color: #1f2328; border-radius: 999px; box-shadow: 0 1px 3px rgb(0 0 0 / .12), 0 4px 14px rgb(0 0 0 / .1);

@@ -32,6 +32,26 @@ describe("comment bubbles", () => {
     layer.destroy();
   });
 
+  it("inside a `within` element, sit relative to it and flip left at its right edge", async () => {
+    fakeLayout(1200, 100);
+    const within = document.createElement("div");
+    document.body.append(within);
+    within.getBoundingClientRect = () => ({ left: 100, top: 50, width: 400, height: 300 }) as DOMRect;
+    Object.defineProperty(within, "clientWidth", { value: 400 });
+    const layer = new BubbleLayer("", () => undefined, () => undefined, { within });
+    layer.setPositions({ a: { x: 150, y: 100 }, b: { x: 450, y: 300 } });
+    layer.show(["a", "b"], (id) => [document.createTextNode(`comment ${id}`)]);
+    await frame();
+
+    expect(layer.host.parentElement).toBe(within);
+    expect(layer.host.style.transform).toBe("translate(-100px, -50px)"); // document coordinates line up inside the element
+    const [a, b] = cards(layer);
+    expect(position(a!)).toEqual([168, 84]);
+    expect(position(b!)[0]).toBe(450 - 18 - 300); // 450 + 18 + 300 passes the element's right edge (500)
+    layer.destroy();
+    within.remove();
+  });
+
   it("keeps a reply being typed when a card is rebuilt", () => {
     fakeLayout(1200, 100);
     const layer = new BubbleLayer("", () => undefined, () => undefined);

@@ -1,54 +1,34 @@
-/* Inklayer showcase. Colours are the product's own tokens (client/packages/ui/src/styles/tokens.css);
-   cursors, marks and the panel copy the extension's styles so the demo looks like the real thing. */
+/* Inklayer showcase. Colours and fonts are the product's own (@inklayer/ui); marks, cursors and comment cards are drawn by
+   the real overlay code (@inklayer/overlay), so only the page itself and the mock panels are styled here. */
 
-@font-face { font-family: "Outfit"; src: url("fonts/outfit.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
-@font-face { font-family: "Plex"; src: url("fonts/plex.woff2") format("woff2"); font-weight: 100 700; font-display: swap; }
+@import "@fontsource-variable/outfit";
+@import "@fontsource-variable/ibm-plex-sans";
+/* The theme's tokens: light on :root, dark under .dark (set on <html> to follow the system, see index.html). */
+@import "@inklayer/ui/tokens.css";
 
+/* Site-only additions to the theme. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0.008 326);
-  --card: oklch(1 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0.008 326);
-  --primary: oklch(0.491 0.27 292.581);
-  --primary-foreground: oklch(0.969 0.016 293.756);
-  --primary-text: oklch(0.491 0.27 292.581);
-  --muted: oklch(0.96 0.003 325.6);
-  --muted-foreground: oklch(0.542 0.034 322.5);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.005 325.62);
-  --input: oklch(0.922 0.005 325.62);
-  --ring: oklch(0.711 0.019 323.02);
   --page: oklch(0.985 0.004 300);
+  --primary-text: var(--primary);
   --tint: color-mix(in oklch, var(--primary) 7%, transparent);
   --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 12px 32px -12px rgb(40 20 80 / .22);
-  --john: #f59e0b; --michael: #3b82f6; --rosie: #ef4444; --leo: #10b981; --you: #8b5cf6;
-  --sans: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --heading: "Plex", "Outfit", system-ui, sans-serif;
+  --you: #8b5cf6;
+  --sans: "Outfit Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --heading: "IBM Plex Sans Variable", "Outfit Variable", system-ui, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color-scheme: light dark;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.145 0.008 326);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.19 0.014 322);
-    --popover: oklch(0.212 0.019 322.12);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.432 0.232 292.759);
-    --primary-text: oklch(0.811 0.111 293.571);
-    --muted: oklch(0.263 0.024 320.12);
-    --muted-foreground: oklch(0.711 0.019 323.02);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --page: oklch(0.13 0.01 310);
-    --tint: color-mix(in oklch, var(--primary) 18%, transparent);
-    --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 16px 40px -12px rgb(0 0 0 / .6);
-  }
+.dark {
+  /* The dark --primary is a fill colour; as text it needs to be lighter (the extension does the same). */
+  --primary-text: oklch(0.811 0.111 293.571);
+  --page: oklch(0.13 0.01 310);
+  --tint: color-mix(in oklch, var(--primary) 18%, transparent);
+  --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 16px 40px -12px rgb(0 0 0 / .6);
 }
 
 * { box-sizing: border-box; }
+/* `hidden` always wins, even over components that set their own display. */
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 body { margin: 0; background: var(--page); color: var(--foreground); font: 400 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
 h1, h2, h3, h4 { font-family: var(--heading); line-height: 1.15; letter-spacing: -0.02em; margin: 0; }
@@ -154,53 +134,6 @@ section.feature:nth-of-type(even) { background: var(--background); }
 .tryit p { margin: 0; color: var(--muted-foreground); font-size: 15.5px; }
 .tryit ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted-foreground); font-size: 15px; }
 
-/* ---------- Fake people: cursors (presence.ts) ---------- */
-.fake-cursor { position: absolute; left: 0; top: 0; z-index: 30; pointer-events: none; will-change: transform; transition: opacity .35s ease;
-  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .3)); }
-.fake-cursor.faded { opacity: 0; }
-.fake-cursor .name { position: absolute; left: 14px; top: 18px; white-space: nowrap; background: var(--c); color: #fff; border-radius: 3px 9px 9px 9px;
-  padding: 3px 8px; font: 600 11.5px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .01em; }
-.fake-cursor.click svg { animation: click .3s ease; }
-@keyframes click { 50% { transform: scale(.82); } }
-.fake-sel { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; background: color-mix(in srgb, var(--c) 24%, transparent); border-radius: 2px; }
-.fake-sel.first { box-shadow: -2px 0 0 0 var(--c); }
-.fake-sel .flag { position: absolute; left: -2px; bottom: 100%; white-space: nowrap; background: var(--c); color: #fff; border-radius: 3px 3px 3px 0; padding: 1px 6px;
-  font: 600 10.5px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-body.no-people .fake-cursor, body.no-people .fake-sel, body.no-people .hero-only { display: none !important; }
-
-/* Avatar pill (presence.ts) */
-.pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; min-height: 30px; background: var(--popover); color: var(--foreground);
-  border-radius: 999px; box-shadow: 0 1px 3px rgb(0 0 0 / .12), 0 4px 14px rgb(0 0 0 / .1); font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #0acf83; box-shadow: 0 0 0 3px rgb(10 207 131 / .2); }
-.faces { display: flex; flex-direction: row-reverse; }
-.face { width: 26px; height: 26px; margin-left: -6px; border-radius: 50%; display: grid; place-items: center; background: var(--c, #6b7280); color: #fff;
-  border: 2px solid var(--popover); font: 700 10px/1 system-ui, sans-serif; transition: transform .2s, opacity .3s; }
-.face.more { background: var(--muted); color: var(--muted-foreground); }
-.face.away { opacity: .45; }
-
-/* ---------- Marks (overlay.ts) ---------- */
-.marks { position: absolute; inset: 0; overflow: visible; pointer-events: none; z-index: 10; width: 100%; height: 100%; }
-.marks .outline { fill: none; stroke: var(--c); stroke-width: 2; stroke-dasharray: 6 4; }
-.marks .rect { fill: color-mix(in srgb, var(--c) 10%, transparent); stroke: var(--c); stroke-width: 2.5; }
-.marks .arrow { stroke: var(--c); stroke-width: 3; stroke-linecap: round; fill: none; }
-.marks .arrowhead, .marks .ink { fill: var(--c); stroke: none; }
-.marks .inkline { fill: none; stroke: var(--c); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
-.marks .hover { fill: color-mix(in oklch, oklch(0.491 0.27 292.581) 6%, transparent); stroke: oklch(0.491 0.27 292.581); stroke-width: 2; stroke-dasharray: 5 4; }
-.marks g.selected { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--c) 80%, transparent)); }
-.marks g.selected .rect, .marks g.selected .outline, .marks g.selected .arrow { stroke-width: 4; }
-.marks g.orphan .rect, .marks g.orphan .outline { stroke-dasharray: 2 4; }
-.marks g.pop { animation: pop .35s ease; transform-box: fill-box; transform-origin: center; }
-.hl { position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; background: color-mix(in srgb, var(--c) 35%, transparent); mix-blend-mode: multiply; border-radius: 2px; }
-@media (prefers-color-scheme: dark) { .hl { mix-blend-mode: screen; background: color-mix(in srgb, var(--c) 45%, transparent); } }
-.mark-badge { position: absolute; z-index: 12; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--c);
-  color: #fff; font: 600 12px/22px var(--sans); text-align: center; box-shadow: 0 1px 3px rgb(0 0 0 / .35), 0 0 0 2px #fff; pointer-events: none; animation: pop .35s ease; }
-.mark-badge.pin { transform: translate(-50%, -100%); border-bottom-left-radius: 2px; }
-.mark-badge.selected { box-shadow: 0 1px 3px rgb(0 0 0 / .35), 0 0 0 3px var(--foreground); }
-.mark-badge .moved { position: absolute; left: 100%; top: 50%; transform: translate(6px, -50%); white-space: nowrap; color: #92400e; background: #fef3c7; border-radius: 999px; padding: 0 7px; font-size: 11px; line-height: 18px; }
-@keyframes pop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.12); } 100% { opacity: 1; } }
-.mark-badge.pin { animation: pinpop .35s ease; }
-@keyframes pinpop { 0% { transform: translate(-50%, -100%) scale(.4); opacity: 0; } 100% { transform: translate(-50%, -100%); opacity: 1; } }
-
 /* ---------- Extension panel (live-page.ts) ---------- */
 .xpanel { width: 330px; max-width: 100%; background: var(--popover); color: var(--popover-foreground); border-radius: 22px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
   box-shadow: 0 20px 40px -12px rgb(0 0 0 / .3), 0 0 0 1px color-mix(in oklch, var(--foreground) 8%, transparent); font: 13px/1.45 var(--sans); position: relative; }
@@ -226,9 +159,6 @@ body.no-people .fake-cursor, body.no-people .fake-sel, body.no-people .hero-only
 .xpanel .swatch.active { box-shadow: 0 0 0 2px var(--foreground); }
 .xpanel .hint { color: var(--muted-foreground); font-size: 12px; margin: 0; min-height: 17px; }
 .xpanel .draft { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 16px; background: var(--muted); }
-.xpanel .draft .ta { min-height: 52px; border-radius: 14px; padding: 8px 10px; background: var(--background); white-space: pre-wrap; }
-.xpanel .draft .ta:empty::before { content: "Add a comment…"; color: var(--muted-foreground); }
-.xpanel .draft .ta.caret::after { content: ""; display: inline-block; width: 1.5px; height: 1.05em; background: var(--foreground); vertical-align: -2px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .xpanel .row { display: flex; gap: 6px; align-items: center; }
 .xpanel .check { display: flex; gap: 6px; align-items: center; color: var(--muted-foreground); font-size: 12px; }
@@ -262,9 +192,6 @@ body.no-people .fake-cursor, body.no-people .fake-sel, body.no-people .hero-only
 /* ---------- Tools section ---------- */
 .tools-stage { display: grid; grid-template-columns: 1fr 330px; gap: 22px; align-items: start; }
 .shop { position: relative; padding: 22px; user-select: text; }
-.shop.drive { cursor: crosshair; }
-.shop.drive.t-text { cursor: text; }
-.shop.drive.t-select { cursor: default; }
 .shop .crumbs { font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 14px; }
 .shop .product { display: grid; grid-template-columns: 200px 1fr; gap: 22px; }
 .shop .photo { height: 210px; border-radius: 16px; background: linear-gradient(140deg, #c4b5fd, #7c3aed 55%, #312e81); position: relative; overflow: hidden; }
@@ -281,10 +208,6 @@ body.no-people .fake-cursor, body.no-people .fake-sel, body.no-people .hero-only
 .shop .sizes span.sel { border-color: var(--foreground); box-shadow: inset 0 0 0 1px var(--foreground); }
 .shop .addcart { display: inline-block; padding: 10px 22px; border-radius: 999px; background: var(--foreground); color: var(--background); font-weight: 600; font-size: 14.5px; }
 .shop .desc { font-size: 14px; color: var(--muted-foreground); margin: 18px 0 0; }
-.drive-note { display: none; position: absolute; top: 10px; right: 10px; z-index: 20; font-size: 12.5px; background: var(--foreground); color: var(--background); padding: 5px 6px 5px 12px; border-radius: 999px; align-items: center; gap: 8px; }
-.drive-note button { border: 0; background: var(--background); color: var(--foreground); border-radius: 999px; padding: 2px 10px; cursor: pointer; font-size: 12px; font-weight: 600; }
-.shop.drive .drive-note { display: inline-flex; }
-.xpanel .item [contenteditable] { outline: none; border-radius: 8px; padding: 2px 4px; margin: -2px -4px; background: var(--background); }
 
 /* ---------- Anchors ---------- */
 .anchor-stage { padding: 18px; overflow: hidden; }
@@ -314,7 +237,6 @@ body.no-people .fake-cursor, body.no-people .fake-sel, body.no-people .hero-only
 
 /* ---------- Presence ---------- */
 .presence-stage { padding: 0; overflow: hidden; }
-.presence-stage .chrome-pill { position: absolute; top: 58px; right: 16px; z-index: 15; }
 .doc-page { padding: 34px 40px 40px; max-width: 680px; }
 .doc-page h3 { font-size: 28px; margin-bottom: 6px; }
 .doc-page .by { color: var(--muted-foreground); font-size: 13.5px; margin-bottom: 18px; }
@@ -587,7 +509,6 @@ footer a:hover { color: var(--foreground); }
   .mini-site .grid { grid-template-columns: 1fr 1fr; }
   .toggle .label { display: none; }
   .doc-page { padding: 26px 20px; }
-  .presence-stage .chrome-pill { top: 54px; right: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -598,7 +519,6 @@ footer a:hover { color: var(--foreground); }
 .xpanel .reply:empty { display: none; }
 .grow-left { margin-left: auto; }
 .xpanel .draft .ta .mention { font-weight: 600; }
-.xpanel .item [contenteditable]:empty::before { content: attr(data-ph); color: var(--muted-foreground); }
 html, body { overflow-x: clip; }
 .feature-grid > *, .hero .wrap > *, .tools-stage > *, .thread-stage > *, .share-stage > *, .mcp-stage > *, .docs-stage > *, .bug-grid > *, .history-stage > *, .issue-stage > * { min-width: 0; }
 @media (max-width: 720px) {
@@ -607,3 +527,29 @@ html, body { overflow-x: clip; }
   .doc-edit { padding: 20px; }
   .wl { white-space: normal; }
 }
+
+/* ---------- Stages: mock pages with the real overlay layers inside (see src/lib/stage.ts) ---------- */
+.stage-root { position: relative; }
+.face { width: 26px; height: 26px; margin-left: -6px; border-radius: 50%; display: grid; place-items: center; background: var(--c, #6b7280); color: #fff;
+  border: 2px solid var(--popover); font: 700 10px/1 system-ui, sans-serif; }
+.xpanel .actions button.icon { all: unset; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; cursor: pointer; color: var(--muted-foreground); }
+.xpanel .actions button.icon:hover { color: var(--foreground); background: var(--muted); }
+.xpanel .actions button.icon.on { color: var(--primary-text); background: var(--tint); }
+.xpanel .actions button.icon svg { width: 16px; height: 16px; }
+.xpanel .driving { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; padding: 6px 6px 6px 12px; border-radius: 999px;
+  background: var(--foreground); color: var(--background); }
+.xpanel .draft textarea { width: 100%; resize: vertical; min-height: 52px; border: 1px solid transparent; border-radius: 14px; padding: 8px 10px;
+  font: inherit; color: var(--foreground); background: var(--background); }
+.xpanel .draft textarea:focus { outline: none; border-color: var(--ring); }
+.xpanel button.pbtn { cursor: pointer; font: inherit; }
+.xpanel .item { cursor: pointer; }
+.xpanel .item:hover { background: color-mix(in oklch, var(--muted) 70%, transparent); }
+.xpanel .compose { min-height: 52px; border-radius: 14px; padding: 8px 10px; background: var(--background); white-space: pre-wrap; }
+.xpanel .compose:empty::before { content: attr(data-placeholder); color: var(--muted-foreground); }
+.xpanel .compose.typing::after { content: ""; display: inline-block; width: 1.5px; height: 1.05em; background: var(--foreground); vertical-align: -2px; margin-left: 1px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+/* The comment's pin in the bug-context screenshot thumbnail, drawn like the overlay's. */
+.shot-pin { position: absolute; transform: translate(-50%, -100%); min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px 11px 11px 2px; background: var(--c);
+  color: #fff; font: 600 12px/22px var(--sans); text-align: center; box-shadow: 0 1px 3px rgb(0 0 0 / .35), 0 0 0 2px #fff; }
+/* Room for the real "Live" pill, which PresenceLayer puts at the stage's top-right. */
+#hero-page .site-nav { padding-right: 170px; }
