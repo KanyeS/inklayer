@@ -71,6 +71,19 @@ describe("live cursors connection", () => {
     vi.resetModules();
   });
 
+  it("keeps a join the page sends before the background has checked the tab", async () => {
+    const { acceptPort } = await import("../src/lib/presence");
+    nextStart = () => Promise.resolve();
+    const tab = fakePort();
+    const accepting = acceptPort(tab.port); // still checking session storage...
+    tab.send({ t: "join", url: "https://site.example/page" }); // ...when the page's join arrives, as in the browser
+    await accepting;
+    await wait(100);
+
+    expect(hubs).toHaveLength(1);
+    expect(statuses(tab.messages).at(-1)).toBe("live");
+  });
+
   it("gives up on an attempt that never finishes and connects with a new one", async () => {
     const { acceptPort } = await import("../src/lib/presence");
     nextStart = () => new Promise(() => undefined); // the socket never opens or fails

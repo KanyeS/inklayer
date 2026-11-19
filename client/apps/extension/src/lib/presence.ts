@@ -96,24 +96,37 @@ async function showBadge(tabId: number, on: boolean): Promise<void> {
 
 /** A live tab connected. Only accepted from this extension's content script, in a tab the user turned presence on for. */
 export async function acceptPort(port: chrome.runtime.Port): Promise<void> {
+  // Listen straight away: the page sends "join" as soon as it connects, and a port drops messages that arrive before
+  // there's a listener. They wait here until the checks below pass.
+  let tab: TabPort | null = null;
+  let gone = false;
+  const early: PresenceUp[] = [];
+  port.onMessage.addListener((message: PresenceUp) => {
+    if (tab) void onTabMessage(tab, message);
+    else early.push(message);
+  });
+  port.onDisconnect.addListener(() => {
+    gone = true;
+    if (!tab) return;
+    ports.delete(tab);
+    void leave(tab);
+    if (ports.size === 0) stopTimer = setTimeout(() => void stopConnection(), STOP_AFTER_MS);
+  });
+
   const tabId = port.sender?.tab?.id;
   const origin = port.sender?.url ? safeOrigin(port.sender.url) : null;
   if (port.sender?.id !== chrome.runtime.id || tabId === undefined || !origin || !(await isPresenceOn(tabId))) {
     port.disconnect();
     return;
   }
+  if (gone) return; // the page went away while we checked
 
-  const tab: TabPort = { port, origin, page: null };
+  tab = { port, origin, page: null };
   ports.add(tab);
   clearTimeout(stopTimer);
   void showBadge(tabId, true);
   port.postMessage(lastStatus);
-  port.onMessage.addListener((message: PresenceUp) => void onTabMessage(tab, message));
-  port.onDisconnect.addListener(() => {
-    ports.delete(tab);
-    void leave(tab);
-    if (ports.size === 0) stopTimer = setTimeout(() => void stopConnection(), STOP_AFTER_MS);
-  });
+  for (const message of early.splice(0)) void onTabMessage(tab, message);
 }
 
 async function onTabMessage(tab: TabPort, message: PresenceUp): Promise<void> {
