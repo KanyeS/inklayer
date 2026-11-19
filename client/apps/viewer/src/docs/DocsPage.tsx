@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, FilePlus2, FileText, FolderPlus, Folder, Network, Pencil, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FilePlus2, FolderPlus, Folder, Network, Pencil, Search, Trash2, X } from "lucide-react";
 import { cn } from "@inklayer/ui/lib/utils";
 import { Button } from "@inklayer/ui/components/button";
 import { Input } from "@inklayer/ui/components/input";
@@ -8,7 +8,9 @@ import { get, type Organization } from "@/lib/api";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 import { DocView } from "./DocView";
-import { docPath, docsApi, type DocSummary, type DocTree } from "./docsApi";
+import { docPath, docsApi, type DocSummary, type DocTagInfo, type DocTree } from "./docsApi";
+import { TagPill, tagOf } from "./tags";
+import { DocIcon } from "./docIcons";
 import { pathOf, rewriteLinks } from "./links";
 import { QuickSwitcher } from "./QuickSwitcher";
 
@@ -59,7 +61,7 @@ export function DocsPage({ orgId, docId }: { orgId: string; docId?: string }) {
       ) : (
         <Welcome orgId={orgId} tree={tree.data} onSearch={() => setSwitcherOpen(true)} />
       )}
-      <QuickSwitcher orgId={orgId} tree={tree.data} open={switcherOpen} onOpenChange={setSwitcherOpen} onCreated={tree.reload} />
+      <QuickSwitcher orgId={orgId} tree={tree.data} open={switcherOpen} onOpenChange={setSwitcherOpen} onCreated={tree.reload} onTag={setTag} />
     </div>
   );
 }
@@ -80,7 +82,7 @@ function Welcome({ orgId, tree, onSearch }: { orgId: string; tree: DocTree; onSe
             {recent.map((d) => (
               <li key={d.id}>
                 <Link to={docPath(orgId, d.id)} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted">
-                  <FileText className="size-4 text-muted-foreground" />{d.title}
+                  <DocIcon icon={d.icon} color={d.color} className={cn("size-4", !d.color && "text-muted-foreground")} />{d.title}
                   {d.folder && <span className="text-xs text-muted-foreground">{d.folder}</span>}
                 </Link>
               </li>
@@ -142,10 +144,12 @@ function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onChanged, onSear
   const [open, setOpen] = useState<Set<string>>(() => new Set(JSON.parse(localStorage.getItem(`inklayer.docs.open.${orgId}`) ?? "[]") as string[]));
   const [draft, setDraft] = useState<Draft>(null);
   const [error, setError] = useState<Error | null>(null);
-  const tags = useMemo(() => {
+  // The server lists tags with counts and their icons and colours; count them here if it didn't.
+  const tags = useMemo<DocTagInfo[]>(() => {
+    if (tree.tags) return tree.tags;
     const counts = new Map<string, number>();
     for (const d of tree.docs) for (const t of d.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
-    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, count]) => ({ tag, count }));
   }, [tree]);
 
   const toggle = useCallback((path: string) => {
@@ -238,9 +242,9 @@ function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onChanged, onSear
 
       {filtered ? (
         <div className="px-2 pb-4">
-          <div className="mx-1 mb-1 flex items-center justify-between rounded-lg bg-primary/10 px-2 py-1 text-sm">
-            <span>#{tag}</span>
-            <button type="button" className="text-muted-foreground hover:text-foreground" title="Show all docs" onClick={() => onTag(null)}><X className="size-4" /></button>
+          <div className="mx-1 mb-2 flex items-center justify-between gap-2 px-1 text-sm">
+            <span className="text-muted-foreground">Tagged</span>
+            <TagPill tag={tagOf(tree, tag!)} active onRemove={() => onTag(null)} />
           </div>
           {filtered.map((d) => <DocRow key={d.id} orgId={orgId} doc={d} active={d.id === activeId} depth={0} showFolder />)}
         </div>
@@ -267,15 +271,10 @@ function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onChanged, onSear
         <div className="border-t px-3 py-4">
           <h2 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Tags</h2>
           <div className="flex flex-wrap gap-1.5">
-            {tags.map(([t, count]) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onTag(tag === t ? null : t)}
-                className={cn("rounded-full px-2 py-0.5 text-xs", tag === t ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary/20")}
-              >
-                #{t} <span className="opacity-70">{count}</span>
-              </button>
+            {tags.map((t) => (
+              <TagPill key={t.tag} tag={t} active={tag === t.tag} onClick={() => onTag(tag === t.tag ? null : t.tag)}>
+                <span className="opacity-60">{t.count}</span>
+              </TagPill>
             ))}
           </div>
         </div>
@@ -363,7 +362,7 @@ function DocRow({ orgId, doc, active, depth, draggable, showFolder }: { orgId: s
       style={{ paddingLeft: depth * 12 + 22 }}
       title={pathOf(doc)}
     >
-      <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+      <DocIcon icon={doc.icon} color={doc.color} className={cn("size-3.5 shrink-0", !doc.color && "text-muted-foreground")} />
       <span className="truncate">{doc.title}</span>
       {showFolder && doc.folder && <span className="ml-auto truncate pl-2 text-xs text-muted-foreground">{doc.folder}</span>}
     </Link>

@@ -123,6 +123,66 @@ export function relinkEdits(text: string, matches: (key: string) => boolean, rep
   return edits.reverse();
 }
 
+/* ------------------------------------------------------------------ adding and removing #tags */
+
+/** A line made of nothing but #tags, where new tags go. */
+const TAG_LINE = /^[ \t]*#[\p{L}\p{N}_/-]+(?:[ \t]+#[\p{L}\p{N}_/-]+)*[ \t]*$/u;
+
+/** The text with `#tag` added: at the end of the doc's last line of tags if it has one, or on a new line at the end. Unchanged if it's already tagged. */
+export function addTag(text: string, tag: string): string {
+  const name = tag.replace(/^#/, "").toLowerCase();
+  if (!name || extractTags(text).includes(name)) return text;
+  const code = codeRanges(text);
+  const lines = text.split("\n");
+  let offset = text.length;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    offset -= lines[i]!.length;
+    if (TAG_LINE.test(lines[i]!) && !inside(code, offset)) {
+      lines[i] = `${lines[i]!.trimEnd()} #${name}`;
+      return lines.join("\n");
+    }
+    offset -= 1;
+  }
+  if (!text.trim()) return `#${name}`;
+  return `${text.replace(/\s+$/, "")}\n\n#${name}`;
+}
+
+/** The text with every `#tag` (any case) taken out, outside code; a line left empty by it goes too. */
+export function removeTag(text: string, tag: string): string {
+  const name = tag.replace(/^#/, "").toLowerCase();
+  const code = codeRanges(text);
+  // Like extractTags: [[Doc#Heading]] isn't a tag, so links are blanked out (same length) before matching.
+  const withoutLinks = text.replace(LINK_PATTERN, (m) => " ".repeat(m.length));
+  const found = [...withoutLinks.matchAll(TAG_PATTERN)]
+    .map((m) => ({ at: m.index + m[1]!.length, length: m[2]!.length + 1, tag: m[2]!.replace(/\/+$/, "").toLowerCase() }))
+    .filter((m) => m.tag === name && !inside(code, m.at));
+  let out = text;
+  for (const { at, length } of found.reverse()) {
+    let from = at;
+    let to = at + length;
+    if (out[to] === " ") to++;
+    else if (from > 0 && out[from - 1] === " ") from--;
+    out = out.slice(0, from) + out.slice(to);
+    // The line it was on, now empty: remove it with its line break.
+    const lineStart = from > 0 ? out.lastIndexOf("\n", from - 1) + 1 : 0;
+    const lineEnd = out.indexOf("\n", from);
+    const line = out.slice(lineStart, lineEnd < 0 ? out.length : lineEnd);
+    if (!line.trim()) out = out.slice(0, lineStart > 0 ? lineStart - 1 : 0) + out.slice(lineEnd < 0 ? out.length : lineStart > 0 ? lineEnd : lineEnd + 1);
+  }
+  // Don't leave blank lines at the end that the text didn't have.
+  return /\s$/.test(text) ? out : out.replace(/\s+$/, "");
+}
+
+/** The smallest single edit that turns `before` into `after`, for applying to the live doc without touching the rest. */
+export function textEdit(before: string, after: string): { from: number; to: number; insert: string } | null {
+  if (before === after) return null;
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) start++;
+  let end = 0;
+  while (end < before.length - start && end < after.length - start && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
+  return { from: start, to: before.length - end, insert: after.slice(start, after.length - end) };
+}
+
 /** The address of a page comment in the viewer, which is also what "Copy link" in the extension copies. */
 export const commentUrlPattern = () => new RegExp(`^${escapeRegExp(location.origin)}/comments/([0-9a-f-]{36})/?$`, "i");
 

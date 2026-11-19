@@ -11,10 +11,13 @@ namespace Inklayer.Api.Features.Docs;
 /// <param name="FullName">Their real name, from their sign-in provider (shown on hover).</param>
 public sealed record DocActor(Guid Id, string DisplayName, string? FullName = null);
 
-public sealed record DocSummaryResponse(Guid Id, string Folder, string Title, DateTime UpdatedAt, IReadOnlyList<string> Tags);
+/// <param name="Icon">A Lucide icon name chosen for the doc, or null for the default.</param>
+/// <param name="Color">The icon's colour, <c>#rrggbb</c>, or null for the theme's.</param>
+public sealed record DocSummaryResponse(Guid Id, string Folder, string Title, DateTime UpdatedAt, IReadOnlyList<string> Tags, string? Icon = null, string? Color = null);
 
 /// <param name="Folders">Every folder, including ones that only exist because a doc is in them, sorted.</param>
-public sealed record DocTreeResponse(IReadOnlyList<string> Folders, IReadOnlyList<DocSummaryResponse> Docs, bool CanEdit);
+/// <param name="Tags">Every #tag in use, with how many docs have it and its icon and colour.</param>
+public sealed record DocTreeResponse(IReadOnlyList<string> Folders, IReadOnlyList<DocSummaryResponse> Docs, bool CanEdit, IReadOnlyList<DocTagCountResponse>? Tags = null);
 
 public sealed record DocLinkResponse(string Text, Guid? DocId, string? Title, string? Folder);
 
@@ -27,7 +30,8 @@ public sealed record DocCommentLinkResponse(Guid AnnotationId, Guid ProjectId, s
 public sealed record DocResponse(
     Guid Id, Guid OrganizationId, string Folder, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DocActor? UpdatedBy,
     bool CanEdit, IReadOnlyList<string> Tags, IReadOnlyList<DocSummaryResponse> Backlinks, IReadOnlyList<DocCommentLinkResponse> CommentBacklinks,
-    IReadOnlyList<DocLinkResponse> Links, IReadOnlyList<Guid> CommentLinks, IReadOnlyList<Notifications.PersonResponse>? People = null);
+    IReadOnlyList<DocLinkResponse> Links, IReadOnlyList<Guid> CommentLinks, IReadOnlyList<Notifications.PersonResponse>? People = null,
+    string? Icon = null, string? Color = null);
 
 /// <param name="RelinkDocs">After a rename or move: docs whose text links the old name. The client that renamed rewrites those links.</param>
 public sealed record DocChangedResponse(DocResponse Doc, IReadOnlyList<Guid> RelinkDocs);
@@ -35,6 +39,9 @@ public sealed record DocChangedResponse(DocResponse Doc, IReadOnlyList<Guid> Rel
 public sealed record CreateDocRequest(string? Folder, string Title);
 
 public sealed record UpdateDocRequest(int Version, string? Title, string? Folder);
+
+/// <summary>A doc's icon and colour. Both are replaced: null or empty sets the default.</summary>
+public sealed record DocAppearanceRequest(string? Icon, string? Color);
 
 public sealed record FolderRequest(string Path);
 
@@ -46,9 +53,11 @@ public sealed record DocRevisionContentResponse(Guid Id, int Version, string Act
 
 public sealed record DocSearchResultResponse(Guid Id, string Folder, string Title, string Snippet);
 
-public sealed record DocTagCountResponse(string Tag, int Count);
+/// <param name="Icon">The tag's Lucide icon, or null for none.</param>
+/// <param name="Color">The tag's colour, <c>#rrggbb</c>, or null for the theme's.</param>
+public sealed record DocTagCountResponse(string Tag, int Count, string? Icon = null, string? Color = null);
 
-public sealed record DocGraphNode(string Id, string Kind, string Label, Guid? DocId, Guid? AnnotationId, string? Folder);
+public sealed record DocGraphNode(string Id, string Kind, string Label, Guid? DocId, Guid? AnnotationId, string? Folder, string? Icon = null, string? Color = null);
 
 public sealed record DocGraphEdge(string Source, string Target);
 
@@ -70,7 +79,8 @@ internal static class DocEndpoints
         byOrg.MapDelete("/folders", DeleteFolderAsync).WithSummary("Delete an empty folder: ?path=");
         byOrg.MapGet("/search", SearchAsync).WithSummary("Full-text search: ?q=");
         byOrg.MapGet("/lookup", LookupAsync).WithSummary("Docs whose title matches ?q=, for link suggestions");
-        byOrg.MapGet("/tags", TagsAsync).WithSummary("Tags with how many docs have each");
+        byOrg.MapGet("/tags", TagsAsync).WithSummary("Tags with how many docs have each, and each tag's icon and colour");
+        byOrg.MapPut("/tags/{tag}", SetTagStyleAsync).WithSummary("Set a #tag's icon and colour (Commenter and above); both empty for the defaults");
         byOrg.MapGet("/graph", GraphAsync).WithSummary("Docs and comments as nodes, links as edges");
 
         // Live co-editing; WebSockets only, signed in with a presence ticket like the presence hub.
@@ -79,6 +89,7 @@ internal static class DocEndpoints
         var docs = app.MapGroup("/api/docs").WithTags("Docs").RequireAuthorization();
         docs.MapGet("/{docId:guid}", GetAsync).WithSummary("A doc's details, links and backlinks (the text comes from the docs hub)");
         docs.MapPatch("/{docId:guid}", UpdateAsync).WithSummary("Rename or move a doc");
+        docs.MapPut("/{docId:guid}/appearance", SetAppearanceAsync).WithSummary("Set the doc's icon and colour (Commenter and above)");
         docs.MapDelete("/{docId:guid}", DeleteAsync).WithSummary("Delete a doc: ?version=");
         docs.MapGet("/{docId:guid}/history", HistoryAsync);
         docs.MapGet("/{docId:guid}/history/{revisionId:guid}", RevisionAsync);
@@ -96,14 +107,15 @@ internal static class DocEndpoints
         }
 
         var docs = await db.Docs.AsNoTracking().Where(d => d.OrganizationId == orgId && d.DeletedAt == null)
-            .Select(d => new { d.Id, d.Folder, d.Title, d.UpdatedAt }).ToListAsync(ct);
+            .Select(d => new { d.Id, d.Folder, d.Title, d.UpdatedAt, d.Icon, d.Color }).ToListAsync(ct);
         var tags = await TagsByDocAsync(db, orgId, ct);
         var folders = await FoldersAsync(db, orgId, ct);
         return TypedResults.Ok(new DocTreeResponse(
             folders,
             [.. docs.OrderBy(d => d.Folder, StringComparer.OrdinalIgnoreCase).ThenBy(d => d.Title, StringComparer.OrdinalIgnoreCase)
-                .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, tags.GetValueOrDefault(d.Id, [])))],
-            check.Role.Grants(Permission.Comment)));
+                .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, tags.GetValueOrDefault(d.Id, []), d.Icon, d.Color))],
+            check.Role.Grants(Permission.Comment),
+            await TagCountsAsync(db, orgId, ct)));
     }
 
     internal static async Task<IResult> CreateAsync(
@@ -222,6 +234,39 @@ internal static class DocEndpoints
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return TypedResults.Ok(new DocChangedResponse(await ResponseAsync(doc, check.Role, currentUser, db, ct), relink));
+    }
+
+    /// <summary>
+    /// Sets how the doc looks in the graph and lists. It isn't a change to the doc itself: no new version or revision, and
+    /// no conflict check, so it never gets in the way of someone renaming the doc at the same time.
+    /// </summary>
+    internal static async Task<IResult> SetAppearanceAsync(
+        Guid docId, DocAppearanceRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    {
+        var doc = await db.Docs.SingleOrDefaultAsync(d => d.Id == docId && d.DeletedAt == null, ct);
+        if (doc is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var check = await access.CheckOrganizationAsync(doc.OrganizationId, Permission.Comment, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        var icon = DocAppearance.NormalizeIcon(request.Icon, out var iconError);
+        var color = DocAppearance.NormalizeColor(request.Color, out var colorError);
+        if (iconError is not null || colorError is not null)
+        {
+            return iconError is not null ? Invalid("icon", iconError) : Invalid("color", colorError!);
+        }
+
+        // Only these two columns: the doc's text and version are left alone.
+        await db.Docs.Where(d => d.Id == doc.Id).ExecuteUpdateAsync(u => u.SetProperty(d => d.Icon, icon).SetProperty(d => d.Color, color), ct);
+        doc.Icon = icon;
+        doc.Color = color;
+        return TypedResults.Ok(await ResponseAsync(doc, check.Role, currentUser, db, ct));
     }
 
     internal static async Task<IResult> DeleteAsync(
@@ -453,13 +498,13 @@ internal static class DocEndpoints
         var term = (q ?? "").Trim().ToLowerInvariant();
         var docs = await db.Docs.AsNoTracking()
             .Where(d => d.OrganizationId == orgId && d.DeletedAt == null && (term.Length == 0 || d.TitleKey.Contains(term)))
-            .Select(d => new { d.Id, d.Folder, d.Title, d.TitleKey, d.UpdatedAt })
+            .Select(d => new { d.Id, d.Folder, d.Title, d.TitleKey, d.UpdatedAt, d.Icon, d.Color })
             .ToListAsync(ct);
         return TypedResults.Ok(docs
             .OrderBy(d => d.TitleKey.StartsWith(term, StringComparison.Ordinal) ? 0 : 1)
             .ThenByDescending(d => d.UpdatedAt)
             .Take(10)
-            .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, []))
+            .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, [], d.Icon, d.Color))
             .ToList());
     }
 
@@ -471,9 +516,65 @@ internal static class DocEndpoints
             return check.Denied!;
         }
 
-        var tags = await db.DocTags.AsNoTracking().Where(t => t.OrganizationId == orgId).GroupBy(t => t.Tag)
-            .Select(g => new DocTagCountResponse(g.Key, g.Count())).ToListAsync(ct);
-        return TypedResults.Ok(tags.OrderByDescending(t => t.Count).ThenBy(t => t.Tag, StringComparer.Ordinal).ToList());
+        return TypedResults.Ok(await TagCountsAsync(db, orgId, ct));
+    }
+
+    /// <summary>Every tag in use in the organisation's docs, most used first, with its icon and colour.</summary>
+    private static async Task<List<DocTagCountResponse>> TagCountsAsync(InklayerDbContext db, Guid orgId, CancellationToken ct)
+    {
+        var counts = await db.DocTags.AsNoTracking().Where(t => t.OrganizationId == orgId).GroupBy(t => t.Tag)
+            .Select(g => new { Tag = g.Key, Count = g.Count() }).ToListAsync(ct);
+        var styles = await db.DocTagStyles.AsNoTracking().Where(l => l.OrganizationId == orgId).ToDictionaryAsync(l => l.Tag, ct);
+        return [.. counts
+            .Select(c => styles.TryGetValue(c.Tag, out var style)
+                ? new DocTagCountResponse(c.Tag, c.Count, style.Icon, style.Color)
+                : new DocTagCountResponse(c.Tag, c.Count))
+            .OrderByDescending(t => t.Count).ThenBy(t => t.Tag, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// Sets a tag's icon and colour, for the whole organisation. The tag doesn't have to be in use yet (someone may be
+    /// about to add it). Both empty removes the style.
+    /// </summary>
+    internal static async Task<IResult> SetTagStyleAsync(Guid orgId, string tag, DocAppearanceRequest request, AccessService access, InklayerDbContext db, CancellationToken ct)
+    {
+        var check = await access.CheckOrganizationAsync(orgId, Permission.Comment, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        var name = DocAppearance.NormalizeTag(tag, out var tagError);
+        var icon = DocAppearance.NormalizeIcon(request.Icon, out var iconError);
+        var color = DocAppearance.NormalizeColor(request.Color, out var colorError);
+        if (tagError is not null || iconError is not null || colorError is not null)
+        {
+            return tagError is not null ? Invalid("tag", tagError) : iconError is not null ? Invalid("icon", iconError) : Invalid("color", colorError!);
+        }
+
+        var style = await db.DocTagStyles.SingleOrDefaultAsync(l => l.OrganizationId == orgId && l.Tag == name, ct);
+        if (icon is null && color is null)
+        {
+            if (style is not null)
+            {
+                db.DocTagStyles.Remove(style);
+            }
+        }
+        else
+        {
+            if (style is null)
+            {
+                style = new DocTagStyle { OrganizationId = orgId, Tag = name! };
+                db.DocTagStyles.Add(style);
+            }
+
+            style.Icon = icon;
+            style.Color = color;
+        }
+
+        await db.SaveChangesAsync(ct);
+        var count = await db.DocTags.CountAsync(t => t.OrganizationId == orgId && t.Tag == name, ct);
+        return TypedResults.Ok(new DocTagCountResponse(name!, count, icon, color));
     }
 
     private static async Task<IResult> GraphAsync(Guid orgId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
@@ -485,7 +586,7 @@ internal static class DocEndpoints
         }
 
         var docs = await db.Docs.AsNoTracking().Where(d => d.OrganizationId == orgId && d.DeletedAt == null)
-            .Select(d => new { d.Id, d.Title, d.Folder }).ToListAsync(ct);
+            .Select(d => new { d.Id, d.Title, d.Folder, d.Icon, d.Color }).ToListAsync(ct);
         var links = await db.DocLinks.AsNoTracking().Where(l => l.OrganizationId == orgId).ToListAsync(ct);
 
         // Comments only appear if the caller can see them.
@@ -496,7 +597,7 @@ internal static class DocEndpoints
             .Select(a => new { a.Id, a.Body, a.ProjectId }).ToListAsync(ct);
         comments = [.. comments.Where(c => visibleProjects.Contains(c.ProjectId))];
 
-        var nodes = docs.Select(d => new DocGraphNode($"d:{d.Id}", "doc", d.Title, d.Id, null, d.Folder))
+        var nodes = docs.Select(d => new DocGraphNode($"d:{d.Id}", "doc", d.Title, d.Id, null, d.Folder, d.Icon, d.Color))
             .Concat(comments.Select(c => new DocGraphNode($"c:{c.Id}", "comment", Preview(c.Body, 60), null, c.Id, null)))
             .ToList();
         var ids = nodes.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
@@ -564,7 +665,7 @@ internal static class DocEndpoints
         var incoming = await db.DocLinks.AsNoTracking().Where(l => l.TargetDocId == doc.Id).ToListAsync(ct);
         var sourceDocIds = incoming.Select(l => l.SourceDocId).OfType<Guid>().Where(id => id != doc.Id).Distinct().ToList();
         var backlinks = await db.Docs.AsNoTracking().Where(d => sourceDocIds.Contains(d.Id) && d.DeletedAt == null)
-            .OrderBy(d => d.Title).Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, new List<string>())).ToListAsync(ct);
+            .OrderBy(d => d.Title).Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, new List<string>(), d.Icon, d.Color)).ToListAsync(ct);
 
         var sourceCommentIds = incoming.Select(l => l.SourceAnnotationId).OfType<Guid>().Distinct().ToList();
         var commentBacklinks = await CommentsAsync(sourceCommentIds, currentUser, db, ct);
@@ -582,7 +683,7 @@ internal static class DocEndpoints
         var updatedBy = await db.Users.AsNoTracking().Where(u => u.Id == doc.UpdatedByUserId).Select(u => new DocActor(u.Id, u.PreferredName ?? u.DisplayName, u.DisplayName)).SingleOrDefaultAsync(ct);
         return new DocResponse(doc.Id, doc.OrganizationId, doc.Folder, doc.Title, doc.Version, doc.CreatedAt, doc.UpdatedAt, updatedBy,
             role.Grants(Permission.Comment), tags, backlinks, commentBacklinks, links, commentLinks,
-            await Notifications.MentionedPeople.ForAsync(db, [doc.Content], ct));
+            await Notifications.MentionedPeople.ForAsync(db, [doc.Content], ct), doc.Icon, doc.Color);
     }
 
     /// <summary>The comments, among <paramref name="ids"/>, that the caller can see.</summary>

@@ -8,6 +8,8 @@ import { Label } from "@inklayer/ui/components/label";
 import { ErrorText, Loading } from "@/components/Layout";
 import { Link, navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
+import { DEFAULT_ICONS, iconPath, useIcons, type IconLibrary } from "./docIcons";
+import { TagPill } from "./tags";
 import { docPath, docsApi, type DocGraph, type DocTree } from "./docsApi";
 
 interface Node extends SimulationNodeDatum {
@@ -16,14 +18,19 @@ interface Node extends SimulationNodeDatum {
   label: string;
   href: string | null;
   degree: number;
+  /** The Lucide icon drawn in the node: the doc's own, or the default for its kind. */
+  icon: string;
+  /** The doc's own colour; null for the default for its kind. */
+  color: string | null;
 }
 
 type Edge = SimulationLinkDatum<Node>;
 
 /**
- * The organisation's docs as a graph, like Obsidian's: a dot per doc, sized by how linked it is, and a line per link.
- * Comments that link docs (or are linked from them) and tags can be shown too. Drag to pan, scroll to zoom, drag a dot
- * to move it, hover to see its neighbours, click to open.
+ * The organisation's docs as a graph, like Obsidian's: each doc as its icon in its colour (chosen in the doc's header),
+ * sized by how linked it is, and a line per link.
+ * Comments that link docs (or are linked from them) and tags can be shown too, and the graph can be narrowed to docs
+ * with chosen tags. Drag to pan, scroll to zoom, drag a node to move it, hover to see its neighbours, click to open.
  */
 export function GraphPage({ orgId }: { orgId: string }) {
   const graph = useAsync(() => docsApi.graph(orgId), [orgId]);
@@ -31,6 +38,13 @@ export function GraphPage({ orgId }: { orgId: string }) {
   const [showComments, setShowComments] = useState(true);
   const [showTags, setShowTags] = useState(false);
   const [filter, setFilter] = useState("");
+  // Only docs with any of these tags; empty for every doc.
+  const [onlyTags, setOnlyTags] = useState<ReadonlySet<string>>(new Set());
+  const toggleTag = (tag: string) => setOnlyTags((current) => {
+    const next = new Set(current);
+    if (!next.delete(tag)) next.add(tag);
+    return next;
+  });
 
   if (graph.error || tree.error) return <div className="p-6"><ErrorText error={graph.error ?? tree.error} /></div>;
   if (!graph.data || !tree.data) return <div className="p-6"><Loading /></div>;
@@ -44,26 +58,49 @@ export function GraphPage({ orgId }: { orgId: string }) {
         <Input placeholder="Highlight docs…" aria-label="Highlight docs whose title contains" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <Label className="flex items-center gap-2 font-normal"><Checkbox checked={showComments} onCheckedChange={(v) => setShowComments(v === true)} />Page comments</Label>
         <Label className="flex items-center gap-2 font-normal"><Checkbox checked={showTags} onCheckedChange={(v) => setShowTags(v === true)} />Tags</Label>
-        <p className="text-xs text-muted-foreground">{graph.data.nodes.filter((n) => n.kind === "doc").length} docs · {graph.data.edges.length} links</p>
+        {(tree.data.tags?.length ?? 0) > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Only docs tagged</span>
+              {onlyTags.size > 0 && <button type="button" className="hover:text-foreground" onClick={() => setOnlyTags(new Set())}>Clear</button>}
+            </div>
+            <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto">
+              {tree.data.tags!.map((t) => <TagPill key={t.tag} tag={t} active={onlyTags.has(t.tag)} onClick={() => toggleTag(t.tag)} />)}
+            </div>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {onlyTags.size > 0 && `${tree.data.docs.filter((d) => d.tags.some((t) => onlyTags.has(t))).length} of `}
+          {graph.data.nodes.filter((n) => n.kind === "doc").length} docs · {graph.data.edges.length} links
+        </p>
       </div>
-      <GraphCanvas orgId={orgId} graph={graph.data} tree={tree.data} showComments={showComments} showTags={showTags} filter={filter} />
+      <GraphCanvas orgId={orgId} graph={graph.data} tree={tree.data} showComments={showComments} showTags={showTags} onlyTags={onlyTags} filter={filter} />
     </div>
   );
 }
 
-function buildGraph(orgId: string, graph: DocGraph, tree: DocTree, showComments: boolean, showTags: boolean): { nodes: Node[]; edges: Edge[] } {
+function buildGraph(orgId: string, graph: DocGraph, tree: DocTree, showComments: boolean, showTags: boolean, onlyTags: ReadonlySet<string>): { nodes: Node[]; edges: Edge[] } {
+  // With tags chosen: their docs, and comments linked to those docs.
+  const tagsOf = new Map(tree.docs.map((d) => [`d:${d.id}`, d.tags]));
+  const keptDocs = new Set(graph.nodes.filter((n) => n.kind === "doc" && (onlyTags.size === 0 || tagsOf.get(n.id)?.some((t) => onlyTags.has(t)))).map((n) => n.id));
+  const nearKept = new Set(graph.edges.flatMap((e) => (keptDocs.has(e.source) ? [e.target] : keptDocs.has(e.target) ? [e.source] : [])));
   const nodes: Node[] = graph.nodes
-    .filter((n) => n.kind === "doc" || showComments)
+    .filter((n) => (n.kind === "doc" ? keptDocs.has(n.id) : showComments && (onlyTags.size === 0 || nearKept.has(n.id))))
     .map((n) => ({
       id: n.id, kind: n.kind, label: n.label, degree: 0,
       href: n.kind === "doc" ? docPath(orgId, n.docId!) : `/comments/${n.annotationId}`,
+      icon: n.icon ?? DEFAULT_ICONS[n.kind], color: n.color ?? null,
     }));
   const ids = new Set(nodes.map((n) => n.id));
   const edges: Edge[] = graph.edges.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({ source: e.source, target: e.target }));
   if (showTags) {
-    const tags = new Set(tree.docs.flatMap((d) => d.tags));
-    for (const tag of tags) nodes.push({ id: `t:${tag}`, kind: "tag", label: `#${tag}`, href: null, degree: 0 });
-    for (const d of tree.docs) for (const tag of d.tags) if (ids.has(`d:${d.id}`)) edges.push({ source: `d:${d.id}`, target: `t:${tag}` });
+    // Each tag once, in its own icon and colour; with tags chosen, only those.
+    const tags = new Set(tree.docs.filter((d) => ids.has(`d:${d.id}`)).flatMap((d) => d.tags).filter((t) => onlyTags.size === 0 || onlyTags.has(t)));
+    for (const tag of tags) {
+      const style = tree.tags?.find((t) => t.tag === tag);
+      nodes.push({ id: `t:${tag}`, kind: "tag", label: `#${tag}`, href: null, degree: 0, icon: style?.icon ?? DEFAULT_ICONS.tag, color: style?.color ?? null });
+    }
+    for (const d of tree.docs) for (const tag of d.tags) if (ids.has(`d:${d.id}`) && tags.has(tag)) edges.push({ source: `d:${d.id}`, target: `t:${tag}` });
   }
   const byId = new Map(nodes.map((n) => [n.id, n]));
   for (const e of edges) {
@@ -73,21 +110,26 @@ function buildGraph(orgId: string, graph: DocGraph, tree: DocTree, showComments:
   return { nodes, edges };
 }
 
-const radius = (n: Node) => (n.kind === "doc" ? 4 + Math.sqrt(n.degree) * 2.2 : n.kind === "tag" ? 4 : 3);
+const radius = (n: Node) => (n.kind === "doc" ? 10 + Math.sqrt(n.degree) * 2.4 : n.kind === "tag" ? 9 : 8);
 
-function GraphCanvas({ orgId, graph, tree, showComments, showTags, filter }: {
+function GraphCanvas({ orgId, graph, tree, showComments, showTags, onlyTags, filter }: {
   orgId: string;
   graph: DocGraph;
   tree: DocTree;
   showComments: boolean;
   showTags: boolean;
+  onlyTags: ReadonlySet<string>;
   filter: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const data = useMemo(() => buildGraph(orgId, graph, tree, showComments, showTags), [orgId, graph, tree, showComments, showTags]);
+  const data = useMemo(() => buildGraph(orgId, graph, tree, showComments, showTags, onlyTags), [orgId, graph, tree, showComments, showTags, onlyTags]);
   const filterRef = useRef(filter);
   filterRef.current = filter.trim().toLowerCase();
   const redraw = useRef<() => void>(() => undefined);
+  // The icon set loads after the page; until then nodes are plain dots.
+  const library = useIcons();
+  const libraryRef = useRef<IconLibrary | null>(library);
+  libraryRef.current = library;
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -109,7 +151,8 @@ function GraphCanvas({ orgId, graph, tree, showComments, showTags, filter }: {
     const colors = () => {
       const style = getComputedStyle(document.documentElement);
       const v = (name: string) => style.getPropertyValue(name).trim();
-      return { doc: v("--primary"), text: v("--foreground"), muted: v("--muted-foreground"), line: v("--border"), comment: "#E8A100", tag: "#0ACF83", bg: v("--background") };
+      // Docs without a colour of their own: the theme's bright violet, which reads on light and dark backgrounds.
+      return { doc: v("--chart-2"), text: v("--foreground"), muted: v("--muted-foreground"), line: v("--border"), comment: "#E8A100", tag: "#0ACF83", bg: v("--background") };
     };
     let palette = colors();
 
@@ -139,7 +182,7 @@ function GraphCanvas({ orgId, graph, tree, showComments, showTags, filter }: {
         const s = e.source as Node;
         const t = e.target as Node;
         const lit = focus ? focus.has(s.id) && focus.has(t.id) && (s.id === hover!.id || t.id === hover!.id) : false;
-        ctx.strokeStyle = lit ? palette.doc : palette.line;
+        ctx.strokeStyle = lit ? colorOf(hover!) : palette.line;
         ctx.globalAlpha = focus && !lit ? 0.25 : q ? 0.35 : 0.9;
         ctx.beginPath();
         ctx.moveTo(s.x!, s.y!);
@@ -149,11 +192,7 @@ function GraphCanvas({ orgId, graph, tree, showComments, showTags, filter }: {
 
       for (const n of nodes) {
         const dim = (focus && !focus.has(n.id)) || !matches(n);
-        ctx.globalAlpha = dim ? 0.2 : 1;
-        ctx.fillStyle = n.kind === "doc" ? (n === hover ? palette.text : palette.doc) : n.kind === "tag" ? palette.tag : palette.comment;
-        ctx.beginPath();
-        ctx.arc(n.x!, n.y!, radius(n), 0, Math.PI * 2);
-        ctx.fill();
+        drawNode(n, dim ? 0.2 : 1, n === hover);
       }
 
       // Labels when zoomed in, for the hovered node and its neighbours, and for highlighted docs.
@@ -171,6 +210,44 @@ function GraphCanvas({ orgId, graph, tree, showComments, showTags, filter }: {
       ctx.restore();
     };
 
+    const colorOf = (n: Node) => n.color ?? (n.kind === "doc" ? palette.doc : n.kind === "tag" ? palette.tag : palette.comment);
+
+    /** A round tile tinted and outlined in the node's colour, with its icon drawn inside in the same colour. */
+    const drawNode = (n: Node, alpha: number, hovered: boolean) => {
+      const r = radius(n);
+      const color = colorOf(n);
+      const icon = libraryRef.current?.get(n.icon);
+      ctx.beginPath();
+      ctx.arc(n.x!, n.y!, r, 0, Math.PI * 2);
+      if (!icon) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = hovered ? palette.text : color;
+        ctx.fill();
+        return;
+      }
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = palette.bg;
+      ctx.fill();
+      ctx.globalAlpha = alpha * (hovered ? 0.24 : 0.12);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = hovered ? 2 : 1.25;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+
+      // Lucide icons are drawn on a 24×24 grid with 2-unit strokes.
+      const size = r * 1.25;
+      ctx.save();
+      ctx.translate(n.x! - size / 2, n.y! - size / 2);
+      ctx.scale(size / 24, size / 24);
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke(iconPath(icon));
+      ctx.restore();
+    };
+
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(() => {
         frame = 0;
@@ -179,7 +256,7 @@ function GraphCanvas({ orgId, graph, tree, showComments, showTags, filter }: {
     };
 
     const simulation: Simulation<Node, Edge> = forceSimulation(nodes)
-      .force("link", forceLink<Node, Edge>(edges).id((n) => n.id).distance(60).strength(0.4))
+      .force("link", forceLink<Node, Edge>(edges).id((n) => n.id).distance(70).strength(0.4))
       .force("charge", forceManyBody().strength(-140))
       .force("center", forceCenter(0, 0))
       .force("collide", forceCollide<Node>().radius((n) => radius(n) + 4))
@@ -282,8 +359,8 @@ function GraphCanvas({ orgId, graph, tree, showComments, showTags, filter }: {
     };
   }, [data]);
 
-  // Redraw when the highlight text changes.
-  useEffect(() => redraw.current(), [filter]);
+  // Redraw when the highlight text changes, and when the icons arrive.
+  useEffect(() => redraw.current(), [filter, library]);
 
   return <canvas ref={canvasRef} className="block size-full cursor-grab touch-none" aria-label="Graph of docs and links" />;
 }

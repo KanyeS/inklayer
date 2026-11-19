@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from "react";
-import { BookOpen, History, Link2, MessageSquare, PenLine, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { BookOpen, History, Info, Link2, MessageSquare, PenLine, Trash2 } from "lucide-react";
 import { PresenceLayer } from "@inklayer/overlay";
 import { cn } from "@inklayer/ui/lib/utils";
-import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@inklayer/ui/components/dialog";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -15,9 +14,16 @@ import { personTitle } from "@/lib/people";
 import { useMe } from "@/App";
 import { DocShareButton } from "@/components/Shares";
 import { DocSession, type AwarenessUser } from "./collab";
-import { headings } from "./docMarkdown";
+import { headings, textEdit } from "./docMarkdown";
+import { enhance } from "./enhance";
 import { docPath, docsApi, type CommentInfo, type DocInfo, type DocRevision, type DocTree } from "./docsApi";
+import { DocIcon } from "./docIcons";
 import { createEditor, type DocEditor } from "./editor";
+import { IconPicker, type Appearance } from "./IconPicker";
+import { TagBar } from "./tags";
+import { FormatToolbar } from "./FormatToolbar";
+import { applyFormat } from "./formatting";
+import { MarkdownGuide } from "./MarkdownGuide";
 import { createFromLink, pathOf, resolveLink, rewriteLinks } from "./links";
 import { escapeHtml, renderMarkdown } from "./reading";
 
@@ -45,6 +51,9 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: {
   const [session, setSession] = useState<DocSession | null>(null);
   const [mode, setMode] = useState<Mode>(tree.canEdit ? "edit" : "read");
   const [historyOpen, setHistoryOpen] = useState(false);
+  // The editor (while editing), shared by the formatting toolbar and the cheat sheet's Insert buttons.
+  const editorRef = useRef<DocEditor | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const { me } = useMe();
   const liveCursors = me.features.liveCursors;
@@ -80,18 +89,26 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: {
       <main className="min-w-0 px-6 pt-6 pb-10 md:px-10 lg:px-16">
         <div className="mx-auto max-w-3xl">
           <Header orgId={orgId} info={info.data} tree={tree} session={session} mode={mode} setMode={setMode} canEdit={canEdit}
-            onRenamed={async () => { await info.reload(); await onTreeChanged(); }}
-            onHistory={() => setHistoryOpen(true)} />
+            onChanged={async () => { await info.reload(); await onTreeChanged(); }}
+            onHistory={() => setHistoryOpen(true)} onGuide={() => setGuideOpen(true)} onTag={onTag} onTreeChanged={onTreeChanged} />
           {!snapshot?.loaded ? (
             snapshot?.status === "offline" ? <ErrorText error={new Error(snapshot.error || "Can't reach the server. Retrying…")} /> : <Loading />
           ) : (
             <Body orgId={orgId} session={session} tree={tree} mode={mode} canEdit={canEdit} commentLinks={info.data.commentLinks} onTag={onTag} onTreeChanged={onTreeChanged}
-              liveCursors={liveCursors} people={info.data.people ?? []} />
+              liveCursors={liveCursors} people={info.data.people ?? []} editorRef={editorRef} onGuide={() => setGuideOpen(true)} />
           )}
         </div>
       </main>
-      <InfoPanel orgId={orgId} info={info.data} session={session} onTag={onTag} />
+      <InfoPanel orgId={orgId} info={info.data} session={session} />
       <HistoryDialog docId={docId} session={session} canEdit={canEdit} open={historyOpen} onOpenChange={setHistoryOpen} />
+      <MarkdownGuide open={guideOpen} onOpenChange={setGuideOpen} onInsert={mode === "edit" && canEdit ? (format) => {
+        // Close first, so focus goes back to the editor, then apply to the selection it kept.
+        setGuideOpen(false);
+        window.setTimeout(() => {
+          const view = editorRef.current?.view;
+          if (view) applyFormat(view, format);
+        }, 0);
+      } : undefined} />
     </>
   );
 }
@@ -112,7 +129,7 @@ function useSessionState(session: DocSession | null) {
 
 /* ------------------------------------------------------------------ title and toolbar */
 
-function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed, onHistory }: {
+function Header({ orgId, info, tree, session, mode, setMode, canEdit, onChanged, onHistory, onGuide, onTag, onTreeChanged }: {
   orgId: string;
   info: DocInfo;
   tree: DocTree;
@@ -120,14 +137,33 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
   mode: Mode;
   setMode: (mode: Mode) => void;
   canEdit: boolean;
-  onRenamed: () => Promise<void>;
+  onChanged: () => Promise<void>;
+  onTag: (tag: string) => void;
+  onTreeChanged: () => Promise<void>;
   onHistory: () => void;
+  onGuide: () => void;
 }) {
   const { me } = useMe();
   const [title, setTitle] = useState(info.title);
   const [error, setError] = useState<Error | null>(null);
   const state = useSessionState(session);
   useEffect(() => setTitle(info.title), [info.title]);
+
+  // The icon shows the new choice at once; saving happens behind it, and the sidebar and graph pick it up after.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [appearance, setAppearance] = useState<Appearance>({ icon: info.icon ?? null, color: info.color ?? null });
+  useEffect(() => setAppearance({ icon: info.icon ?? null, color: info.color ?? null }), [info.icon, info.color]);
+  const changeAppearance = async (next: Appearance) => {
+    setAppearance(next);
+    try {
+      await docsApi.setAppearance(info.id, next);
+      setError(null);
+      await onChanged();
+    } catch (e) {
+      setError(e as Error);
+      setAppearance({ icon: info.icon ?? null, color: info.color ?? null });
+    }
+  };
 
   const rename = async () => {
     const next = title.trim();
@@ -139,7 +175,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
       const result = await docsApi.update(info.id, { version: info.version, title: next });
       await rewriteLinks(result.relinkDocs, [{ from: info, to: { folder: info.folder, title: result.doc.title } }]);
       setError(null);
-      await onRenamed();
+      await onChanged();
     } catch (e) {
       setError(e as Error);
       setTitle(info.title);
@@ -170,6 +206,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
               {mode === "edit" ? <BookOpen data-icon="inline-start" /> : <PenLine data-icon="inline-start" />}{mode === "edit" ? "Read" : "Edit"}
             </Button>
           )}
+          <Button variant="ghost" size="icon" className="size-8" title="Markdown cheat sheet" aria-label="Markdown cheat sheet" onClick={onGuide}><Info /></Button>
           <Button variant="ghost" size="sm" onClick={onHistory}><History data-icon="inline-start" />History</Button>
           {me.features.sharing && <DocShareButton docId={info.id} canEdit={canEdit} />}
           {canEdit && (
@@ -179,8 +216,17 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
           )}
         </div>
       </div>
+      <div className="mt-2 flex items-center gap-2">
+      {canEdit ? (
+        <Button variant="ghost" size="icon" className="size-10 shrink-0 [&_svg]:size-7" title="Change icon and colour" aria-label="Change icon and colour"
+          onClick={() => setPickerOpen(true)}>
+          <DocIcon icon={appearance.icon} color={appearance.color} />
+        </Button>
+      ) : (
+        <span className="flex size-10 shrink-0 items-center justify-center [&_svg]:size-7"><DocIcon icon={appearance.icon} color={appearance.color} /></span>
+      )}
       <input
-        className="mt-2 w-full bg-transparent font-heading text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground disabled:opacity-100"
+        className="w-full min-w-0 bg-transparent font-heading text-3xl font-bold tracking-tight outline-none placeholder:text-muted-foreground disabled:opacity-100"
         value={title}
         disabled={!canEdit}
         aria-label="Title"
@@ -195,7 +241,9 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
           }
         }}
       />
-      {info.tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{info.tags.map((t) => <Badge key={t} variant="secondary">#{t}</Badge>)}</div>}
+      </div>
+      <IconPicker open={pickerOpen} onOpenChange={setPickerOpen} value={appearance} onChange={(next) => void changeAppearance(next)} />
+      <TagBar orgId={orgId} tree={tree} session={session} fallback={info.tags} canEdit={canEdit} onTag={onTag} onTreeChanged={onTreeChanged} />
       <p className="mt-1 text-xs text-muted-foreground">
         {info.updatedBy ? <>Edited by <span title={personTitle(info.updatedBy)}>{info.updatedBy.displayName}</span> {timeAgo(info.updatedAt)}</> : `Created ${timeAgo(info.createdAt)}`}
       </p>
@@ -206,7 +254,7 @@ function Header({ orgId, info, tree, session, mode, setMode, canEdit, onRenamed,
 
 /* ------------------------------------------------------------------ the text */
 
-function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTreeChanged, liveCursors, people }: {
+function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTreeChanged, liveCursors, people, editorRef, onGuide }: {
   orgId: string;
   session: DocSession;
   tree: DocTree;
@@ -217,12 +265,13 @@ function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTree
   onTreeChanged: () => Promise<void>;
   liveCursors: boolean;
   people: { id: string; displayName: string; fullName: string }[];
+  editorRef: React.RefObject<DocEditor | null>;
+  onGuide: () => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   // Names for <@id> mentions: those in the doc, plus anyone picked from @ suggestions here.
   const names = useRef(new Map<string, { displayName: string; fullName: string }>());
   for (const p of people) names.current.set(p.id.toLowerCase(), p);
-  const editorRef = useRef<DocEditor | null>(null);
   const treeRef = useRef(tree);
   treeRef.current = tree;
   const labels = useRef(new Map<string, string>());
@@ -276,8 +325,13 @@ function Body({ orgId, session, tree, mode, canEdit, commentLinks, onTag, onTree
 
   usePresence(session, editorRef, liveCursors);
 
-  if (mode === "read") return <Reading orgId={orgId} session={session} tree={tree} onTag={onTag} openLink={openLink} person={(id) => names.current.get(id)} />;
-  return <div ref={host} className="doc-editor min-h-[50vh]" />;
+  if (mode === "read") return <Reading orgId={orgId} session={session} tree={tree} canEdit={canEdit} onTag={onTag} openLink={openLink} person={(id) => names.current.get(id)} />;
+  return (
+    <>
+      {canEdit && <FormatToolbar view={() => editorRef.current?.view} onGuide={onGuide} />}
+      <div ref={host} className="doc-editor min-h-[50vh]" />
+    </>
+  );
 }
 
 /** Others' pointers and the avatar pill, drawn with the same layer as live cursors on web pages. */
@@ -324,10 +378,11 @@ function usePresence(session: DocSession, editorRef: React.RefObject<DocEditor |
   }, [session, editorRef, enabled]);
 }
 
-function Reading({ orgId, session, tree, onTag, openLink, person }: {
+function Reading({ orgId, session, tree, canEdit, onTag, openLink, person }: {
   orgId: string;
   session: DocSession;
   tree: DocTree;
+  canEdit: boolean;
   onTag: (tag: string) => void;
   openLink: (target: string | null, resolvedId: string | null, newTab: boolean) => Promise<void>;
   person: (id: string) => { displayName: string; fullName: string } | undefined;
@@ -343,6 +398,7 @@ function Reading({ orgId, session, tree, onTag, openLink, person }: {
         return doc ? { href: docPath(orgId, doc.id) } : null;
       },
       person,
+      tickable: canEdit,
     }));
     render();
     const update = () => {
@@ -354,7 +410,7 @@ function Reading({ orgId, session, tree, onTag, openLink, person }: {
       clearTimeout(timer);
       session.text.unobserve(update);
     };
-  }, [session, tree, orgId]);
+  }, [session, tree, orgId, canEdit]);
 
   // Comment embeds: fill in each one's card.
   useEffect(() => {
@@ -365,6 +421,28 @@ function Reading({ orgId, session, tree, onTag, openLink, person }: {
       });
     }
   }, [html]);
+
+  // Maths, diagrams and code colours, drawn after each render.
+  useEffect(() => {
+    if (ref.current) void enhance(ref.current);
+  }, [html]);
+
+  // Ticking a checkbox ticks it in the doc's text, on its line, for everyone.
+  const onChange = (e: ChangeEvent<HTMLDivElement>) => {
+    const box = e.target as unknown as HTMLInputElement;
+    if (!canEdit || !box.classList.contains("task-checkbox")) return;
+    const line = Number(box.dataset.line);
+    const text = session.text.toString();
+    const lines = text.split("\n");
+    if (!(line >= 0 && line < lines.length)) return;
+    lines[line] = lines[line]!.replace(/\[( |x|X)\]/, box.checked ? "[x]" : "[ ]");
+    const edit = textEdit(text, lines.join("\n"));
+    if (!edit) return;
+    session.doc.transact(() => {
+      session.text.delete(edit.from, edit.to - edit.from);
+      session.text.insert(edit.from, edit.insert);
+    });
+  };
 
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const a = (e.target as Element).closest<HTMLAnchorElement>("a");
@@ -383,7 +461,7 @@ function Reading({ orgId, session, tree, onTag, openLink, person }: {
   };
 
   // eslint-disable-next-line react/no-danger -- rendered by renderMarkdown, which escapes all raw HTML
-  return <div ref={ref} className="doc-reading" onClick={onClick} dangerouslySetInnerHTML={{ __html: html || `<p class="text-muted-foreground">${escapeHtml("This doc is empty.")}</p>` }} />;
+  return <div ref={ref} className="doc-reading" onClick={onClick} onChange={onChange} dangerouslySetInnerHTML={{ __html: html || `<p class="text-muted-foreground">${escapeHtml("This doc is empty.")}</p>` }} />;
 }
 
 /** A linked page comment, as a card in reading view. Built with textContent. */
@@ -414,7 +492,7 @@ function commentCard(comment: CommentInfo | null, id: string): HTMLElement {
 
 /* ------------------------------------------------------------------ right panel */
 
-function InfoPanel({ orgId, info, session, onTag }: { orgId: string; info: DocInfo; session: DocSession; onTag: (tag: string) => void }) {
+function InfoPanel({ orgId, info, session }: { orgId: string; info: DocInfo; session: DocSession }) {
   const [outline, setOutline] = useState(() => headings(session.text.toString()));
   useEffect(() => {
     let timer = 0;
@@ -455,14 +533,6 @@ function InfoPanel({ orgId, info, session, onTag }: { orgId: string; info: DocIn
             : <span key={l.text} className="block truncate px-2 py-1 text-muted-foreground" title="This doc doesn't exist yet">{l.text} <span className="text-xs">(missing)</span></span>
         ))}
       </PanelSection>
-
-      {info.tags.length > 0 && (
-        <PanelSection title="Tags" count={info.tags.length}>
-          <div className="flex flex-wrap gap-1.5 px-2">
-            {info.tags.map((t) => <button key={t} type="button" onClick={() => onTag(t)} className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary hover:bg-primary/20">#{t}</button>)}
-          </div>
-        </PanelSection>
-      )}
 
       {outline.length > 0 && (
         <PanelSection title="Outline" count={outline.length}>

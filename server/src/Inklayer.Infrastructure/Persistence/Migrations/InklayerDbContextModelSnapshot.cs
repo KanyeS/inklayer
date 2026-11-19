@@ -348,6 +348,10 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Color")
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasMaxLength(1000000)
@@ -365,6 +369,10 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<string>("Folder")
                         .IsRequired()
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("LastRevisionAt")
@@ -557,6 +565,28 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrganizationId", "Tag");
 
                     b.ToTable("DocTags");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocTagStyle", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tag")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("OrganizationId", "Tag");
+
+                    b.ToTable("DocTagStyles");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Docs.DocUpdate", b =>
@@ -1473,6 +1503,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasOne("Inklayer.Domain.Docs.Doc", null)
                         .WithMany()
                         .HasForeignKey("DocId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocTagStyle", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

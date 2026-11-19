@@ -76,6 +76,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<DocTag> DocTags => Set<DocTag>();
 
+    public DbSet<DocTagStyle> DocTagStyles => Set<DocTagStyle>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);

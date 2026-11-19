@@ -8,10 +8,12 @@ import {
   type DecorationSet, type ViewUpdate,
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { MessageSquare, createElement as createIcon } from "lucide";
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
+import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
-import type { DocSession } from "./collab";
 import { LINK_PATTERN, commentUrlPattern, parseLink, type WikiLink } from "./docMarkdown";
+import { applyFormat } from "./formatting";
 
 export interface EditorHooks {
   /** People in the organisation whose name matches, for @ suggestions. */
@@ -38,7 +40,17 @@ export interface DocEditor {
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
-export function createEditor(parent: HTMLElement, session: DocSession, hooks: EditorHooks): DocEditor {
+/**
+ * What the editor needs from a doc session: the shared text, everyone's carets (awareness), and whether this person may
+ * edit. A live DocSession (collab.ts) provides them; so can a local Y.Doc, as on the showcase site.
+ */
+export interface EditorSession {
+  text: Y.Text;
+  awareness: Awareness;
+  canEdit: boolean;
+}
+
+export function createEditor(parent: HTMLElement, session: EditorSession, hooks: EditorHooks): DocEditor {
   const editable = new Compartment();
   const undoManager = new Y.UndoManager(session.text);
   let pointerTimer = 0;
@@ -48,7 +60,13 @@ export function createEditor(parent: HTMLElement, session: DocSession, hooks: Ed
     state: EditorState.create({
       doc: session.text.toString(),
       extensions: [
-        keymap.of([...yUndoManagerKeymap, ...defaultKeymap, indentWithTab]),
+        // Formatting shortcuts first, so Ctrl/⌘+I is italic rather than CodeMirror's "select parent syntax".
+        keymap.of([
+          { key: "Mod-b", run: (v) => applyFormat(v, "bold") },
+          { key: "Mod-i", run: (v) => applyFormat(v, "italic") },
+          { key: "Mod-e", run: (v) => applyFormat(v, "code") },
+          ...yUndoManagerKeymap, ...defaultKeymap, indentWithTab,
+        ]),
         drawSelection(),
         dropCursor(),
         EditorView.lineWrapping,
@@ -57,7 +75,10 @@ export function createEditor(parent: HTMLElement, session: DocSession, hooks: Ed
         yCollab(session.text, session.awareness, { undoManager }),
         editable.of(editableExtensions(session.canEdit)),
         placeholder(session.canEdit ? "Start writing. [[ links a doc, # adds a tag." : "This doc is empty."),
-        autocompletion({ override: [linkCompletion(hooks), mentionCompletion(hooks)], icons: false }),
+        // Suggestions start 40 ms after a keystroke rather than CodeMirror's 100. Any edit that isn't the user's own
+        // typing, such as a collaborator's arriving, restarts that wait (and cancels a lookup in progress), so a short
+        // wait still finishes between the batches of others' edits, which arrive about every 250 ms.
+        autocompletion({ override: [linkCompletion(hooks), mentionCompletion(hooks)], icons: false, activateOnTypingDelay: 40 }),
         linkMarks,
         tagMarks,
         commentChips(hooks),
@@ -176,7 +197,7 @@ class CommentChip extends WidgetType {
     chip.title = "Page comment: click to open";
     const icon = document.createElement("span");
     icon.className = "cm-comment-chip-icon";
-    icon.textContent = "💬";
+    icon.append(createIcon(MessageSquare));
     const text = document.createElement("span");
     text.textContent = this.label;
     chip.append(icon, text);
@@ -276,11 +297,23 @@ function mentionChips(hooks: EditorHooks) {
 
 /** Typing @ suggests people in the organisation; picking one inserts <@id>, shown as their name. */
 function mentionCompletion(hooks: EditorHooks) {
+  // Lookups are kept for a while: when a collaborator's edit cancels a lookup halfway, CodeMirror asks again, and the
+  // second ask then gets the answer already on its way instead of starting over (and being cancelled again).
+  const lookups = new Map<string, { at: number; people: ReturnType<NonNullable<EditorHooks["people"]>> }>();
+  const lookUp = (query: string) => {
+    const key = query.toLowerCase();
+    const cached = lookups.get(key);
+    if (cached && Date.now() - cached.at < 30_000) return cached.people;
+    const people = hooks.people!(query);
+    lookups.set(key, { at: Date.now(), people });
+    people.catch(() => lookups.delete(key));
+    return people;
+  };
   return async (context: CompletionContext): Promise<CompletionResult | null> => {
     const before = context.matchBefore(/(?:^|\s)@[^\s@<>[\]]{0,30}$/);
     if (!before || !hooks.people) return null;
     const at = before.from + before.text.indexOf("@");
-    const people = await hooks.people(before.text.slice(before.text.indexOf("@") + 1));
+    const people = await lookUp(before.text.slice(before.text.indexOf("@") + 1));
     return {
       from: at,
       filter: false,
@@ -356,7 +389,8 @@ const theme = EditorView.theme({
     verticalAlign: "bottom", padding: "0 8px", borderRadius: "8px", cursor: "pointer", fontSize: "0.9em",
     backgroundColor: "color-mix(in oklab, var(--primary) 10%, transparent)", border: "1px solid color-mix(in oklab, var(--primary) 25%, transparent)",
   },
-  ".cm-comment-chip-icon": { fontSize: "0.85em" },
+  ".cm-comment-chip-icon": { display: "inline-flex", color: "var(--primary)" },
+  ".cm-comment-chip-icon svg": { width: "0.95em", height: "0.95em" },
   ".cm-mention": { color: "var(--primary)", fontWeight: "600", backgroundColor: "color-mix(in oklab, var(--primary) 10%, transparent)", borderRadius: "6px", padding: "0 3px" },
   ".cm-tooltip.cm-tooltip-autocomplete": { border: "1px solid var(--border)", borderRadius: "12px", backgroundColor: "var(--popover)", color: "var(--popover-foreground)", overflow: "hidden" },
   ".cm-tooltip-autocomplete ul li[aria-selected]": { backgroundColor: "var(--accent)", color: "var(--accent-foreground)" },

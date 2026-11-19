@@ -11,6 +11,7 @@ public sealed class Doc
     public const int MaxTitleLength = 200;
     public const int MaxFolderLength = 500;
     public const int MaxContentLength = 1_000_000;
+    public const int MaxIconLength = 64;
 
     public Guid Id { get; init; } = Guid.CreateVersion7();
 
@@ -55,6 +56,12 @@ public sealed class Doc
 
     /// <summary>When the last <see cref="DocRevision"/> for an edit was written, so editing adds at most one every few minutes.</summary>
     public DateTime? LastRevisionAt { get; set; }
+
+    /// <summary>A Lucide icon name (e.g. <c>book-open</c>) to show for the doc in the graph and lists; null for the default.</summary>
+    public string? Icon { get; set; }
+
+    /// <summary>The colour for the doc's icon, <c>#rrggbb</c>; null for the theme's.</summary>
+    public string? Color { get; set; }
 
     public void Place(string folder, string title)
     {
@@ -159,6 +166,77 @@ public sealed class DocTag
     public required string Tag { get; init; }
 
     public required Guid OrganizationId { get; init; }
+}
+
+/// <summary>
+/// How a <c>#tag</c> looks, across the organisation: an optional icon and colour. Tags themselves live in docs' text
+/// (<see cref="DocTag"/>); this only styles them, and no row means the defaults.
+/// </summary>
+public sealed class DocTagStyle
+{
+    public const int MaxTagLength = 100;
+
+    public required Guid OrganizationId { get; init; }
+
+    /// <summary>The tag, lowercase and without the <c>#</c>.</summary>
+    public required string Tag { get; init; }
+
+    public string? Icon { get; set; }
+
+    public string? Color { get; set; }
+}
+
+/// <summary>Rules for a doc's icon and colour. Any well-formed name is accepted: the icon set lives in the browser.</summary>
+public static partial class DocAppearance
+{
+    /// <summary>Lowercase words joined by dashes, like Lucide's names (<c>file-text</c>, <c>bar-chart-3</c>). Null or blank clears it.</summary>
+    public static string? NormalizeIcon(string? icon, out string? error)
+    {
+        var trimmed = icon?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            error = null;
+            return null;
+        }
+
+        error = trimmed.Length > Doc.MaxIconLength || !IconName().IsMatch(trimmed) ? "That isn't an icon name." : null;
+        return error is null ? trimmed : null;
+    }
+
+    /// <summary>A <c>#rrggbb</c> colour, stored lowercase. Null or blank clears it.</summary>
+    public static string? NormalizeColor(string? color, out string? error)
+    {
+        var trimmed = color?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            error = null;
+            return null;
+        }
+
+        error = HexColor().IsMatch(trimmed) ? null : "Colours are written as #rrggbb.";
+        return error is null ? trimmed : null;
+    }
+
+    /// <summary>A tag as <c>#tag</c> extraction finds it (letters, digits, _ / -, not only digits and symbols), lowercase, without the <c>#</c>.</summary>
+    public static string? NormalizeTag(string? tag, out string? error)
+    {
+        var trimmed = (tag ?? "").Trim().TrimStart('#').TrimEnd('/').ToLowerInvariant();
+        error = trimmed.Length == 0 || trimmed.Length > DocTagStyle.MaxTagLength || !TagName().IsMatch(trimmed) || !HasLetter().IsMatch(trimmed)
+            ? "That isn't a tag." : null;
+        return error is null ? trimmed : null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[\p{L}\p{N}_/-]+$")]
+    private static partial System.Text.RegularExpressions.Regex TagName();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"[\p{L}_]")]
+    private static partial System.Text.RegularExpressions.Regex HasLetter();
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)*$")]
+    private static partial System.Text.RegularExpressions.Regex IconName();
+
+    [System.Text.RegularExpressions.GeneratedRegex("^#[0-9a-f]{6}$")]
+    private static partial System.Text.RegularExpressions.Regex HexColor();
 }
 
 /// <summary>Rules for folder paths and titles.</summary>

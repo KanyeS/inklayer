@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Eye, FileText, MessageSquare } from "lucide-react";
 import { Badge } from "@inklayer/ui/components/badge";
 import { ApiError, get } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
+import { enhance } from "@/docs/enhance";
 import { renderMarkdown } from "@/docs/reading";
 
 interface PublicReply {
@@ -76,13 +77,17 @@ function SharedDoc({ title, doc }: { title: string; doc: NonNullable<PublicShare
       return found ? { href: `/s/${encodeURIComponent(found.token)}${link.heading ? `#${encodeURIComponent(link.heading)}` : ""}` } : null;
     },
   }), [doc]);
+  const body = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (body.current) void enhance(body.current);
+  }, [html]);
 
   return (
     <article>
       <p className="mb-2 flex items-center gap-2 text-sm text-muted-foreground"><FileText className="size-4" />Doc · updated {timeAgo(doc.updatedAt)}</p>
       <h1 className="mb-6 font-heading text-3xl font-bold">{title}</h1>
       {/* eslint-disable-next-line react/no-danger -- rendered by renderMarkdown, which escapes all raw HTML */}
-      <div className="doc-reading" dangerouslySetInnerHTML={{ __html: html }} />
+      <div ref={body} className="doc-reading" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );
 }

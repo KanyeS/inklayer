@@ -10,9 +10,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "6.20.4",
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-markdown": "6.5.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
     "@fontsource-variable/ibm-plex-sans": "^5.3.0",
     "@fontsource-variable/outfit": "^5.3.0",
     "@inklayer/overlay": "*",
-    "@inklayer/ui": "*"
+    "@inklayer/ui": "*",
+    "@lezer/highlight": "1.2.5",
+    "lucide": "^1.76.0",
+    "y-codemirror.next": "0.3.6",
+    "y-protocols": "1.0.7",
+    "yjs": "13.6.33"
   }
 }

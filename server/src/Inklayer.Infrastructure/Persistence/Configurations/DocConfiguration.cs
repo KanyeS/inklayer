@@ -16,6 +16,8 @@ internal sealed class DocConfiguration : IEntityTypeConfiguration<Doc>
         builder.Property(d => d.PathKey).HasMaxLength(Doc.MaxFolderLength + Doc.MaxTitleLength + 1);
         builder.Property(d => d.TitleKey).HasMaxLength(Doc.MaxTitleLength);
         builder.Property(d => d.Content).HasMaxLength(Doc.MaxContentLength);
+        builder.Property(d => d.Icon).HasMaxLength(Doc.MaxIconLength);
+        builder.Property(d => d.Color).HasMaxLength(7);
         builder.Property(d => d.Version).IsConcurrencyToken();
 
         // One doc per path among those that aren't deleted; deleted docs keep their history.
@@ -75,6 +77,18 @@ internal sealed class DocLinkConfiguration : IEntityTypeConfiguration<DocLink>
         builder.HasOne<Doc>().WithMany().HasForeignKey(l => l.SourceDocId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Annotation>().WithMany().HasForeignKey(l => l.SourceAnnotationId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Doc>().WithMany().HasForeignKey(l => l.TargetDocId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+internal sealed class DocTagStyleConfiguration : IEntityTypeConfiguration<DocTagStyle>
+{
+    public void Configure(EntityTypeBuilder<DocTagStyle> builder)
+    {
+        builder.HasKey(l => new { l.OrganizationId, l.Tag });
+        builder.Property(l => l.Tag).HasMaxLength(DocTagStyle.MaxTagLength);
+        builder.Property(l => l.Icon).HasMaxLength(Doc.MaxIconLength);
+        builder.Property(l => l.Color).HasMaxLength(7);
+        builder.HasOne<Organization>().WithMany().HasForeignKey(l => l.OrganizationId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

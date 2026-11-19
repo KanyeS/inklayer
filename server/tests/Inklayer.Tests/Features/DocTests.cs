@@ -7,9 +7,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Inklayer.Tests.Features;
 
-public sealed record DocSummaryDto(Guid Id, string Folder, string Title, List<string> Tags);
+public sealed record DocSummaryDto(Guid Id, string Folder, string Title, List<string> Tags, string? Icon = null, string? Color = null);
 
-public sealed record DocTreeDto(List<string> Folders, List<DocSummaryDto> Docs, bool CanEdit);
+public sealed record DocTreeDto(List<string> Folders, List<DocSummaryDto> Docs, bool CanEdit, List<DocTagDto>? Tags = null);
 
 public sealed record DocLinkDto(string Text, Guid? DocId, string? Title);
 
@@ -17,17 +17,17 @@ public sealed record DocCommentLinkDto(Guid AnnotationId, string Body);
 
 public sealed record DocDto(
     Guid Id, string Folder, string Title, int Version, bool CanEdit, List<string> Tags, List<DocSummaryDto> Backlinks,
-    List<DocCommentLinkDto> CommentBacklinks, List<DocLinkDto> Links, List<Guid> CommentLinks);
+    List<DocCommentLinkDto> CommentBacklinks, List<DocLinkDto> Links, List<Guid> CommentLinks, string? Icon = null, string? Color = null);
 
 public sealed record DocChangedDto(DocDto Doc, List<Guid> RelinkDocs);
 
 public sealed record DocSearchDto(Guid Id, string Title, string Snippet);
 
-public sealed record DocTagDto(string Tag, int Count);
+public sealed record DocTagDto(string Tag, int Count, string? Icon = null, string? Color = null);
 
 public sealed record DocGraphDto(List<DocGraphNodeDto> Nodes, List<DocGraphEdgeDto> Edges);
 
-public sealed record DocGraphNodeDto(string Id, string Kind, string Label);
+public sealed record DocGraphNodeDto(string Id, string Kind, string Label, string? Icon = null, string? Color = null);
 
 public sealed record DocGraphEdgeDto(string Source, string Target);
 
@@ -200,5 +200,68 @@ public sealed class DocTests(InklayerApiFactory factory)
         admin.Dispose();
         commenter.Dispose();
         viewer.Dispose();
+    }
+
+    [Fact]
+    public async Task Commenters_give_a_doc_an_icon_and_colour_shown_in_the_tree_and_graph()
+    {
+        var (_, orgId, commenter, viewer) = await OrgAsync();
+        var doc = await CreateAsync(commenter, orgId, "Launch plan");
+        var before = await GetAsync(commenter, doc.Id);
+
+        // Names and colours are tidied: any case in, lowercase stored.
+        using (var response = await commenter.PutJsonAsync($"/api/docs/{doc.Id}/appearance", new { icon = " Rocket ", color = "#7C3AED" }))
+        {
+            var updated = await response.ReadAsync<DocDto>();
+            Assert.Equal("rocket", updated.Icon);
+            Assert.Equal("#7c3aed", updated.Color);
+            Assert.Equal(before.Version, updated.Version); // not a change to the doc: renames don't conflict with it
+        }
+
+        var tree = await (await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs", UriKind.Relative))).ReadAsync<DocTreeDto>();
+        Assert.Equal(("rocket", "#7c3aed"), tree.Docs.Where(d => d.Id == doc.Id).Select(d => (d.Icon, d.Color)).Single());
+        var graph = await (await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs/graph", UriKind.Relative))).ReadAsync<DocGraphDto>();
+        Assert.Equal(("rocket", "#7c3aed"), graph.Nodes.Where(n => n.Id == $"d:{doc.Id}").Select(n => (n.Icon, n.Color)).Single());
+
+        // Viewers can't; malformed values are refused; empty values go back to the default.
+        await viewer.PutJsonAsync($"/api/docs/{doc.Id}/appearance", new { icon = "star", color = (string?)null }).ExpectAsync(HttpStatusCode.Forbidden);
+        await commenter.PutJsonAsync($"/api/docs/{doc.Id}/appearance", new { icon = "<script>", color = (string?)null }).ExpectAsync(HttpStatusCode.BadRequest);
+        await commenter.PutJsonAsync($"/api/docs/{doc.Id}/appearance", new { icon = "star", color = "red" }).ExpectAsync(HttpStatusCode.BadRequest);
+        using (var response = await commenter.PutJsonAsync($"/api/docs/{doc.Id}/appearance", new { icon = "", color = (string?)null }))
+        {
+            var cleared = await response.ReadAsync<DocDto>();
+            Assert.Null(cleared.Icon);
+            Assert.Null(cleared.Color);
+        }
+    }
+
+    [Fact]
+    public async Task Tags_have_an_optional_icon_and_colour_for_the_whole_organisation()
+    {
+        var (_, orgId, commenter, viewer) = await OrgAsync();
+        var doc = await CreateAsync(commenter, orgId, "Launch plan");
+        await WriteAsync(doc.Id, "Ship it. #launch #mobile");
+
+        // Any case, with or without the #: stored as the tag.
+        using (var response = await commenter.PutJsonAsync($"/api/orgs/{orgId}/docs/tags/%23Launch", new { icon = "rocket", color = "#EA580C" }))
+        {
+            var style = await response.ReadAsync<DocTagDto>();
+            Assert.Equal(new DocTagDto("launch", 1, "rocket", "#ea580c"), style);
+        }
+
+        var tree = await (await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs", UriKind.Relative))).ReadAsync<DocTreeDto>();
+        Assert.Contains(new DocTagDto("launch", 1, "rocket", "#ea580c"), tree.Tags!);
+        Assert.Contains(new DocTagDto("mobile", 1), tree.Tags!); // unstyled: the defaults
+        var tags = await (await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs/tags", UriKind.Relative))).ReadAsync<List<DocTagDto>>();
+        Assert.Contains(new DocTagDto("launch", 1, "rocket", "#ea580c"), tags);
+
+        // A colour alone is fine; viewers can't; malformed tags are refused; clearing both removes the style.
+        await commenter.PutJsonAsync($"/api/orgs/{orgId}/docs/tags/mobile", new { icon = (string?)null, color = "#2563eb" }).ExpectAsync(HttpStatusCode.OK);
+        await viewer.PutJsonAsync($"/api/orgs/{orgId}/docs/tags/launch", new { icon = "star", color = (string?)null }).ExpectAsync(HttpStatusCode.Forbidden);
+        await commenter.PutJsonAsync($"/api/orgs/{orgId}/docs/tags/1234", new { icon = "star", color = (string?)null }).ExpectAsync(HttpStatusCode.BadRequest);
+        await commenter.PutJsonAsync($"/api/orgs/{orgId}/docs/tags/launch", new { icon = "", color = "" }).ExpectAsync(HttpStatusCode.OK);
+        tree = await (await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs", UriKind.Relative))).ReadAsync<DocTreeDto>();
+        Assert.Contains(new DocTagDto("launch", 1), tree.Tags!);
+        Assert.Contains(new DocTagDto("mobile", 1, null, "#2563eb"), tree.Tags!);
     }
 }
