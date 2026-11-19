@@ -13,7 +13,9 @@ Comment on any web page, right on the page, with the browser extension (Chrome o
 | `server/` | ASP.NET Core (.NET 10) API and auth |
 | `client/apps/extension/` | Browser extension (Manifest V3, Chrome and Firefox) that shows and adds comments on pages |
 | `client/apps/viewer/` | Web app: organisations, members, projects and their commented pages (React) |
-| `client/packages/overlay/` | Annotation overlay drawn on pages: anchoring, drawing tools |
+| `client/packages/overlay/` | Annotation overlay drawn on pages: anchoring, drawing tools, and the small DOM helpers the extension and site share |
+| `client/packages/docs/` | Docs core shared by the viewer and the site: Markdown rendering, the live editor, formatting |
+| `client/packages/ui/` | The theme and shadcn components |
 | `client/apps/site/` | The showcase at [inklayer.online](https://inklayer.online), built on the overlay package (`npm run build:site`) |
 | `deploy/` | Dockerfile, docker-compose, reverse-proxy examples |
 
@@ -78,7 +80,9 @@ Requires Node.js 22.
 ```bash
 cd client
 npm ci
-npm test             # overlay anchoring tests
+npm run lint         # Biome: lint and formatting (npm run format fixes what it can)
+npm run typecheck
+npm test             # unit tests, plus architecture tests (client/test/) that check the code's structure
 npm run build        # Chrome: client/apps/extension/dist, Firefox: client/apps/extension/dist-firefox
 ```
 

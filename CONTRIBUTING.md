@@ -21,5 +21,11 @@ The client licence check allows `EPL-2.0` and `Unlicense` for these; don't add o
 
 Known traps: SingleFile, MinIO, Duende IdentityServer, MediatR/AutoMapper (newer versions), MassTransit v9+, FluentAssertions v8+, ImageSharp, Redis 7.4+ (use Valkey).
 
+## Client code (TypeScript)
+- **Lint and format with Biome** (`client/biome.json`): `npm run lint` checks, `npm run format` fixes. CI fails on any finding. A rule may be suppressed only with `// biome-ignore <rule>: <why>` on the line, saying why it's right there.
+- **Architecture tests** (`client/test/architecture.test.ts`) read the source and enforce the layout: no file over 800 lines; no stylesheets in TypeScript strings (shadow-DOM styles live in `.css` files imported with `?inline`); no dead CSS in the panel's and docs' stylesheets; apps don't import each other's source (share code through `packages/`); content scripts don't pull in React; the extension's page requests match what the background handles. If one fails, fix the structure rather than the test.
+- **Pure logic goes in its own module with a unit test.** A module whose doc comment says it's unit-tested must have a test that imports it (checked by the architecture tests).
+- **Shared code:** DOM helpers (`h`, `lineIcon`, `copyText`, `shadowTokens`, `followColorScheme`) are in `@inklayer/overlay`; the docs core (Markdown, editor, formatting) is in `@inklayer/docs`; theme and components in `@inklayer/ui`.
+
 ## Commits
 Make one focused commit per feature, and keep the build and tests passing on every commit.

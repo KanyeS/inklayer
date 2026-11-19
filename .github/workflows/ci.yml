@@ -48,7 +48,7 @@ jobs:
           -override ../.github/licenses/nuget-overrides.json
 
   client:
-    name: Extension — typecheck, test, build, licences
+    name: Client — lint, typecheck, test, build, licences
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -61,6 +61,7 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
