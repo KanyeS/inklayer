@@ -23,13 +23,25 @@ interface TabPort {
 
 const STORAGE_KEY = "presenceTabs";
 const STOP_AFTER_MS = 30_000;
-const RETRY_AFTER_MS = 15_000;
+/**
+ * How long one connection attempt may take. SignalR doesn't limit how long a WebSocket may take to open, and after a
+ * network change (a VPN, sleep, switching Wi-Fi) the browser can leave one pending forever, which used to leave live
+ * cursors on "Connecting…" until the extension was reloaded.
+ */
+const CONNECT_TIMEOUT_MS = 15_000;
+/** Waits between attempts after a connection fails or drops: quick at first, then every 15 seconds. */
+const RETRY_DELAYS_MS = [0, 2_000, 5_000, 15_000];
 
 const ports = new Set<TabPort>();
 /** Page hash → how many of this browser's tabs are on it. */
 const joined = new Map<string, number>();
+/**
+ * The hub being started or in use. Anything that gives up on a hub sets this to null (or another hub) first, so events
+ * from an abandoned hub, which may still finish starting or closing later, are ignored.
+ */
 let connection: HubConnection | null = null;
 let starting: Promise<void> | null = null;
+let failures = 0;
 let stopTimer: ReturnType<typeof setTimeout> | undefined;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 let lastStatus: PresenceDown = { t: "status", status: "connecting" };
@@ -157,9 +169,13 @@ function toAll(message: PresenceDown): void {
 
 /* -------------------------------------------------------------------- the hub connection */
 
+/**
+ * Opens the hub connection if there isn't one. Each attempt is a fresh hub with a time limit; SignalR's own automatic
+ * reconnect isn't used, because one of its attempts can hang with no way to cancel it.
+ */
 function connect(): Promise<void> {
   clearTimeout(retryTimer);
-  if (connection) return Promise.resolve(); // connected or reconnecting; pages are joined when it's ready
+  if (connection) return Promise.resolve(); // starting or connected; pages are joined when it's ready
   starting ??= (async () => {
     const { serverUrl } = await getSettings();
     if (!serverUrl) throw new Error("Not signed in to Inklayer.");
@@ -168,40 +184,60 @@ function connect(): Promise<void> {
       toAll({ t: "status", status: "offline", error: "Live cursors are turned off on this server." });
       return;
     }
+    if (connection || ports.size === 0) return; // connected meanwhile, or every live tab went away
     const hub = new HubConnectionBuilder()
       .withUrl(new URL("/api/presence/hub", serverUrl).href, {
         transport: HttpTransportType.WebSockets,
         skipNegotiation: true,
-        // Called again on every reconnect, so each connection attempt gets a fresh ticket.
         accessTokenFactory: async () => (await postJson<{ ticket: string }>("/api/presence/ticket", {})).ticket,
       })
-      .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
       .configureLogging(LogLevel.Warning)
       .build();
+    connection = hub;
+    const current = () => connection === hub;
 
-    hub.on("peerJoin", (page: string, peer: PresencePeer) => toPage(page, { t: "peerJoin", peer }));
-    hub.on("peerLeave", (page: string, id: string) => toPage(page, { t: "peerLeave", id }));
-    hub.on("cursor", (page: string, id: string, data: unknown) => toPage(page, { t: "cursor", id, data }));
-    hub.on("select", (page: string, id: string, data: unknown) => toPage(page, { t: "select", id, data }));
-    hub.on("idle", (page: string, id: string) => toPage(page, { t: "idle", id }));
-    hub.onreconnecting(() => toAll({ t: "status", status: "connecting" }));
-    // The server forgets rooms when a connection drops: join them again.
-    hub.onreconnected(() => void joinAll());
-    hub.onclose((error) => {
-      if (connection === hub) connection = null;
-      toAll({ t: "status", status: "offline", error: error ? "Lost the connection to Inklayer." : undefined });
-      if (ports.size > 0) retryTimer = setTimeout(() => void connect(), RETRY_AFTER_MS);
+    const forward = (page: string, message: PresenceDown) => {
+      if (current()) toPage(page, message);
+    };
+    hub.on("peerJoin", (page: string, peer: PresencePeer) => forward(page, { t: "peerJoin", peer }));
+    hub.on("peerLeave", (page: string, id: string) => forward(page, { t: "peerLeave", id }));
+    hub.on("cursor", (page: string, id: string, data: unknown) => forward(page, { t: "cursor", id, data }));
+    hub.on("select", (page: string, id: string, data: unknown) => forward(page, { t: "select", id, data }));
+    hub.on("idle", (page: string, id: string) => forward(page, { t: "idle", id }));
+    hub.onclose(() => {
+      if (!current()) return; // given up on, or stopped on purpose
+      connection = null;
+      // Dropped (network change, server restart): try again straight away, then back off.
+      toAll({ t: "status", status: "connecting" });
+      scheduleRetry();
     });
 
     toAll({ t: "status", status: "connecting" });
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await hub.start();
+      await Promise.race([
+        hub.start(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Timed out connecting to Inklayer.")), CONNECT_TIMEOUT_MS);
+        }),
+      ]);
     } catch (error) {
-      toAll({ t: "status", status: "offline", error: "Couldn't connect to Inklayer." });
-      if (ports.size > 0) retryTimer = setTimeout(() => void connect(), RETRY_AFTER_MS);
+      if (current()) {
+        connection = null;
+        toAll({ t: "status", status: "offline", error: "Couldn't connect to Inklayer. Trying again…" });
+        scheduleRetry();
+      }
+      void hub.stop().catch(() => undefined); // may never settle if the socket is stuck; it's abandoned either way
       throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    connection = hub;
+    if (!current()) {
+      void hub.stop().catch(() => undefined); // stopped while starting
+      return;
+    }
+    failures = 0;
+    // The server forgets rooms with each connection: join them all.
     await joinAll();
   })()
     .catch(() => undefined)
@@ -211,13 +247,22 @@ function connect(): Promise<void> {
   return starting;
 }
 
+/** Tries again after the next wait in RETRY_DELAYS_MS, while any tab is still live. */
+function scheduleRetry(): void {
+  clearTimeout(retryTimer);
+  if (ports.size === 0) return;
+  const delay = RETRY_DELAYS_MS[Math.min(failures, RETRY_DELAYS_MS.length - 1)]!;
+  failures++;
+  retryTimer = setTimeout(() => void connect(), delay);
+}
+
 async function joinAll(): Promise<void> {
   for (const page of joined.keys()) await joinPage(page);
   toAll({ t: "status", status: "live" });
 }
 
 async function joinPage(page: string): Promise<void> {
-  if (!connection) return;
+  if (connection?.state !== HubConnectionState.Connected) return;
   try {
     const peers = await connection.invoke<PresencePeer[]>("Join", page);
     toPage(page, { t: "peers", peers });
@@ -229,10 +274,12 @@ async function joinPage(page: string): Promise<void> {
 
 async function stopConnection(): Promise<void> {
   clearTimeout(retryTimer);
+  failures = 0;
   const hub = connection;
   connection = null;
   lastStatus = { t: "status", status: "connecting" };
-  await hub?.stop().catch(() => undefined);
+  // Not awaited: stopping a hub whose socket is stuck opening never finishes, and signing out mustn't wait on it.
+  void hub?.stop().catch(() => undefined);
 }
 
 /* -------------------------------------------------------------------- page identity */
