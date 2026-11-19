@@ -6,8 +6,6 @@ Open-source, self-hosted web page annotation for UX designers, developers and QA
 
 Comment on any web page, right on the page, with the browser extension (Chrome or Firefox): pin comments, highlight text or draw, attached to specific elements or freehand. Everyone in the project who has the extension sees them on the page. Every change is kept with a full history and timestamps. Access is controlled by roles, and sign-in uses Google or your own SSO provider (JumpCloud, Okta, Entra ID or any OpenID Connect provider).
 
-> **Status:** early development. Nothing is usable yet. See [docs/PLAN.md](docs/PLAN.md) for the design and roadmap.
-
 ## Components
 
 | Path | What it is |
