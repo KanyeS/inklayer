@@ -2,7 +2,7 @@
 # Build context: repository root.  docker build -f deploy/Dockerfile -t inklayer-server .
 
 # Web viewer: static files that end up in the server's wwwroot.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS client
+FROM --platform=$BUILDPLATFORM node:26-alpine AS client
 WORKDIR /src/client
 COPY client/ ./
 RUN npm ci --no-audit --no-fund \
