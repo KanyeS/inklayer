@@ -75,7 +75,7 @@ Then open <http://localhost:5048/auth/login>.
 
 ### Browser extension
 
-Requires Node.js 22.
+Requires Node.js 26 (LTS; `client/.nvmrc`).
 
 ```bash
 cd client
