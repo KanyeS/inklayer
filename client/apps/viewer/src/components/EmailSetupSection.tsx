@@ -2,6 +2,7 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { GuideLink } from "@/components/GuideLink";
 import { SectionTitle } from "@/components/Layout";
 import { api } from "@/lib/api";
 import { queries } from "@/lib/queries";
@@ -30,7 +31,7 @@ export function EmailSetupSection() {
         <p className="max-w-2xl text-sm text-muted-foreground">
           Not set up. To let organisations email notifications, set <code>INKLAYER_SMTP_HOST</code>,{" "}
           <code>INKLAYER_SMTP_PORT</code>, <code>INKLAYER_SMTP_USERNAME</code>, <code>INKLAYER_SMTP_PASSWORD</code> and{" "}
-          <code>INKLAYER_SMTP_FROM</code> on the server (Amazon SES works), then restart.
+          <code>INKLAYER_SMTP_FROM</code> on the server (Amazon SES works), then restart. <GuideLink section="email" />
         </p>
       )}
     </section>

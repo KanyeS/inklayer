@@ -4,6 +4,7 @@ import { Bot, Check, Copy, ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useMe } from "@/App";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { GuideLink } from "@/components/GuideLink";
 import { ErrorText, SectionTitle } from "@/components/Layout";
 import { api } from "@/lib/api";
 import { dateTime, timeAgo } from "@/lib/format";
@@ -42,7 +43,8 @@ export function ConnectedApps() {
         <>
           <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
             AI assistants such as Claude can use Inklayer as you: read and reply to comments, and read and edit docs,
-            wherever your role allows. Add this MCP server address to the app, then sign in and allow it.
+            wherever your role allows. Add this MCP server address to the app, then sign in and allow it.{" "}
+            <GuideLink section="ai-assistants-mcp" />
           </p>
           <CopyField value={mcpUrl} className="mb-4" />
           <McpSetup url={mcpUrl} />

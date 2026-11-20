@@ -152,7 +152,7 @@ internal static class InklayerTools
 
     /* ------------------------------------------------------------------ issue trackers */
 
-    [McpServerTool(Name = "list_issue_trackers", ReadOnly = true), Description("The issue trackers (GitHub, Jira, Linear) connected to a project, to create issues in.")]
+    [McpServerTool(Name = "list_issue_trackers", ReadOnly = true), Description("The issue trackers (GitHub, GitLab, Forgejo/Gitea, Jira, Linear, Azure DevOps) connected to a project, to create issues in.")]
     public static async Task<string> ListIssueTrackers([Description("Project id")] Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct) =>
         ToolResults.ToJson(ToolResults.Value<List<TrackerChoiceResponse>>(await IssueEndpoints.ChoicesAsync(projectId, access, db, ct)));
 

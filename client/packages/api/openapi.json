@@ -1815,7 +1815,7 @@
         "tags": [
           "Issues"
         ],
-        "summary": "Connect GitHub, Jira Cloud or Linear (checked before saving)",
+        "summary": "Connect an issue tracker (checked before saving)",
         "parameters": [
           {
             "name": "projectId",
@@ -4929,7 +4929,10 @@
             "enum": [
               "github",
               "jira",
-              "linear"
+              "linear",
+              "azuredevops",
+              "gitlab",
+              "forgejo"
             ],
             "type": "string"
           },
@@ -5934,7 +5937,10 @@
             "enum": [
               "github",
               "jira",
-              "linear"
+              "linear",
+              "azuredevops",
+              "gitlab",
+              "forgejo"
             ],
             "type": "string"
           },
@@ -5964,7 +5970,10 @@
             "enum": [
               "github",
               "jira",
-              "linear"
+              "linear",
+              "azuredevops",
+              "gitlab",
+              "forgejo"
             ],
             "type": "string"
           },

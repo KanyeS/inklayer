@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CircleCheck, CircleDot, ExternalLink, Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { GuideLink } from "@/components/GuideLink";
 import { ErrorText } from "@/components/Layout";
 import { api } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
@@ -19,7 +20,14 @@ export type Issue = IssueResponse;
 export type TrackerKind = TrackerConnectionResponse["kind"];
 type Tracker = TrackerConnectionResponse;
 
-export const TRACKER_NAMES: Record<TrackerKind, string> = { github: "GitHub", jira: "Jira", linear: "Linear" };
+export const TRACKER_NAMES: Record<TrackerKind, string> = {
+  github: "GitHub",
+  gitlab: "GitLab",
+  forgejo: "Forgejo",
+  jira: "Jira",
+  linear: "Linear",
+  azuredevops: "Azure DevOps",
+};
 
 /** Issues linked to a comment: tracker, key and whether it's still open. */
 export function IssueChips({ issues }: { issues: Issue[] }) {
@@ -122,12 +130,40 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
 
 const HELP: Record<TrackerKind, string> = {
   github: "A fine-grained personal access token with Issues: read and write on the repository.",
+  gitlab:
+    "A personal, project or group access token with the api scope, from someone with at least the Reporter role in the project.",
+  forgejo:
+    "An access token (Settings → Applications) with issue: Read and write, and repository: Read. Codeberg by default; for your own Forgejo or Gitea, give its address.",
   jira: "An Atlassian API token (id.atlassian.com → Security → API tokens) for the account email below.",
   linear:
     "A personal API key (Linear → Settings → Security & access). The team id is in the team's settings, or copy it with Cmd/Ctrl+K → “Copy model UUID”.",
+  azuredevops:
+    "A personal access token (User settings → Personal access tokens) with the Work Items: Read & write scope, for this organisation.",
 };
 
-/** A project's connected issue trackers, for project Admins: any number of GitHub repositories, Jira projects and Linear teams. */
+const TOKEN_LABEL: Record<TrackerKind, string> = {
+  github: "Token",
+  gitlab: "Access token",
+  forgejo: "Access token",
+  jira: "API token",
+  linear: "API key",
+  azuredevops: "Personal access token",
+};
+
+/** Each tracker's section in the integrations setup guide. */
+const GUIDE_SECTION = {
+  github: "github",
+  gitlab: "gitlab",
+  forgejo: "codeberg-forgejo-and-gitea",
+  jira: "jira-cloud",
+  linear: "linear",
+  azuredevops: "azure-devops",
+} as const satisfies Record<TrackerKind, string>;
+
+/** Picker labels where the tracker covers more than its name says. */
+const PICKER_LABEL: Partial<Record<TrackerKind, string>> = { forgejo: "Codeberg, Forgejo, Gitea" };
+
+/** A project's connected issue trackers, for project Admins: any number of each kind (repositories, projects, teams). */
 export function IssueTrackersSection({ projectId }: { projectId: string }) {
   const trackers = useQuery(queries.issueTrackers(projectId));
   const { run, error } = useAction();
@@ -146,7 +182,7 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
         <h2 className="font-heading text-base font-semibold">Issue trackers</h2>
         <p className="text-sm text-muted-foreground">
           Commenters can turn comments into issues. Inklayer checks linked issues every few minutes: closing one
-          resolves its comment, reopening it reopens the comment.
+          resolves its comment, reopening it reopens the comment. <GuideLink section="issue-trackers" />
         </p>
       </div>
       <ErrorText error={error ?? trackers.error} />
@@ -264,7 +300,7 @@ function AddTracker({ projectId }: { projectId: string }) {
               setSettings({});
             }}
           >
-            {TRACKER_NAMES[k]}
+            {PICKER_LABEL[k] ?? TRACKER_NAMES[k]}
           </Button>
         ))}
       </div>
@@ -283,10 +319,28 @@ function AddTracker({ projectId }: { projectId: string }) {
         </div>
       )}
       {kind === "linear" && text("teamId", "Team id", "a1b2c3d4-…")}
+      {kind === "gitlab" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {text("projectKey", "Project path", "acme/website")}
+          {text("site", "Instance address (self-managed only)", "https://gitlab.com", false)}
+        </div>
+      )}
+      {kind === "forgejo" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {text("owner", "Owner", "acme")}
+          {text("repo", "Repository", "website")}
+          {text("site", "Instance address", "https://codeberg.org", false)}
+        </div>
+      )}
+      {kind === "azuredevops" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {text("site", "Organisation address", "https://dev.azure.com/acme")}
+          {text("projectKey", "Project", "Web Shop")}
+          {text("issueType", "Work item type", "Bug", false)}
+        </div>
+      )}
       <Field>
-        <FieldLabel htmlFor="tracker-token">
-          {kind === "linear" ? "API key" : kind === "jira" ? "API token" : "Token"}
-        </FieldLabel>
+        <FieldLabel htmlFor="tracker-token">{TOKEN_LABEL[kind]}</FieldLabel>
         <Input
           id="tracker-token"
           type="password"
@@ -296,7 +350,8 @@ function AddTracker({ projectId }: { projectId: string }) {
           onChange={(e) => setToken(e.target.value)}
         />
         <FieldDescription>
-          {HELP[kind]} Stored encrypted; only its last four characters are shown again.
+          {HELP[kind]} Stored encrypted; only its last four characters are shown again.{" "}
+          <GuideLink section={GUIDE_SECTION[kind]}>Step-by-step setup</GuideLink>
         </FieldDescription>
       </Field>
       {kind === "github" &&

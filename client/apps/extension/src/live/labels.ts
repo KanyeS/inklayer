@@ -36,8 +36,11 @@ export const KIND_LABELS: Readonly<Record<ActivityItem["kind"], string>> = {
 /** Issue trackers by name. */
 export const TRACKER_NAMES: Readonly<Record<LinkedIssue["kind"], string>> = {
   github: "GitHub",
+  gitlab: "GitLab",
+  forgejo: "Forgejo",
   jira: "Jira",
   linear: "Linear",
+  azuredevops: "Azure DevOps",
 };
 
 /** The colours a new comment can be drawn in. The first is the default. */

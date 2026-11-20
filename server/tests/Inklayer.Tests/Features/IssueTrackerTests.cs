@@ -15,7 +15,7 @@ public sealed record PageSummaryDto(string PageUrl, int OpenCount, int ResolvedC
 
 public sealed record IssueDto(Guid Id, string Kind, string Key, string Url, string State);
 
-/// <summary>GitHub, Jira Cloud and Linear, each against a fake tracker: connecting, creating issues, and keeping both sides in step.</summary>
+/// <summary>GitHub, GitLab, Forgejo, Jira Cloud, Linear and Azure DevOps, each against a fake tracker: connecting, creating issues, and keeping both sides in step.</summary>
 [Collection(ApiTestGroup.Name)]
 public sealed class IssueTrackerTests(InklayerApiFactory factory)
 {
@@ -240,5 +240,168 @@ public sealed class IssueTrackerTests(InklayerApiFactory factory)
         var before = factory.Outbound.To("https://api.linear.app/graphql").Count();
         await ana.PatchJsonAsync($"/api/annotations/{commentId}", new { version = 1, status = "Resolved" }).ExpectAsync(HttpStatusCode.OK);
         Assert.Equal(before, factory.Outbound.To("https://api.linear.app/graphql").Count());
+    }
+
+    [Fact]
+    public async Task Azure_DevOps_work_items_follow_their_state_category()
+    {
+        var (admin, projectId, ana, _, viewer) = await ProjectAsync();
+        using var _a = admin;
+        using var _b = ana;
+        using var _c = viewer;
+        var org = $"https://ado-{Guid.NewGuid():N}.test/acme";
+        var project = $"{org}/Web Shop"; // as the fake sees it: Uri.ToString() unescapes %20
+        var state = "Active";
+        factory.Outbound.Responders[$"{project}/_apis/wit/workitemtypes/Bug?"] = (_, _) => Json(new { name = "Bug" });
+        factory.Outbound.Responders[$"{project}/_apis/wit/workitemtypes/Bug/states"] = (_, _) => Json(new
+        {
+            value = new[] { new { name = "New", category = "Proposed" }, new { name = "Active", category = "InProgress" }, new { name = "Closed", category = "Completed" } },
+        });
+        factory.Outbound.Responders[$"{project}/_apis/wit/workitems/$Bug"] = (_, _) =>
+            Json(new { id = 1234, _links = new { html = new { href = $"{project}/_workitems/edit/1234" } } });
+        factory.Outbound.Responders[$"{project}/_apis/wit/workitems/1234"] = (request, body) =>
+        {
+            if (request.Method == HttpMethod.Patch)
+            {
+                state = "Closed";
+            }
+
+            return Json(new { id = 1234, fields = new Dictionary<string, string> { ["System.WorkItemType"] = "Bug", ["System.State"] = state } });
+        };
+
+        using var created = await admin.PostJsonAsync($"/api/projects/{projectId}/issue-trackers",
+            new { kind = "azuredevops", token = "ado-pat", settings = new { site = org, projectKey = "Web Shop" } });
+        var tracker = await created.ReadAsync<TrackerDto>(HttpStatusCode.Created);
+        var authorization = factory.Outbound.To($"{project}/_apis/wit/workitemtypes/Bug?").Last().Request.Headers.Authorization!;
+        Assert.Equal(("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(":ado-pat"))), (authorization.Scheme, authorization.Parameter));
+
+        var commentId = await CommentAsync(ana, projectId, "Coupon <b>field</b> overlaps");
+        using var made = await ana.PostJsonAsync($"/api/annotations/{commentId}/issues", new { connectionId = tracker.Id, title = "Coupon field" });
+        var issue = await made.ReadAsync<IssueDto>(HttpStatusCode.Created);
+        Assert.Equal(("#1234", $"{project}/_workitems/edit/1234"), (issue.Key, issue.Url));
+        var (post, postBody) = factory.Outbound.To($"{project}/_apis/wit/workitems/$Bug").Single();
+        Assert.Equal("application/json-patch+json", post.Content!.Headers.ContentType!.MediaType);
+        using (var sent = JsonDocument.Parse(postBody))
+        {
+            var ops = sent.RootElement.EnumerateArray().ToDictionary(o => o.GetProperty("path").GetString()!, o => o.GetProperty("value").GetString()!);
+            Assert.Equal("Coupon field", ops["/fields/System.Title"]);
+            Assert.Contains("Coupon &lt;b&gt;field&lt;/b&gt; overlaps", ops["/fields/Microsoft.VSTS.TCM.ReproSteps"], StringComparison.Ordinal);
+        }
+
+        await SyncAsync(issue.Id); // Active is in progress: nothing changes
+        Assert.Equal("Open", (await CommentJsonAsync(ana, commentId)).GetProperty("status").GetString());
+
+        // Resolving the comment moves the work item to the type's Completed state.
+        await ana.PatchJsonAsync($"/api/annotations/{commentId}", new { version = 1, status = "Resolved" }).ExpectAsync(HttpStatusCode.OK);
+        var (_, patchBody) = factory.Outbound.To($"{project}/_apis/wit/workitems/1234").Single(r => r.Request.Method == HttpMethod.Patch);
+        using (var sent = JsonDocument.Parse(patchBody))
+        {
+            Assert.Equal(("/fields/System.State", "Closed"), (sent.RootElement[0].GetProperty("path").GetString(), sent.RootElement[0].GetProperty("value").GetString()));
+        }
+
+        // Reopened in Azure DevOps: the comment reopens.
+        state = "Active";
+        await SyncAsync(issue.Id);
+        Assert.Equal("Open", (await CommentJsonAsync(ana, commentId)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task GitLab_issues_use_the_project_path_and_its_iid()
+    {
+        var (admin, projectId, ana, _, viewer) = await ProjectAsync();
+        using var _a = admin;
+        using var _b = ana;
+        using var _c = viewer;
+        var site = $"https://gitlab-{Guid.NewGuid():N}.test";
+        var project = $"{site}/api/v4/projects/acme%2Fweb%2Fshop";
+        var state = "opened";
+        factory.Outbound.Responders[project] = (request, _) => request.Method == HttpMethod.Get
+            ? Json(new { id = 7, path_with_namespace = "acme/web/shop", issues_enabled = true })
+            : Json(new { message = "unexpected" }, HttpStatusCode.BadRequest);
+        factory.Outbound.Responders[$"{project}/issues"] = (request, _) => request.Method == HttpMethod.Post
+            ? Json(new { id = 90001, iid = 12, web_url = $"{site}/acme/web/shop/-/issues/12" }, HttpStatusCode.Created)
+            : Json(new { message = "unexpected" }, HttpStatusCode.BadRequest);
+        factory.Outbound.Responders[$"{project}/issues/12"] = (request, _) =>
+        {
+            if (request.Method == HttpMethod.Put)
+            {
+                state = "closed";
+            }
+
+            return Json(new { iid = 12, state });
+        };
+
+        using var created = await admin.PostJsonAsync($"/api/projects/{projectId}/issue-trackers",
+            new { kind = "gitlab", token = "glpat-secret", settings = new { site, projectKey = "acme/web/shop" } });
+        var tracker = await created.ReadAsync<TrackerDto>(HttpStatusCode.Created);
+        Assert.Equal("glpat-secret", factory.Outbound.To(project).Last().Request.Headers.GetValues("PRIVATE-TOKEN").Single());
+
+        var commentId = await CommentAsync(ana, projectId, "Menu doesn't close");
+        using var made = await ana.PostJsonAsync($"/api/annotations/{commentId}/issues", new { connectionId = tracker.Id, title = "Menu stays open" });
+        var issue = await made.ReadAsync<IssueDto>(HttpStatusCode.Created);
+        Assert.Equal(("#12", $"{site}/acme/web/shop/-/issues/12"), (issue.Key, issue.Url));
+        using (var sent = JsonDocument.Parse(factory.Outbound.To($"{project}/issues").Single(r => r.Request.Method == HttpMethod.Post).Body))
+        {
+            Assert.Equal("Menu stays open", sent.RootElement.GetProperty("title").GetString());
+            Assert.Contains("Menu doesn't close", sent.RootElement.GetProperty("description").GetString(), StringComparison.Ordinal);
+        }
+
+        await SyncAsync(issue.Id);
+        Assert.Equal("Open", (await CommentJsonAsync(ana, commentId)).GetProperty("status").GetString());
+
+        // Resolving the comment closes the GitLab issue.
+        await ana.PatchJsonAsync($"/api/annotations/{commentId}", new { version = 1, status = "Resolved" }).ExpectAsync(HttpStatusCode.OK);
+        var (_, closeBody) = factory.Outbound.To($"{project}/issues/12").Single(r => r.Request.Method == HttpMethod.Put);
+        using (var sent = JsonDocument.Parse(closeBody))
+        {
+            Assert.Equal("close", sent.RootElement.GetProperty("state_event").GetString());
+        }
+
+        // Reopened in GitLab: the comment reopens.
+        state = "opened";
+        await SyncAsync(issue.Id);
+        Assert.Equal("Open", (await CommentJsonAsync(ana, commentId)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Forgejo_issues_go_to_the_instance_given()
+    {
+        var (admin, projectId, ana, _, viewer) = await ProjectAsync();
+        using var _a = admin;
+        using var _b = ana;
+        using var _c = viewer;
+        var site = $"https://forgejo-{Guid.NewGuid():N}.test";
+        var repo = $"{site}/api/v1/repos/acme/shop";
+        factory.Outbound.Responders[repo] = (_, _) => Json(new { full_name = "acme/shop", has_issues = true });
+        factory.Outbound.Responders[$"{repo}/issues"] = (request, _) => request.Method == HttpMethod.Post
+            ? Json(new { number = 3, html_url = $"{site}/acme/shop/issues/3", state = "open" }, HttpStatusCode.Created)
+            : Json(new { message = "unexpected" }, HttpStatusCode.BadRequest);
+
+        using var created = await admin.PostJsonAsync($"/api/projects/{projectId}/issue-trackers",
+            new { kind = "forgejo", token = "fj-token", settings = new { site, owner = "acme", repo = "shop" } });
+        var tracker = await created.ReadAsync<TrackerDto>(HttpStatusCode.Created);
+        var authorization = factory.Outbound.To(repo).Last().Request.Headers.Authorization!;
+        Assert.Equal(("token", "fj-token"), (authorization.Scheme, authorization.Parameter));
+
+        var commentId = await CommentAsync(ana, projectId, "Footer overlaps");
+        using var made = await ana.PostJsonAsync($"/api/annotations/{commentId}/issues", new { connectionId = tracker.Id });
+        var issue = await made.ReadAsync<IssueDto>(HttpStatusCode.Created);
+        Assert.Equal(("#3", $"{site}/acme/shop/issues/3"), (issue.Key, issue.Url));
+    }
+
+    [Fact]
+    public async Task Forgejo_refuses_a_repository_with_issues_turned_off()
+    {
+        var (admin, projectId, ana, _, viewer) = await ProjectAsync();
+        using var _a = admin;
+        using var _b = ana;
+        using var _c = viewer;
+        var site = $"https://forgejo-{Guid.NewGuid():N}.test";
+        factory.Outbound.Responders[$"{site}/api/v1/repos/acme/wiki"] = (_, _) => Json(new { full_name = "acme/wiki", has_issues = false });
+
+        using var created = await admin.PostJsonAsync($"/api/projects/{projectId}/issue-trackers",
+            new { kind = "forgejo", token = "fj-token", settings = new { site, owner = "acme", repo = "wiki" } });
+        Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
+        Assert.Contains("Issues are turned off", await created.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 }

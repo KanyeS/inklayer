@@ -1866,7 +1866,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Connect GitHub, Jira Cloud or Linear (checked before saving) */
+        /** Connect an issue tracker (checked before saving) */
         post: {
             parameters: {
                 query?: never;
@@ -3516,7 +3516,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "github" | "jira" | "linear";
+            kind: "github" | "jira" | "linear" | "azuredevops" | "gitlab" | "forgejo";
             key: string;
             url: string;
             /** @enum {string} */
@@ -3783,14 +3783,14 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "github" | "jira" | "linear";
+            kind: "github" | "jira" | "linear" | "azuredevops" | "gitlab" | "forgejo";
             name: string;
         };
         TrackerConnectionResponse: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "github" | "jira" | "linear";
+            kind: "github" | "jira" | "linear" | "azuredevops" | "gitlab" | "forgejo";
             name: string;
             settings: components["schemas"]["TrackerSettings"];
             closeIssueOnResolve: boolean;

@@ -188,14 +188,21 @@ Organisation Admins can add as many integrations as they like under the organisa
 
 Messages wait in an outbox and are retried with growing gaps, up to 8 tries. The last error shows on the integration. Webhook addresses and secrets are stored encrypted.
 
+Step-by-step setup for each, including Discord and Teams: [docs/integrations.md](docs/integrations.md#notifications).
+
 ### Issue trackers
 Project Admins connect trackers under the project's **Settings** tab, as many as they like:
 
 | Tracker | What it needs |
 |---|---|
 | **GitHub** | The repository owner and name, and a fine-grained personal access token with **Issues: read and write** on it. GitHub Enterprise works too: give its API address. |
+| **GitLab** | The project's path (`group/project`) and an access token with the `api` scope and at least the Reporter role. Self-managed GitLab works too: give its address. |
+| **Codeberg, Forgejo, Gitea** | The repository owner and name, and an access token with **issue: Read and write** and **repository: Read**. Codeberg by default; give the address of your own Forgejo or Gitea. |
 | **Jira Cloud** | The site (`https://<you>.atlassian.net`), project key, issue type (Bug by default), and an Atlassian API token with its account email. |
 | **Linear** | The team id and a personal API key. |
+| **Azure DevOps** | The organisation address (`https://dev.azure.com/<org>`, or an Azure DevOps Server collection), the project, the work item type (Bug by default), and a personal access token with **Work Items: Read & write**. |
+
+Step-by-step setup for each tracker: [docs/integrations.md](docs/integrations.md#issue-trackers).
 
 How it works:
 - **Connecting:** Inklayer checks the credentials before saving them. Tokens are stored encrypted, and only their last four characters are shown again.
@@ -260,6 +267,8 @@ To connect (the home page's **Connected apps** section has these filled in for y
 - **Claude Code, signing in on start:** with Node.js installed, run `claude mcp add inklayer -- npx -y mcp-remote https://<your server>/api/mcp --static-oauth-client-metadata '{"token_endpoint_auth_method":"none"}'`. It opens the browser to sign in the first time Claude Code starts. The flag is needed because Inklayer only registers public (PKCE) clients.
 - **VS Code or Cursor:** use **Add to VS Code** or **Add to Cursor** under Connected apps. The editor opens the browser to sign in.
 - **Claude Desktop or claude.ai:** add a custom connector with the same address.
+
+More detail: [docs/integrations.md](docs/integrations.md#ai-assistants-mcp).
 
 How sign-in works:
 - **Signing in:** the app registers itself (OAuth dynamic client registration), your browser opens, you sign in as usual, and Inklayer asks whether to allow the app. You're asked once per app.

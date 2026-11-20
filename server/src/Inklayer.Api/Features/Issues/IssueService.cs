@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Inklayer.Api.Features.Issues;
 
 public sealed record IssueResponse(
-    Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear)] string Kind, string Key, string Url,
+    Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Key, string Url,
     [property: AllowedValues(IssueStates.Open, IssueStates.Closed)] string State);
 
 /// <summary>Issues made from comments: creating them with everything a developer needs, and closing them when comments are resolved.</summary>

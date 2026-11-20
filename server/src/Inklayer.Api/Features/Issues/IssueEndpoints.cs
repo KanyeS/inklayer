@@ -10,10 +10,10 @@ namespace Inklayer.Api.Features.Issues;
 
 /// <param name="TokenHint">The token's last four characters; the token itself is never returned.</param>
 public sealed record TrackerConnectionResponse(
-    Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear)] string Kind, string Name, TrackerSettings Settings, bool CloseIssueOnResolve, string TokenHint, DateTime? LastErrorAt, string? LastError);
+    Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Name, TrackerSettings Settings, bool CloseIssueOnResolve, string TokenHint, DateTime? LastErrorAt, string? LastError);
 
 /// <summary>What Commenters need to pick a tracker.</summary>
-public sealed record TrackerChoiceResponse(Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear)] string Kind, string Name);
+public sealed record TrackerChoiceResponse(Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Name);
 
 public sealed record CreateTrackerRequest(string Kind, string? Name, string Token, TrackerSettings Settings, bool CloseIssueOnResolve = true);
 
@@ -22,7 +22,8 @@ public sealed record UpdateTrackerRequest(string? Name, string? Token, TrackerSe
 public sealed record CreateIssueRequest(Guid ConnectionId, string? Title);
 
 /// <summary>
-/// Issue trackers: project Admins connect GitHub, Jira Cloud or Linear (as many as they like); Commenters and above create
+/// Issue trackers: project Admins connect GitHub, GitLab, Forgejo or Gitea (such as Codeberg), Jira Cloud, Linear or
+/// Azure DevOps (as many as they like); Commenters and above create
 /// issues from comments. Tokens are encrypted and never returned. Connections are checked against the tracker when saved.
 /// </summary>
 internal static class IssueEndpoints
@@ -32,7 +33,7 @@ internal static class IssueEndpoints
         var trackers = app.MapGroup("/api/projects/{projectId:guid}/issue-trackers").WithTags("Issues").RequireAuthorization();
         trackers.MapGet("/", ListAsync).Produces<List<TrackerConnectionResponse>>().WithSummary("The project's issue tracker connections (project Admins)");
         trackers.MapGet("/choices", ChoicesAsync).Produces<List<TrackerChoiceResponse>>().WithSummary("Trackers a Commenter can create issues in");
-        trackers.MapPost("/", CreateAsync).Produces<TrackerConnectionResponse>(StatusCodes.Status201Created).WithSummary("Connect GitHub, Jira Cloud or Linear (checked before saving)");
+        trackers.MapPost("/", CreateAsync).Produces<TrackerConnectionResponse>(StatusCodes.Status201Created).WithSummary("Connect an issue tracker (checked before saving)");
         trackers.MapPatch("/{id:guid}", UpdateAsync).Produces<TrackerConnectionResponse>();
         trackers.MapDelete("/{id:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent);
         trackers.MapPost("/{id:guid}/test", TestAsync).Produces<TestResultResponse>().WithSummary("Check the connection still works");
@@ -78,7 +79,7 @@ internal static class IssueEndpoints
 
         if (!TrackerKinds.All.Contains(request.Kind))
         {
-            return Invalid("kind", "Choose github, jira or linear.");
+            return Invalid("kind", $"Choose one of {string.Join(", ", TrackerKinds.All)}.");
         }
 
         if (Validate(request.Kind, request.Settings) is { } invalid)
@@ -240,6 +241,11 @@ internal static class IssueEndpoints
             TrackerKinds.Jira when Blank(s.Site) || !IsHttps(s.Site!) || Blank(s.ProjectKey) || Blank(s.Email) =>
                 Invalid("settings", "Jira needs the site (https://…atlassian.net), project key, and the account email for the token."),
             TrackerKinds.Linear when Blank(s.TeamId) => Invalid("settings", "Linear needs the team id."),
+            TrackerKinds.AzureDevOps when Blank(s.Site) || !IsHttps(s.Site!) || Blank(s.ProjectKey) =>
+                Invalid("settings", "Azure DevOps needs the organisation address (https://dev.azure.com/…) and the project."),
+            TrackerKinds.GitLab when Blank(s.ProjectKey) => Invalid("settings", "GitLab needs the project's path, such as group/project."),
+            TrackerKinds.Forgejo when Blank(s.Owner) || Blank(s.Repo) => Invalid("settings", "Forgejo and Gitea need the repository owner and name."),
+            TrackerKinds.GitLab or TrackerKinds.Forgejo when s.Site is { Length: > 0 } site && !IsHttps(site) => Invalid("settings", "The instance address must use https."),
             _ => null,
         };
     }
@@ -255,6 +261,9 @@ internal static class IssueEndpoints
             {
                 TrackerKinds.GitHub => $"{s.Owner}/{s.Repo}",
                 TrackerKinds.Jira => $"Jira {s.ProjectKey}",
+                TrackerKinds.AzureDevOps => $"Azure DevOps {s.ProjectKey}",
+                TrackerKinds.GitLab => s.ProjectKey!.Trim(),
+                TrackerKinds.Forgejo => $"{s.Owner}/{s.Repo}",
                 _ => "Linear",
             };
         }

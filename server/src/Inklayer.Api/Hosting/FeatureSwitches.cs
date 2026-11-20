@@ -22,7 +22,7 @@ public enum Feature
     /// <summary>Screenshots and page details (browser, console errors, failed requests) captured with each comment.</summary>
     BugContext,
 
-    /// <summary>Linking comments to GitHub, Jira and Linear issues.</summary>
+    /// <summary>Linking comments to issues in GitHub, GitLab, Forgejo/Gitea, Jira, Linear and Azure DevOps.</summary>
     IssueTrackers,
 
     /// <summary>Read-only share links for comments and public docs, reachable from outside the network allow list.</summary>

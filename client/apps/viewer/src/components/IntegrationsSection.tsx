@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Hash, Mail, Webhook } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { GuideLink } from "@/components/GuideLink";
 import { ErrorText } from "@/components/Layout";
 import { api, type Project } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
@@ -44,6 +45,9 @@ const KINDS: Record<Kind, { label: string; icon: typeof Mail; help: string }> = 
   },
 };
 
+/** Each kind's section in the integrations setup guide. */
+const GUIDE_SECTION = { email: "email", slack: "slack", webhook: "webhooks" } as const satisfies Record<Kind, string>;
+
 /**
  * Where an organisation's notifications go besides everyone's in-app inbox: as many email, Slack and webhook
  * integrations as you like. Organisation Admins only.
@@ -69,7 +73,7 @@ export function IntegrationsSection({ orgId }: { orgId: string }) {
     <div className="max-w-3xl space-y-6">
       <p className="text-sm text-muted-foreground">
         Everyone gets notifications under the bell. Add integrations to also send them by email, to Slack channels, or
-        to other tools. Add as many as you like.
+        to other tools. Add as many as you like. <GuideLink section="notifications" />
       </p>
       <ErrorText error={error ?? integrations.error} />
       {secret && (
@@ -210,7 +214,9 @@ function AddIntegration({
           );
         })}
       </div>
-      <p className="text-sm text-muted-foreground">{KINDS[kind].help}</p>
+      <p className="text-sm text-muted-foreground">
+        {KINDS[kind].help} <GuideLink section={GUIDE_SECTION[kind]}>Step-by-step setup</GuideLink>
+      </p>
       <Field>
         <FieldLabel htmlFor="integration-name">Name</FieldLabel>
         <Input
