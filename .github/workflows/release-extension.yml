@@ -20,8 +20,8 @@ jobs:
       run:
         working-directory: client
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -59,7 +59,7 @@ jobs:
           (cd apps/extension/dist-firefox && zip -qr "$GITHUB_WORKSPACE/out/inklayer-extension-firefox-$VERSION.zip" .)
           ls -l ../out
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: inklayer-extension-${{ steps.version.outputs.value }}
           path: out/*.zip
