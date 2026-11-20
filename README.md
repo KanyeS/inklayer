@@ -150,7 +150,7 @@ People with the extension can see and add comments **directly on any website**.
   - **Starting list:** set `INKLAYER_ALLOWED_NETWORKS` (e.g. `10.8.0.0/16, 203.0.113.7`) to start with a list. Once an administrator saves a list, it replaces this one.
   - **Lockout protection:** an administrator can't save a list that leaves out their own address. If everyone is locked out anyway, set `INKLAYER_NETWORK_RESTRICTION_DISABLED=true`, restart, fix the list, then remove it.
   - **Always allowed:** health checks (`/health/*`) and the server itself (loopback).
-  - **Behind a reverse proxy:** the proxy's network must be in `ForwardedHeaders:KnownNetworks` (the Lightsail compose file sets it), or every request appears to come from the proxy. The Admin page shows "Your address" as the server sees it, so you can check.
+  - **Behind a reverse proxy:** the proxy's network must be in `ForwardedHeaders:KnownNetworks` (`INKLAYER_TRUSTED_PROXY_NETWORK` in the compose file; the Lightsail compose file sets it), or every request appears to come from the proxy over plain HTTP. The server logs a warning when that happens, and the Admin page shows "Your address" as the server sees it, so you can check. Only the proxy should reach the server: don't publish port 8080 to the internet.
 
 ### Bug context
 When someone saves a comment, the extension attaches what a developer needs to reproduce the problem:

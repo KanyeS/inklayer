@@ -1,5 +1,8 @@
 # Example reverse proxy with automatic HTTPS (Caddy is Apache-2.0).
+# Set INKLAYER_TRUSTED_PROXY_NETWORK in .env (172.16.0.0/12 for Caddy in Docker), so the server trusts Caddy's
+# X-Forwarded-* headers, and add HSTS so browsers only ever use HTTPS.
 
 inklayer.example.com {
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	reverse_proxy server:8080
 }

@@ -10,14 +10,30 @@ namespace Inklayer.Api.Auth;
 /// </summary>
 internal static class ConsentPage
 {
+    /// <summary>
+    /// The page's own CSP. Above all, no other site may frame it: a framed "Allow" button can be clickjacked.
+    /// Its only style is inline, and its only form posts back here.
+    /// </summary>
+    internal const string Policy =
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+
     public static string Render(HttpContext context, IAntiforgery antiforgery, OpenIddictRequest request, string appName, string userName, bool expired)
     {
+        context.Response.Headers.ContentSecurityPolicy = Policy;
+        context.Response.Headers.XFrameOptions = "DENY";
+
         var tokens = antiforgery.GetAndStoreTokens(context);
         var hidden = string.Concat(request.GetParameters()
             .Where(p => p.Key is not ("consent" or "__RequestVerificationToken"))
             .Select(p => $"""<input type="hidden" name="{Encode(p.Key)}" value="{Encode((string?)p.Value ?? "")}">"""));
         var redirectHost = Uri.TryCreate(request.RedirectUri, UriKind.Absolute, out var redirect) ? redirect.Authority : request.RedirectUri ?? "";
         var notice = expired ? """<p class="warn">That form expired. Please choose again.</p>""" : "";
+
+        // Apps that registered themselves chose their own name, so anyone could call theirs "Claude". Say so, and point
+        // at the one thing they can't fake: where the app sends you back to.
+        var unverified = request.ClientId?.StartsWith(McpResource.DynamicClientPrefix, StringComparison.Ordinal) == true
+            ? $"""<p class="warn"><strong>Unverified app.</strong> It named itself; Inklayer can't check who made it. Only allow it if you started connecting it and <strong>{Encode(redirectHost)}</strong> is where you expect it to run.</p>"""
+            : "";
 
         return $"""
             <!DOCTYPE html>
@@ -33,6 +49,7 @@ internal static class ConsentPage
             </style></head><body>
             <h1>Allow {Encode(appName)} to use Inklayer?</h1>
             {notice}
+            {unverified}
             <p><strong>{Encode(appName)}</strong> wants to use Inklayer as <strong>{Encode(userName)}</strong>.</p>
             <div class="box"><p>It will be able to do anything you can:</p>
             <ul><li>read comments, replies and docs in your organisations</li>

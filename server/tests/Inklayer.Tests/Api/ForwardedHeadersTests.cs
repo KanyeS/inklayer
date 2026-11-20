@@ -24,4 +24,19 @@ public sealed class ForwardedHeadersTests(InklayerApiFactory factory)
         var response = await client.GetAsync(new Uri("/health/live", UriKind.Relative));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    [Fact]
+    public async Task A_blank_known_network_is_ignored()
+    {
+        // The self-host compose file passes INKLAYER_TRUSTED_PROXY_NETWORK through, which is blank unless it's set.
+        await using var configured = factory.WithWebHostBuilder(b =>
+            b.UseSetting("ForwardedHeaders:KnownNetworks:0", ""));
+
+        var options = configured.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value;
+
+        Assert.DoesNotContain(options.KnownIPNetworks, n => n.Contains(IPAddress.Parse("172.18.0.5")));
+        using var client = configured.CreateClient();
+        var response = await client.GetAsync(new Uri("/health/live", UriKind.Relative));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }

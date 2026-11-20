@@ -68,6 +68,8 @@ public sealed partial class McpTests(InklayerApiFactory factory)
 
         var (consent, _) = await AuthorizeAsync(member, clientId);
         Assert.Contains("Allow Claude (test) to use Inklayer?", consent, StringComparison.Ordinal);
+        // It registered itself, so it chose that name: the page says so.
+        Assert.Contains("Unverified app.", consent, StringComparison.Ordinal);
         var tokens = await AllowAsync(member, clientId, consent);
 
         // The second time, no consent page: straight back to the app.
@@ -352,6 +354,9 @@ public sealed partial class McpTests(InklayerApiFactory factory)
 
         var page = await response.Content.ReadAsStringAsync();
         Assert.True(response.StatusCode == HttpStatusCode.OK, $"{response.StatusCode}: {page}");
+        // No other site may frame the consent page (its "Allow" button could be clickjacked).
+        Assert.Contains("frame-ancestors 'none'", string.Join(';', response.Headers.GetValues("Content-Security-Policy")), StringComparison.Ordinal);
+        Assert.Equal("DENY", Assert.Single(response.Headers.GetValues("X-Frame-Options")));
         return (page, null);
     }
 

@@ -17,6 +17,9 @@ services:
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      # Behind a reverse proxy (Caddy, Traefik, nginx): the proxy's network, so the server trusts its X-Forwarded-* headers
+      # and sees people's real addresses and HTTPS. E.g. 172.16.0.0/12 when the proxy runs in Docker. See .env.example.
+      ForwardedHeaders__KnownNetworks__0: ${INKLAYER_TRUSTED_PROXY_NETWORK:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       Inklayer__Auth__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
       Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
