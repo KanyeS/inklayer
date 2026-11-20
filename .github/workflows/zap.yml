@@ -63,6 +63,12 @@ jobs:
           issue_title: "ZAP baseline scan"
           rules_file_name: .zap/rules.tsv
 
+      # Both scans write report_*.{json,md,html} to the workspace from inside the ZAP container; the baseline's copies
+      # (already uploaded as its artifact) block the API scan from writing its own.
+      - name: Clear baseline reports
+        if: ${{ !cancelled() }}
+        run: sudo rm -f report_json.json report_md.md report_html.html
+
       - name: API scan
         if: ${{ !cancelled() }}
         uses: zaproxy/action-api-scan@v0.10.0
