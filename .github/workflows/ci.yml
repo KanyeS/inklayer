@@ -41,6 +41,14 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --logger "trx;LogFileName=results.trx"
 
+      - name: Known vulnerabilities (NuGet, including transitive)
+        run: |
+          dotnet list package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::A NuGet package has a known vulnerability. Update it (see above)."
+            exit 1
+          fi
+
       - name: Dependency licence check (permissive only)
         run: >
           dotnet nuget-license -i Inklayer.slnx -t
@@ -61,6 +69,9 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci
+      # Shipped dependencies only: dev tools (Vite, Vitest, Biome) never reach users.
+      - name: Known vulnerabilities (npm, high and critical)
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
