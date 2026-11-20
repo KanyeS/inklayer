@@ -37,6 +37,7 @@ internal static partial class HostingExtensions
 
     public static WebApplication UseInklayerHosting(this WebApplication app)
     {
+        app.UseInklayerSecurityHeaders();
         app.UseForwardedHeaders();
         app.UseUntrustedProxyWarning();
         app.UseInklayerNetworkAccess();

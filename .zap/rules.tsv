@@ -1,0 +1,7 @@
+10049	IGNORE	(Cacheability notes: informational. API responses default to no-store; /assets is immutable by design)
+10109	IGNORE	(Modern Web Application: informational, the viewer is a single-page app)
+10055	IGNORE	(CSP notes: img-src https: is needed for sign-in provider avatars; style-src unsafe-inline for UI library style tags)
+90004	IGNORE	(Cross-Origin headers: CORP and COOP are set; COEP is left out on purpose because require-corp blocks avatars)
+2	IGNORE	(Private IP disclosure: the 10.8.0.0/24 example text in the network access settings)
+100000	IGNORE	(Client error responses: 401/404 from an unauthenticated API scan are the expected result)
+100001	IGNORE	(Unexpected Content-Type: non-API paths fall back to the viewer HTML by design)

@@ -7,7 +7,7 @@ name: ZAP security scan
 #   API scan: attacks every endpoint in the server's own OpenAPI document. Without a signed-in user most answer 401,
 #             which checks that they're protected; signed-in coverage needs a test token (ZAP_AUTH_HEADER_VALUE).
 # Findings are kept in one GitHub issue per scan (updated each run) and in the run's artifacts. To silence a false
-# positive, add a rules file (rule id<TAB>IGNORE<TAB>note) and pass it as rules_file_name.
+# positive, add it to .zap/rules.tsv (rule id<TAB>IGNORE<TAB>note); header checks are also covered by SecurityHeaderTests.
 on:
   schedule:
     - cron: "23 3 * * 1" # Mondays
@@ -61,6 +61,7 @@ jobs:
           target: http://localhost:8080
           artifact_name: zap-baseline
           issue_title: "ZAP baseline scan"
+          rules_file_name: .zap/rules.tsv
 
       - name: API scan
         if: ${{ !cancelled() }}
@@ -70,6 +71,7 @@ jobs:
           format: openapi
           artifact_name: zap-api
           issue_title: "ZAP API scan"
+          rules_file_name: .zap/rules.tsv
 
       - name: Server log
         if: ${{ !cancelled() }}
