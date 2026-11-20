@@ -255,8 +255,10 @@ Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs
 - **Read:** comments and replies on a page, pages with comments, docs (search, read, links and backlinks), tags, history and activity.
 - **Write:** reply to, resolve and edit comments, create issues from comments in a connected tracker, and create, edit, rename, move and delete docs. Doc edits appear live to anyone editing the doc in the browser.
 
-To connect:
+To connect (the home page's **Connected apps** section has these filled in for your server, with copy buttons):
 - **Claude Code:** run `claude mcp add --transport http inklayer https://<your server>/api/mcp`, then `/mcp` to sign in.
+- **Claude Code, signing in on start:** with Node.js installed, run `claude mcp add inklayer -- npx -y mcp-remote https://<your server>/api/mcp --static-oauth-client-metadata '{"token_endpoint_auth_method":"none"}'`. It opens the browser to sign in the first time Claude Code starts. The flag is needed because Inklayer only registers public (PKCE) clients.
+- **VS Code or Cursor:** use **Add to VS Code** or **Add to Cursor** under Connected apps. The editor opens the browser to sign in.
 - **Claude Desktop or claude.ai:** add a custom connector with the same address.
 
 How sign-in works:

@@ -10,7 +10,8 @@ export type Request =
   | { type: "presenceState"; tabId: number }
   | { type: "setPresence"; tabId: number; on: boolean }
   | { type: "notifications" }
-  | { type: "notificationsRead"; ids?: string[] };
+  | { type: "notificationsRead"; ids?: string[] }
+  | { type: "connectedApps" };
 
 export interface StateResponse {
   serverUrl: string | null;
@@ -30,6 +31,8 @@ export interface ResponseMap {
   setPresence: null;
   notifications: Inbox;
   notificationsRead: null;
+  /** How many AI assistants (MCP clients) the person has connected; the extension itself isn't one. */
+  connectedApps: number;
 }
 
 export async function send<K extends Request["type"]>(request: Extract<Request, { type: K }>): Promise<ResponseMap[K]> {

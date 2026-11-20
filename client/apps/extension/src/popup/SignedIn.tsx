@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { type StateResponse, send } from "@/lib/messages";
 import { activeTabId, requestSiteAccess } from "./browser";
 import { Notifications } from "./Notifications";
-import { ErrorText, Hint, OpenDocs, ScreenshotAccess } from "./parts";
+import { ConnectAssistant, ErrorText, Hint, OpenDocs, ScreenshotAccess } from "./parts";
 
 const OFF_LIMITS = "(browser pages and extension stores are off limits)";
 
@@ -61,6 +61,8 @@ export function SignedIn({
       <Notifications />
       {/* Hidden while an administrator has turned docs off. */}
       {me.features.docs && state.serverUrl && <OpenDocs serverUrl={state.serverUrl} organizations={me.organizations} />}
+      {/* Hidden while an administrator has turned AI assistants off. */}
+      {me.features.mcp && state.serverUrl && <ConnectAssistant serverUrl={state.serverUrl} />}
       <ErrorText>{error}</ErrorText>
       {footer}
     </>

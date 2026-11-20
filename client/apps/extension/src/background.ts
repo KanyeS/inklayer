@@ -86,6 +86,8 @@ async function handle(request: Request): Promise<unknown> {
     case "setPresence":
       await setPresence(request.tabId, request.on);
       return null;
+    case "connectedApps":
+      return (await api.get("/api/me/apps")).length;
   }
 }
 

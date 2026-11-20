@@ -1,5 +1,6 @@
 import { Button } from "@inklayer/ui/components/button";
 import { type ReactNode, useEffect, useState } from "react";
+import { send } from "@/lib/messages";
 import { openInNewTab, requestSiteAccess, SITE_ACCESS } from "./browser";
 
 /** Small pieces several popup screens use. */
@@ -77,6 +78,28 @@ export function OpenDocs({
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+/**
+ * Points to the web app's setup for AI assistants (Claude Code, VS Code, Cursor...). Shown only until the person has
+ * connected one, and hidden if the server can't say.
+ */
+export function ConnectAssistant({ serverUrl }: { serverUrl: string }) {
+  const [connected, setConnected] = useState<number | null>(null);
+  useEffect(() => {
+    void send({ type: "connectedApps" })
+      .then(setConnected)
+      .catch(() => setConnected(null));
+  }, []);
+  if (connected !== 0) return null;
+  return (
+    <>
+      <Button variant="outline" onClick={() => void openInNewTab(`${serverUrl}/#connected-apps`)}>
+        Connect an AI assistant
+      </Button>
+      <Hint>Let Claude or your editor read and resolve comments for you.</Hint>
     </>
   );
 }
