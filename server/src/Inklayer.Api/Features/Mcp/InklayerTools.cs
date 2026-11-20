@@ -115,12 +115,13 @@ internal static class InklayerTools
         return [ImageContentBlock.FromBytes(screenshot.Bytes, screenshot.ContentType)];
     }
 
-    [McpServerTool(Name = "reply_to_comment", OpenWorld = false), Description("Reply in a comment's thread, as the signed-in person. [[Doc title]] links a doc.")]
+    [McpServerTool(Name = "reply_to_comment", OpenWorld = true),
+     Description("Reply in a comment's thread, as the signed-in person. [[Doc title]] links a doc. Where a project's tracker is set to, the reply is also posted on the comment's linked issues.")]
     public static async Task<string> ReplyToComment(
         [Description("Comment id")] Guid commentId, [Description("The reply")] string body,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, TimeProvider clock, CancellationToken ct) =>
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, NotificationService notifications, IssueService issues, TimeProvider clock, CancellationToken ct) =>
         ToolResults.ToJson(ToolResults.Value<ReplyResponse>(
-            await AnnotationEndpoints.CreateReplyAsync(commentId, new CreateReplyRequest(body), access, currentUser, db, indexer, notifications, clock, ct)));
+            await AnnotationEndpoints.CreateReplyAsync(commentId, new CreateReplyRequest(body), access, currentUser, db, indexer, notifications, issues, clock, ct)));
 
     [McpServerTool(Name = "set_comment_status", Idempotent = true, OpenWorld = false), Description("Resolve a comment, or reopen it.")]
     public static async Task<string> SetCommentStatus(
@@ -164,6 +165,24 @@ internal static class InklayerTools
         [Description("Issue title; defaults to the comment's first line")] string? title = null) =>
         ToolResults.ToJson(ToolResults.Value<IssueResponse>(
             await IssueEndpoints.CreateIssueAsync(commentId, new CreateIssueRequest(trackerId, title), access, currentUser, db, issues, ct)));
+
+    [McpServerTool(Name = "search_issues", ReadOnly = true, OpenWorld = true),
+     Description("Search a connected tracker's open issues by title, to link one to a comment instead of creating a duplicate. An issue's address, number or key finds that issue.")]
+    public static async Task<string> SearchIssues(
+        [Description("Project id")] Guid projectId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
+        [Description("Words in the title, or the issue's address, number (#12) or key (ABC-12)")] string query,
+        AccessService access, InklayerDbContext db, IssueService issues, CancellationToken ct) =>
+        ToolResults.ToJson(ToolResults.Value<List<FoundIssue>>(await IssueEndpoints.SearchIssuesAsync(projectId, trackerId, query, access, db, issues, ct)));
+
+    [McpServerTool(Name = "link_issue_to_comment", OpenWorld = true),
+     Description("Link an issue that already exists to a comment. By default also posts the comment (with its replies, page and details) on the issue. The issue's comments then show in the comment's thread, and closing it resolves the comment.")]
+    public static async Task<string> LinkIssueToComment(
+        [Description("Comment id")] Guid commentId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
+        [Description("The issue's address, number (#12) or key (ABC-12)")] string issue,
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct,
+        [Description("Post the comment on the issue (default true)")] bool addComment = true) =>
+        ToolResults.ToJson(ToolResults.Value<IssueResponse>(
+            await IssueEndpoints.LinkIssueAsync(commentId, new LinkIssueRequest(trackerId, issue, addComment), access, currentUser, db, issues, ct)));
 
     /* ------------------------------------------------------------------ docs: reading */
 
@@ -285,7 +304,7 @@ internal static class InklayerTools
     /* ------------------------------------------------------------------ helpers */
 
     /// <summary>Tools that work on issue trackers: hidden and refused while they're turned off.</summary>
-    public static readonly HashSet<string> IssueTools = new(StringComparer.Ordinal) { "list_issue_trackers", "create_issue_from_comment" };
+    public static readonly HashSet<string> IssueTools = new(StringComparer.Ordinal) { "list_issue_trackers", "create_issue_from_comment", "search_issues", "link_issue_to_comment" };
 
     /// <summary>Tools that work on docs: hidden and refused while docs are turned off.</summary>
     public static readonly HashSet<string> DocTools = new(StringComparer.Ordinal)
@@ -309,6 +328,7 @@ internal static class InklayerTools
         DocLinks = a.DocLinks, MentionedIn = a.MentionedIn,
         a.HasScreenshot,
         Issues = a.Issues?.Select(i => new { Tracker = Domain.Issues.TrackerKinds.Name(i.Kind), i.Key, i.Url, i.State }),
+        IssueComments = a.IssueComments?.Select(c => new { Issue = $"{Domain.Issues.TrackerKinds.Name(c.Kind)} {c.IssueKey}", Author = c.AuthorName, c.Body, c.CreatedAt }),
         Context = a.Context is { } c ? new
         {
             c.Browser, c.Os, Viewport = $"{c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x", c.Zoom, c.Selector, c.ElementHtml,

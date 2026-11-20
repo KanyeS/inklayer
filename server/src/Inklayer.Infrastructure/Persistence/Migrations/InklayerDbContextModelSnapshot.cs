@@ -621,6 +621,12 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AnnotationId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CommentsCheckedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("ConnectionId")
                         .HasColumnType("TEXT");
 
@@ -643,6 +649,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("LastSyncedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Linked")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -657,11 +666,64 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AnnotationId");
 
-                    b.HasIndex("ConnectionId");
-
                     b.HasIndex("LastSyncedAt");
 
+                    b.HasIndex("ConnectionId", "ExternalId");
+
                     b.ToTable("AnnotationIssues");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Issues.IssueComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AuthorUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConnectionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("FromInklayer")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IssueExternalId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReplyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectionId", "IssueExternalId", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("IssueComments");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Issues.IssueTrackerConnection", b =>
@@ -698,6 +760,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("PostRepliesToIssue")
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("TEXT");
@@ -1533,6 +1598,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Inklayer.Domain.Issues.IssueTrackerConnection", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Issues.IssueComment", b =>
+                {
                     b.HasOne("Inklayer.Domain.Issues.IssueTrackerConnection", null)
                         .WithMany()
                         .HasForeignKey("ConnectionId")

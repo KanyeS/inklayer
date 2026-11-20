@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink, FileText, MessageSquare } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
 import { useMe } from "@/App";
-import { CreateIssueButton, IssueChips } from "@/components/Issues";
+import { CreateIssueButton, IssueChips, IssueCommentItem } from "@/components/Issues";
 import { ErrorText, Loading, Page } from "@/components/Layout";
 import { MentionTextarea, type MentionTextareaHandle } from "@/components/MentionTextarea";
 import { ApiError, api } from "@/lib/api";
@@ -48,6 +48,16 @@ export function CommentPage({ commentId }: { commentId: string }) {
       </Page>
     );
   const c = comment.data;
+  // Replies and the linked issues' comments, in the order they were written.
+  const thread = [
+    ...c.replies.map((reply) => ({ kind: "reply" as const, at: reply.createdAt, reply, issueComment: undefined })),
+    ...(me.features.issueTrackers ? (c.issueComments ?? []) : []).map((issueComment) => ({
+      kind: "issue" as const,
+      at: issueComment.createdAt,
+      reply: undefined,
+      issueComment,
+    })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
   const docHref = (docId: string) => `/orgs/${c.organizationId}/docs/${docId}`;
   const linked = (text: string) =>
     commentParts(text, c.docLinks, c.people ?? []).map((part, i) =>
@@ -139,35 +149,39 @@ export function CommentPage({ commentId }: { commentId: string }) {
       </article>
 
       <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Replies</h2>
-      {c.replies.length === 0 && <p className="text-sm text-muted-foreground">No replies yet.</p>}
+      {thread.length === 0 && <p className="text-sm text-muted-foreground">No replies yet.</p>}
       <ol className="space-y-3">
-        {c.replies.map((r) => (
-          <li key={r.id} className="rounded-2xl border px-4 py-3">
-            <p className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground" title={personTitle(r.author)}>
-                {r.author.displayName}
-              </span>
-              <span title={dateTime(r.createdAt)}>{timeAgo(r.createdAt)}</span>
-              {r.canDelete && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="ml-auto h-auto px-0 text-destructive"
-                  onClick={() =>
-                    void deleteReply.run(() =>
-                      api.delete("/api/replies/{replyId}", {
-                        params: { path: { replyId: r.id }, query: { version: r.version } },
-                      }),
-                    )
-                  }
-                >
-                  Delete
-                </Button>
-              )}
-            </p>
-            <p className="whitespace-pre-wrap">{linked(r.body)}</p>
-          </li>
-        ))}
+        {thread.map(({ kind, reply: r, issueComment }) =>
+          kind === "issue" ? (
+            <IssueCommentItem key={issueComment.id} comment={issueComment} />
+          ) : (
+            <li key={r.id} className="rounded-2xl border px-4 py-3">
+              <p className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground" title={personTitle(r.author)}>
+                  {r.author.displayName}
+                </span>
+                <span title={dateTime(r.createdAt)}>{timeAgo(r.createdAt)}</span>
+                {r.canDelete && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="ml-auto h-auto px-0 text-destructive"
+                    onClick={() =>
+                      void deleteReply.run(() =>
+                        api.delete("/api/replies/{replyId}", {
+                          params: { path: { replyId: r.id }, query: { version: r.version } },
+                        }),
+                      )
+                    }
+                  >
+                    Delete
+                  </Button>
+                )}
+              </p>
+              <p className="whitespace-pre-wrap">{linked(r.body)}</p>
+            </li>
+          ),
+        )}
       </ol>
       <ErrorText error={deleteReply.error} />
       {c.canReply && <ReplyForm commentId={c.id} orgId={c.organizationId} />}

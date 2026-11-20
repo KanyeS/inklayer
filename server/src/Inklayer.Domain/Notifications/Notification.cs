@@ -15,6 +15,9 @@ public static class NotificationKinds
 
     /// <summary>An issue linked to your comment was closed.</summary>
     public const string IssueClosed = "issue_closed";
+
+    /// <summary>Someone commented on an issue linked to a comment you're in, in the tracker.</summary>
+    public const string IssueComment = "issue_comment";
 }
 
 /// <summary>Something for one person to look at, shown in their in-app inbox (and emailed, if their organisation sends emails).</summary>

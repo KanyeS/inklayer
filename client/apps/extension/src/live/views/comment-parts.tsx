@@ -2,7 +2,7 @@
 import { commentParts, stopPropagation } from "@inklayer/overlay";
 import type { ComponentChild } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { TrackerChoice } from "../../lib/live";
+import type { FoundIssue, TrackerChoice } from "../../lib/live";
 import { personTitle } from "../../lib/people";
 import { sizeDiffers } from "../../lib/viewportMatch";
 import { call } from "../call";
@@ -40,6 +40,8 @@ export class CommentParts {
   readonly #replies = new Map<string, TextDraft>();
   /** Each project's connected issue trackers, loaded the first time a comment there is shown. */
   readonly #trackers = new Map<string, TrackerChoice[] | "loading">();
+  /** Comments with "Link issue" open. */
+  readonly #linking = new Set<string>();
 
   constructor(ctx: PanelContext, options: CommentPartsOptions) {
     this.#ctx = ctx;
@@ -106,6 +108,12 @@ export class CommentParts {
     const issues = (a.issues ?? []).filter((issue) => HTTPS.test(issue.url));
     const trackers = this.#options.canCommentIn(a.projectId) ? this.#trackersIn(a.projectId) : [];
     const create = this.#createIssue(a, trackers);
+    const linking = this.#linking.has(a.id) && trackers.length > 0;
+    const toggleLink = () => {
+      if (linking) this.#linking.delete(a.id);
+      else this.#linking.add(a.id);
+      this.#ctx.render();
+    };
     if (issues.length === 0 && !create) return null;
     return (
       <div className="issues" onClick={stopPropagation}>
@@ -125,6 +133,25 @@ export class CommentParts {
           );
         })}
         {create}
+        {create && (
+          <button type="button" className="link" disabled={this.#ctx.busy} aria-expanded={linking} onClick={toggleLink}>
+            Link issue
+          </button>
+        )}
+        {linking && (
+          <LinkIssue
+            projectId={a.projectId}
+            trackers={trackers}
+            busy={this.#ctx.busy}
+            onLink={(connectionId, reference, addComment) => {
+              this.#linking.delete(a.id);
+              this.#ctx.mutate(() =>
+                call({ type: "live.issueLink", annotationId: a.id, connectionId, reference, addComment }),
+              );
+            }}
+            onCancel={toggleLink}
+          />
+        )}
       </div>
     );
   }
@@ -243,36 +270,78 @@ export class CommentParts {
     );
   }
 
-  /** The thread, oldest first, with "Delete" on replies the user may delete. */
+  /** How many entries the thread has: replies, and comments on linked issues while issue trackers are on. */
+  threadLength(a: PageAnnotation): number {
+    return (a.replies?.length ?? 0) + (this.#ctx.init.features.issueTrackers ? (a.issueComments?.length ?? 0) : 0);
+  }
+
+  /**
+   * The thread, oldest first: replies, with "Delete" where the user may delete them, and comments written on linked
+   * issues in the tracker (read-only, marked with the issue).
+   */
   replies(a: PageAnnotation): ComponentChild {
     const remove = (e: Event, id: string, version: number) => {
       e.stopPropagation();
       if (window.confirm("Delete this reply?")) this.#ctx.mutate(() => call({ type: "live.replyDelete", id, version }));
     };
+    const fromIssues = this.#ctx.init.features.issueTrackers ? (a.issueComments ?? []) : [];
+    const thread = [
+      ...(a.replies ?? []).map((reply) => ({
+        kind: "reply" as const,
+        at: reply.createdAt,
+        reply,
+        issueComment: undefined,
+      })),
+      ...fromIssues.map((issueComment) => ({
+        kind: "issue" as const,
+        at: issueComment.createdAt,
+        reply: undefined,
+        issueComment,
+      })),
+    ].sort((x, y) => x.at.localeCompare(y.at));
     return (
       <ul className="replies">
-        {(a.replies ?? []).map((r) => (
-          <li key={r.id} className="reply">
-            <div className="meta">
-              <strong title={personTitle(r.author)}>{r.author.displayName || "Someone"}</strong>
-              <span className="muted"> {timeAgo(r.createdAt)}</span>
-              {r.canDelete && (
-                <>
-                  {" "}
-                  <button
-                    type="button"
-                    className="link danger"
-                    disabled={this.#ctx.busy}
-                    onClick={(e) => remove(e, r.id, r.version)}
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
-            </div>
-            {this.linkedText(r.body, a)}
-          </li>
-        ))}
+        {thread.map(({ kind, reply: r, issueComment: c }) =>
+          kind === "issue" ? (
+            <li key={c.id} className="reply from-issue">
+              <div className="meta">
+                <strong>{c.authorName || "Someone"}</strong>
+                <span className="muted"> {timeAgo(c.createdAt)} · </span>
+                {HTTPS.test(c.issueUrl) ? (
+                  <a className="muted" href={c.issueUrl} target="_blank" rel="noopener noreferrer">
+                    on {TRACKER_NAMES[c.kind]} {c.issueKey}
+                  </a>
+                ) : (
+                  <span className="muted">
+                    on {TRACKER_NAMES[c.kind]} {c.issueKey}
+                  </span>
+                )}
+              </div>
+              {c.body}
+            </li>
+          ) : (
+            <li key={r.id} className="reply">
+              <div className="meta">
+                <strong title={personTitle(r.author)}>{r.author.displayName || "Someone"}</strong>
+                <span className="muted"> {timeAgo(r.createdAt)}</span>
+                {r.canDelete && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="link danger"
+                      disabled={this.#ctx.busy}
+                      onClick={(e) => remove(e, r.id, r.version)}
+                    >
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+              {this.linkedText(r.body, a)}
+            </li>
+          ),
+        )}
       </ul>
     );
   }
@@ -350,4 +419,121 @@ function showLightbox(parent: ParentNode, bitmap: ImageBitmap): void {
   box.addEventListener("click", () => box.remove());
   box.append(canvas);
   parent.append(box);
+}
+
+/**
+ * Finds an issue that already exists, by title or a pasted address or number, and links it to the comment. Searches
+ * as you type; an empty box lists the open issues.
+ */
+function LinkIssue({
+  projectId,
+  trackers,
+  busy,
+  onLink,
+  onCancel,
+}: {
+  projectId: string;
+  trackers: TrackerChoice[];
+  busy: boolean;
+  onLink: (connectionId: string, reference: string, addComment: boolean) => void;
+  onCancel: () => void;
+}) {
+  const [connectionId, setConnectionId] = useState(trackers[0]?.id ?? "");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<FoundIssue[] | null>(null);
+  const [error, setError] = useState("");
+  const [picked, setPicked] = useState<FoundIssue | null>(null);
+  const [addComment, setAddComment] = useState(true);
+
+  useEffect(() => {
+    let current = true;
+    const timer = window.setTimeout(() => {
+      call<FoundIssue[]>({ type: "live.issueSearch", projectId, connectionId, q: query.trim() })
+        .then((found) => {
+          if (!current) return;
+          setResults(found);
+          setError("");
+        })
+        .catch((e: unknown) => {
+          if (!current) return;
+          setResults([]);
+          setError(e instanceof Error ? e.message : "Search failed.");
+        });
+    }, 300);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [projectId, connectionId, query]);
+
+  const reference = picked?.url ?? query.trim();
+  const submit = (e: Event) => {
+    e.preventDefault();
+    if (reference) onLink(connectionId, reference, addComment);
+  };
+
+  return (
+    <form className="link-issue" onSubmit={submit}>
+      {trackers.length > 1 && (
+        <select
+          aria-label="Tracker"
+          value={connectionId}
+          onChange={(e) => {
+            setConnectionId((e.currentTarget as HTMLSelectElement).value);
+            setPicked(null);
+          }}
+        >
+          {trackers.map((t) => (
+            <option key={t.id} value={t.id}>
+              {TRACKER_NAMES[t.kind]}: {t.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <input
+        type="text"
+        aria-label="Find an issue"
+        placeholder="Search titles, or paste an address or #number"
+        value={query}
+        onInput={(e) => {
+          setQuery((e.currentTarget as HTMLInputElement).value);
+          setPicked(null);
+        }}
+      />
+      {results && results.length > 0 && (
+        <ul className="found" aria-label="Issues found">
+          {results.map((r) => (
+            <li key={r.externalId}>
+              <button
+                type="button"
+                className={picked?.externalId === r.externalId ? "picked" : ""}
+                aria-pressed={picked?.externalId === r.externalId}
+                onClick={() => setPicked(r)}
+              >
+                <strong>{r.key}</strong> {r.title}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {results?.length === 0 && !error && <p className="muted">No open issues match.</p>}
+      {error && <p className="error">{error}</p>}
+      <label className="row muted">
+        <input
+          type="checkbox"
+          checked={addComment}
+          onChange={(e) => setAddComment((e.currentTarget as HTMLInputElement).checked)}
+        />
+        Add this comment to the issue
+      </label>
+      <div className="row">
+        <button type="submit" disabled={busy || !reference}>
+          {picked ? `Link ${picked.key}` : "Link"}
+        </button>
+        <button type="button" className="link" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
 }

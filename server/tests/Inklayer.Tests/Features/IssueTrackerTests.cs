@@ -17,7 +17,7 @@ public sealed record IssueDto(Guid Id, string Kind, string Key, string Url, stri
 
 /// <summary>GitHub, GitLab, Forgejo, Jira Cloud, Linear and Azure DevOps, each against a fake tracker: connecting, creating issues, and keeping both sides in step.</summary>
 [Collection(ApiTestGroup.Name)]
-public sealed class IssueTrackerTests(InklayerApiFactory factory)
+public sealed partial class IssueTrackerTests(InklayerApiFactory factory)
 {
     private static HttpResponseMessage Json(object body, HttpStatusCode status = HttpStatusCode.OK) =>
         new(status) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };

@@ -69,7 +69,7 @@ export function listEntry(
 ): ComponentChild {
   const resolved = a.status === "Resolved";
   const className = ["item", resolved ? "resolved" : "", o.selected ? "selected" : ""].join(" ");
-  const replies = a.replies?.length ?? 0;
+  const replies = parts.threadLength(a);
   return (
     // Keyed by comment, so each keeps its own state (a reply being typed) when the list changes.
     <li key={a.id} className={className} data-id={a.id} onClick={o.onSelect}>
@@ -223,7 +223,7 @@ export function bubbleContent(
       {parts.screenshot(a)}
       {parts.details(a)}
       {parts.issues(a)}
-      {Boolean(a.replies?.length) && parts.replies(a)}
+      {parts.threadLength(a) > 0 && parts.replies(a)}
       {o.canComment && (
         <>
           {parts.replyBox(a, "bubble")}

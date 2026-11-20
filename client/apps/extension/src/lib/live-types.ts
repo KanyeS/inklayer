@@ -15,6 +15,8 @@ import type { Features } from "./api";
 
 export type {
   AnnotationResponse as LiveAnnotation,
+  FoundIssue,
+  IssueCommentResponse as IssueComment,
   IssueResponse as LinkedIssue,
   LivePageAnnotationsResponse as LivePage,
   LiveProjectResponse as LiveProject,
@@ -71,6 +73,8 @@ export type LiveRequest =
   | { type: "live.replyDelete"; id: string; version: number }
   | { type: "live.trackers"; projectId: string }
   | { type: "live.issue"; annotationId: string; connectionId: string }
+  | { type: "live.issueSearch"; projectId: string; connectionId: string; q: string }
+  | { type: "live.issueLink"; annotationId: string; connectionId: string; reference: string; addComment: boolean }
   | { type: "live.share"; projectId: string; url: string }
   | { type: "live.matchSize"; width: number; height?: number; left?: number; top?: number }
   | { type: "live.restoreSize" }

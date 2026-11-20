@@ -245,6 +245,18 @@ const HANDLERS: Handlers = {
       params: { path: { annotationId: r.annotationId } },
       body: { connectionId: r.connectionId },
     }),
+  // Searching is limited to the user's own projects, like the tracker list.
+  "live.issueSearch": async (r) => {
+    if (!(await projects.get()).some((p) => p.id === r.projectId)) throw new Error("Unknown project.");
+    return api.get("/api/projects/{projectId}/issue-trackers/{id}/search", {
+      params: { path: { projectId: r.projectId, id: r.connectionId }, query: { q: r.q.slice(0, 2000) } },
+    });
+  },
+  "live.issueLink": (r) =>
+    api.post("/api/annotations/{annotationId}/issues/link", {
+      params: { path: { annotationId: r.annotationId } },
+      body: { connectionId: r.connectionId, reference: r.reference.slice(0, 2000), addComment: r.addComment },
+    }),
   // A read-only link to this page's open comments in one project. The page address is the sender's own (checked above).
   "live.share": (r) =>
     api.post("/api/shares", { body: { kind: "page", projectId: r.projectId, pageUrl: r.url, expiresInDays: 30 } }),

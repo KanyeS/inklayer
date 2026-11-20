@@ -122,6 +122,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/annotations/{annotationId}/issues/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link an issue that already exists to a comment, optionally adding the comment to it */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    annotationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LinkIssueRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssueResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/shares": {
         parameters: {
             query?: never;
@@ -2038,6 +2080,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/issue-trackers/{id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open issues matching a title, or the issue an address or number points to (Commenters) */
+        get: {
+            parameters: {
+                query?: {
+                    q?: string;
+                };
+                header?: never;
+                path: {
+                    projectId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FoundIssue"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shares": {
         parameters: {
             query?: never;
@@ -3148,6 +3231,7 @@ export interface components {
             hasScreenshot?: boolean;
             people?: null | components["schemas"]["PersonResponse"][];
             issues?: null | components["schemas"]["IssueResponse"][];
+            issueComments?: null | components["schemas"]["IssueCommentResponse"][];
         };
         AnnotationDocLink: {
             text: string;
@@ -3199,6 +3283,7 @@ export interface components {
             hasScreenshot?: boolean;
             people?: null | components["schemas"]["PersonResponse"][];
             issues?: null | components["schemas"]["IssueResponse"][];
+            issueComments?: null | components["schemas"]["IssueCommentResponse"][];
         };
         AnnotationRevisionResponse: {
             /** Format: int32 */
@@ -3310,6 +3395,8 @@ export interface components {
             settings: components["schemas"]["TrackerSettings"];
             /** @default true */
             closeIssueOnResolve?: boolean;
+            /** @default false */
+            postRepliesToIssue?: boolean;
         };
         DocActor: {
             /** Format: uuid */
@@ -3476,6 +3563,14 @@ export interface components {
         FolderRequest: {
             path: string;
         };
+        FoundIssue: {
+            externalId: string;
+            key: string;
+            title: string;
+            url: string;
+            /** @enum {string} */
+            state: "open" | "closed";
+        };
         InboxResponse: {
             /** Format: int32 */
             unread: number;
@@ -3512,6 +3607,21 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        IssueCommentResponse: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "github" | "jira" | "linear" | "azuredevops" | "gitlab" | "forgejo";
+            issueKey: string;
+            issueUrl: string;
+            authorName: string;
+            authorUrl: null | string;
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         IssueResponse: {
             /** Format: uuid */
             id: string;
@@ -3523,6 +3633,13 @@ export interface components {
             state: "open" | "closed";
         };
         JsonElement: unknown;
+        LinkIssueRequest: {
+            /** Format: uuid */
+            connectionId: string;
+            reference?: null | string;
+            /** @default true */
+            addComment?: boolean;
+        };
         LivePageAnnotationsResponse: {
             /** Format: uuid */
             projectId: string;
@@ -3624,7 +3741,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "mention" | "reply" | "resolved" | "issue_closed";
+            kind: "mention" | "reply" | "resolved" | "issue_closed" | "issue_comment";
             actor: null | components["schemas"]["NotificationActor"];
             /** Format: uuid */
             organizationId: string;
@@ -3798,6 +3915,7 @@ export interface components {
             /** Format: date-time */
             lastErrorAt: null | string;
             lastError: null | string;
+            postRepliesToIssue: boolean;
         };
         TrackerSettings: {
             owner?: null | string;
@@ -3870,6 +3988,7 @@ export interface components {
             token?: null | string;
             settings?: null | components["schemas"]["TrackerSettings"];
             closeIssueOnResolve?: null | boolean;
+            postRepliesToIssue?: null | boolean;
         };
         VersionResponse: {
             version: string;
@@ -3930,12 +4049,15 @@ export type FeatureSettingResponse = components['schemas']['FeatureSettingRespon
 export type FeatureSource = components['schemas']['FeatureSource'];
 export type FeaturesResponse = components['schemas']['FeaturesResponse'];
 export type FolderRequest = components['schemas']['FolderRequest'];
+export type FoundIssue = components['schemas']['FoundIssue'];
 export type InboxResponse = components['schemas']['InboxResponse'];
 export type IntegrationCreatedResponse = components['schemas']['IntegrationCreatedResponse'];
 export type IntegrationResponse = components['schemas']['IntegrationResponse'];
 export type InvitationResponse = components['schemas']['InvitationResponse'];
+export type IssueCommentResponse = components['schemas']['IssueCommentResponse'];
 export type IssueResponse = components['schemas']['IssueResponse'];
 export type JsonElement = components['schemas']['JsonElement'];
+export type LinkIssueRequest = components['schemas']['LinkIssueRequest'];
 export type LivePageAnnotationsResponse = components['schemas']['LivePageAnnotationsResponse'];
 export type LivePageSummaryResponse = components['schemas']['LivePageSummaryResponse'];
 export type LiveProjectResponse = components['schemas']['LiveProjectResponse'];

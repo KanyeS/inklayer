@@ -12,7 +12,7 @@ namespace Inklayer.Api.Features.Notifications;
 public sealed record NotificationActor(Guid Id, string DisplayName, string FullName);
 
 public sealed record NotificationResponse(
-    Guid Id, [property: AllowedValues(NotificationKinds.Mention, NotificationKinds.Reply, NotificationKinds.Resolved, NotificationKinds.IssueClosed)] string Kind, NotificationActor? Actor, Guid OrganizationId, Guid? AnnotationId, Guid? DocId, string Preview, string Where, DateTime CreatedAt, bool Read);
+    Guid Id, [property: AllowedValues(NotificationKinds.Mention, NotificationKinds.Reply, NotificationKinds.Resolved, NotificationKinds.IssueClosed, NotificationKinds.IssueComment)] string Kind, NotificationActor? Actor, Guid OrganizationId, Guid? AnnotationId, Guid? DocId, string Preview, string Where, DateTime CreatedAt, bool Read);
 
 public sealed record InboxResponse(int Unread, IReadOnlyList<NotificationResponse> Items);
 

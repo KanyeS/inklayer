@@ -84,9 +84,9 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task IssueCreatedAsync(Annotation comment, Guid actorUserId, string issueKey, string issueUrl, CancellationToken ct)
+    public async Task IssueCreatedAsync(Annotation comment, Guid actorUserId, string issueKey, string issueUrl, CancellationToken ct, bool linked = false)
     {
-        await EventAsync(IntegrationEvents.IssueCreated, comment, actorUserId, $"{issueKey}: {issueUrl}", "created an issue for", ct);
+        await EventAsync(IntegrationEvents.IssueCreated, comment, actorUserId, $"{issueKey}: {issueUrl}", linked ? "linked an issue to" : "created an issue for", ct);
         await db.SaveChangesAsync(ct);
     }
 
@@ -102,6 +102,19 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
         // The preview is the line with the mention.
         var line = doc.Content.Split('\n').FirstOrDefault(l => added.Any(id => l.Contains(id.ToString(), StringComparison.OrdinalIgnoreCase))) ?? doc.Title;
         await NotifyAsync(NotificationKinds.Mention, added, doc.OrganizationId, actorUserId, null, doc, line, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Someone commented on a linked issue in the tracker: tell the comment's author, the people in its thread, and whoever
+    /// created or linked the issue.
+    /// </summary>
+    public async Task IssueCommentAsync(Annotation comment, IReadOnlyCollection<Guid> issueCreators, string issueKey, string authorName, string body, CancellationToken ct)
+    {
+        var people = await db.AnnotationReplies.Where(r => r.AnnotationId == comment.Id && r.DeletedAt == null).Select(r => r.AuthorUserId).ToListAsync(ct);
+        people.Add(comment.AuthorUserId);
+        people.AddRange(issueCreators);
+        await NotifyAsync(NotificationKinds.IssueComment, [.. people.Distinct()], comment.OrganizationId, null, comment, null, $"{authorName} on {issueKey}: {body}", ct);
         await db.SaveChangesAsync(ct);
     }
 
@@ -150,6 +163,7 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
             NotificationKinds.Reply => $"{actor} replied to a comment you're in",
             NotificationKinds.Resolved => $"{actor} resolved your comment",
             NotificationKinds.IssueClosed => "An issue linked to your comment was closed",
+            NotificationKinds.IssueComment => "New comment on a linked issue",
             _ => "Inklayer",
         };
         var link = comment is not null ? $"{Origin()}/comments/{comment.Id}" : doc is not null ? $"{Origin()}/orgs/{doc.OrganizationId}/docs/{doc.Id}" : Origin();

@@ -654,6 +654,56 @@ details.context li.error {
 .issues a.issue.closed {
   color: #8250df;
 }
+.reply.from-issue {
+  border-left: 2px dashed var(--border);
+  padding-left: 8px;
+}
+.reply.from-issue a.muted {
+  color: var(--muted-foreground);
+}
+.link-issue {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--muted);
+}
+.link-issue input[type="text"] {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--foreground);
+  background: var(--background);
+}
+.link-issue ul.found {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+}
+.link-issue ul.found button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  padding: 5px 8px;
+  background: none;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-issue ul.found button:hover,
+.link-issue ul.found button.picked {
+  background: var(--muted);
+}
 .issues select.issue-pick {
   font: inherit;
   font-size: 12px;

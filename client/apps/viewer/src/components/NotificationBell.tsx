@@ -13,7 +13,11 @@ const KIND_TEXT: Record<InboxItem["kind"], string> = {
   reply: "replied",
   resolved: "resolved your comment",
   issue_closed: "An issue linked to your comment was closed",
+  issue_comment: "New comment on a linked issue",
 };
+
+/** Notifications that come from a tracker, not a person: no name in front. */
+const FROM_TRACKER = new Set<InboxItem["kind"]>(["issue_closed", "issue_comment"]);
 
 /** The in-app inbox: a bell with the unread count, and the recent notifications. Checks for new ones every minute. */
 export function NotificationBell() {
@@ -111,8 +115,8 @@ export function NotificationBell() {
                           className="mr-1.5 inline-block size-2 rounded-full bg-primary"
                         />
                       )}
-                      {item.kind === "issue_closed" ? (
-                        KIND_TEXT.issue_closed
+                      {FROM_TRACKER.has(item.kind) ? (
+                        KIND_TEXT[item.kind]
                       ) : (
                         <>
                           <strong title={item.actor?.fullName}>{item.actor?.displayName ?? "Someone"}</strong>{" "}

@@ -45,6 +45,9 @@ public sealed class IssueTrackerConnection
     /// <summary>Close the issue when its comment is resolved in Inklayer.</summary>
     public bool CloseIssueOnResolve { get; set; } = true;
 
+    /// <summary>Post replies written in Inklayer to linked issues, as the token's account.</summary>
+    public bool PostRepliesToIssue { get; set; }
+
     public Guid CreatedByUserId { get; init; }
 
     public DateTime CreatedAt { get; init; }
@@ -84,4 +87,47 @@ public sealed class AnnotationIssue
     public DateTime CreatedAt { get; init; }
 
     public DateTime LastSyncedAt { get; set; }
+
+    /// <summary>An issue that already existed and was linked to the comment, rather than created from it.</summary>
+    public bool Linked { get; init; }
+
+    /// <summary>When the tracker said it was closed; null while open. Comments stop being fetched a while after.</summary>
+    public DateTime? ClosedAt { get; set; }
+
+    /// <summary>Comments changed since this were fetched last time; null until the first fetch.</summary>
+    public DateTime? CommentsCheckedAt { get; set; }
+}
+
+/// <summary>
+/// A comment on a tracker issue, shown in the thread of every Inklayer comment linked to that issue. Belongs to the issue
+/// (connection and external id), so comments linked to the same issue share one copy.
+/// </summary>
+public sealed class IssueComment
+{
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+
+    public required Guid ConnectionId { get; init; }
+
+    /// <summary>The issue's id in the tracker (<see cref="AnnotationIssue.ExternalId"/>).</summary>
+    public required string IssueExternalId { get; init; }
+
+    /// <summary>The comment's id in the tracker.</summary>
+    public required string ExternalId { get; init; }
+
+    public required string AuthorName { get; set; }
+
+    public string? AuthorUrl { get; set; }
+
+    /// <summary>Plain text or markdown, as the tracker gives it (HTML and Jira's document format are turned into text).</summary>
+    public required string Body { get; set; }
+
+    public DateTime CreatedAt { get; init; }
+
+    public DateTime UpdatedAt { get; set; }
+
+    /// <summary>Inklayer posted it (a reply or the note when linking), so it isn't shown again as the tracker's.</summary>
+    public bool FromInklayer { get; init; }
+
+    /// <summary>The Inklayer reply it was posted from, if any.</summary>
+    public Guid? ReplyId { get; init; }
 }

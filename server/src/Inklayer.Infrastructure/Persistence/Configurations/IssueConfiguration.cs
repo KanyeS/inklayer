@@ -31,7 +31,23 @@ internal sealed class AnnotationIssueConfiguration : IEntityTypeConfiguration<An
         builder.Property(i => i.State).HasMaxLength(16);
         builder.HasIndex(i => i.AnnotationId);
         builder.HasIndex(i => i.LastSyncedAt);
+        builder.HasIndex(i => new { i.ConnectionId, i.ExternalId });
         builder.HasOne<Annotation>().WithMany().HasForeignKey(i => i.AnnotationId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<IssueTrackerConnection>().WithMany().HasForeignKey(i => i.ConnectionId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class IssueCommentConfiguration : IEntityTypeConfiguration<IssueComment>
+{
+    public void Configure(EntityTypeBuilder<IssueComment> builder)
+    {
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.IssueExternalId).HasMaxLength(100);
+        builder.Property(c => c.ExternalId).HasMaxLength(100);
+        builder.Property(c => c.AuthorName).HasMaxLength(200);
+        builder.Property(c => c.AuthorUrl).HasMaxLength(500);
+        builder.Property(c => c.Body).HasMaxLength(20_000);
+        builder.HasIndex(c => new { c.ConnectionId, c.IssueExternalId, c.ExternalId }).IsUnique();
+        builder.HasOne<IssueTrackerConnection>().WithMany().HasForeignKey(c => c.ConnectionId).OnDelete(DeleteBehavior.Cascade);
     }
 }

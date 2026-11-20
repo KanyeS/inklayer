@@ -1,22 +1,30 @@
-import type { IssueResponse, TrackerConnectionResponse, TrackerSettings } from "@inklayer/api";
+import type {
+  FoundIssue,
+  IssueCommentResponse,
+  IssueResponse,
+  TrackerConnectionResponse,
+  TrackerSettings,
+} from "@inklayer/api";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
+import { cn } from "@inklayer/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { CircleCheck, CircleDot, ExternalLink, Plus } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { CircleCheck, CircleDot, ExternalLink, Link2, Plus } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { GuideLink } from "@/components/GuideLink";
 import { ErrorText } from "@/components/Layout";
 import { api } from "@/lib/api";
-import { timeAgo } from "@/lib/format";
+import { dateTime, timeAgo } from "@/lib/format";
 import { queries } from "@/lib/queries";
 import { useAction } from "@/lib/query";
 
 export type Issue = IssueResponse;
+export type IssueComment = IssueCommentResponse;
 export type TrackerKind = TrackerConnectionResponse["kind"];
 type Tracker = TrackerConnectionResponse;
 
@@ -56,10 +64,15 @@ export function IssueChips({ issues }: { issues: Issue[] }) {
   );
 }
 
-/** "Create issue" for a comment, in one of the project's connected trackers. Hidden when none are connected. */
+type IssueMode = "new" | "existing";
+
+/**
+ * "Create issue" and "Link existing issue" for a comment, in one of the project's connected trackers. Hidden when none
+ * are connected. Linking searches the tracker's open issues, or takes a pasted address or number.
+ */
 export function CreateIssueButton({ commentId, projectId }: { commentId: string; projectId: string }) {
   const choices = useQuery(queries.issueTrackerChoices(projectId));
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<IssueMode | null>(null);
   const [connectionId, setConnectionId] = useState("");
   const [title, setTitle] = useState("");
   const { run, error, pending: busy } = useAction();
@@ -67,13 +80,20 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
   const first = choices.data?.[0];
   if (!choices.data || !first) return null;
   const chosen = connectionId || first.id;
+  const trackerName = choices.data.length === 1 ? first.name : "tracker";
 
-  if (!open) {
+  if (!mode) {
     return (
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        <Plus data-icon="inline-start" />
-        Create issue
-      </Button>
+      <>
+        <Button variant="outline" onClick={() => setMode("new")}>
+          <Plus data-icon="inline-start" />
+          Create issue
+        </Button>
+        <Button variant="outline" onClick={() => setMode("existing")}>
+          <Link2 data-icon="inline-start" />
+          Link existing issue
+        </Button>
+      </>
     );
   }
 
@@ -86,14 +106,29 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
       }),
     );
     if (created.ok) {
-      setOpen(false);
+      setMode(null);
       setTitle("");
     }
   };
 
   return (
-    <form onSubmit={create} className="mt-3 flex w-full flex-col gap-2 rounded-xl border p-3">
-      <div className="flex flex-wrap gap-2">
+    <div className="mt-3 flex w-full flex-col gap-2 rounded-xl border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1" role="tablist" aria-label="Issue">
+          {(["new", "existing"] as const).map((m) => (
+            <Button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              size="sm"
+              variant={mode === m ? "secondary" : "ghost"}
+              onClick={() => setMode(m)}
+            >
+              {m === "new" ? "New issue" : "Existing issue"}
+            </Button>
+          ))}
+        </div>
         {choices.data.length > 1 && (
           <NativeSelect aria-label="Tracker" value={chosen} onChange={(e) => setConnectionId(e.target.value)}>
             {choices.data.map((c) => (
@@ -103,28 +138,189 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
             ))}
           </NativeSelect>
         )}
-        <Input
-          className="min-w-48 flex-1"
-          aria-label="Issue title"
-          placeholder="Title (defaults to the comment's first line)"
-          value={title}
-          maxLength={120}
-          onChange={(e) => setTitle(e.target.value)}
-        />
       </div>
+      {mode === "existing" ? (
+        <LinkIssueForm
+          key={chosen}
+          commentId={commentId}
+          projectId={projectId}
+          connectionId={chosen}
+          trackerName={trackerName}
+          onDone={() => setMode(null)}
+        />
+      ) : (
+        <form onSubmit={create} className="flex flex-col gap-2">
+          <Input
+            aria-label="Issue title"
+            placeholder="Title (defaults to the comment's first line)"
+            value={title}
+            maxLength={120}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            The issue gets the comment, its replies, the page and its details. Closing the issue resolves the comment.
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="submit" disabled={busy}>
+              Create in {trackerName}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setMode(null)}>
+              Cancel
+            </Button>
+            <ErrorText error={error} />
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** Finds an issue that already exists (by title, or a pasted address or number) and links it to the comment. */
+function LinkIssueForm({
+  commentId,
+  projectId,
+  connectionId,
+  trackerName,
+  onDone,
+}: {
+  commentId: string;
+  projectId: string;
+  connectionId: string;
+  trackerName: string;
+  onDone: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<FoundIssue[] | null>(null);
+  const [searchError, setSearchError] = useState<Error | null>(null);
+  const [picked, setPicked] = useState<FoundIssue | null>(null);
+  const [addComment, setAddComment] = useState(true);
+  const { run, error, pending: busy } = useAction();
+
+  // Searches as you type, after a pause; an empty box lists the open issues.
+  useEffect(() => {
+    let current = true;
+    const timer = window.setTimeout(() => {
+      api
+        .get("/api/projects/{projectId}/issue-trackers/{id}/search", {
+          params: { path: { projectId, id: connectionId }, query: { q: query.trim() } },
+        })
+        .then((found) => {
+          if (!current) return;
+          setResults(found);
+          setSearchError(null);
+        })
+        .catch((e: unknown) => {
+          if (!current) return;
+          setResults([]);
+          setSearchError(e instanceof Error ? e : new Error("Search failed."));
+        });
+    }, 300);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [query, projectId, connectionId]);
+
+  const link = async (e: FormEvent) => {
+    e.preventDefault();
+    const reference = picked?.url ?? query.trim();
+    if (!reference) return;
+    const linked = await run(() =>
+      api.post("/api/annotations/{annotationId}/issues/link", {
+        params: { path: { annotationId: commentId } },
+        body: { connectionId, reference, addComment },
+      }),
+    );
+    if (linked.ok) onDone();
+  };
+
+  return (
+    <form onSubmit={link} className="flex flex-col gap-2">
+      <Input
+        aria-label="Find an issue"
+        placeholder="Search titles, or paste the issue's address or number"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setPicked(null);
+        }}
+      />
+      <ul className="max-h-60 divide-y overflow-y-auto rounded-lg border empty:hidden" aria-label="Issues found">
+        {results?.map((r) => (
+          <li key={r.externalId}>
+            <button
+              type="button"
+              aria-pressed={picked?.externalId === r.externalId}
+              onClick={() => setPicked(r)}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
+                picked?.externalId === r.externalId && "bg-muted",
+              )}
+            >
+              {r.state === "open" ? (
+                <CircleDot className="size-3.5 shrink-0 text-green-600" />
+              ) : (
+                <CircleCheck className="size-3.5 shrink-0 text-purple-600" />
+              )}
+              <span className="shrink-0 font-medium">{r.key}</span>
+              <span className="min-w-0 truncate">{r.title}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {results?.length === 0 && !searchError && <p className="text-xs text-muted-foreground">No open issues match.</p>}
+      <ErrorText error={searchError} />
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={addComment} onCheckedChange={(on) => setAddComment(on === true)} />
+        Add this comment to the issue
+      </label>
       <p className="text-xs text-muted-foreground">
-        The issue gets the comment, its replies, the page and its details. Closing the issue resolves the comment.
+        The issue's comments show in this thread, and closing it resolves the comment.
       </p>
       <div className="flex items-center gap-2">
-        <Button type="submit" disabled={busy}>
-          Create in {choices.data.length === 1 ? first.name : "tracker"}
+        <Button type="submit" disabled={busy || (!picked && !query.trim())}>
+          {picked ? `Link ${picked.key}` : `Link from ${trackerName}`}
         </Button>
-        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+        <Button type="button" variant="ghost" onClick={onDone}>
           Cancel
         </Button>
         <ErrorText error={error} />
       </div>
     </form>
+  );
+}
+
+/** A comment on a linked issue, written in the tracker: read-only, in the thread with the replies. */
+export function IssueCommentItem({ comment }: { comment: IssueComment }) {
+  const name = comment.authorUrl ? (
+    <a
+      href={comment.authorUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-medium text-foreground hover:underline"
+    >
+      {comment.authorName}
+    </a>
+  ) : (
+    <span className="font-medium text-foreground">{comment.authorName}</span>
+  );
+  return (
+    <li className="rounded-2xl border border-dashed bg-muted/30 px-4 py-3">
+      <p className="mb-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        {name}
+        <span title={dateTime(comment.createdAt)}>{timeAgo(comment.createdAt)}</span>
+        <a
+          href={comment.issueUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto inline-flex items-center gap-1 hover:underline"
+        >
+          on {TRACKER_NAMES[comment.kind]} {comment.issueKey}
+          <ExternalLink className="size-3" />
+        </a>
+      </p>
+      <p className="whitespace-pre-wrap">{comment.body}</p>
+    </li>
   );
 }
 
@@ -197,7 +393,8 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
                 Token {t.tokenHint} ·{" "}
                 {t.closeIssueOnResolve
                   ? "Closes issues when comments are resolved"
-                  : "Leaves issues open when comments are resolved"}
+                  : "Leaves issues open when comments are resolved"}{" "}
+                · {t.postRepliesToIssue ? "Posts Inklayer replies to issues" : "Keeps Inklayer replies in Inklayer"}
               </p>
               {t.lastError && t.lastErrorAt && (
                 <p className="text-sm text-destructive">
@@ -223,6 +420,21 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
                 }
               >
                 {t.closeIssueOnResolve ? "Don't close issues" : "Close issues"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Replies are posted as the token's account, with the name of the person who wrote them."
+                onClick={() =>
+                  void run(() =>
+                    api.patch("/api/projects/{projectId}/issue-trackers/{id}", {
+                      params: { path: { projectId, id: t.id } },
+                      body: { postRepliesToIssue: !t.postRepliesToIssue },
+                    }),
+                  )
+                }
+              >
+                {t.postRepliesToIssue ? "Don't post replies" : "Post replies"}
               </Button>
               <ConfirmButton
                 title={`Disconnect ${t.name}?`}
@@ -253,6 +465,7 @@ function AddTracker({ projectId }: { projectId: string }) {
   const [token, setToken] = useState("");
   const [name, setName] = useState("");
   const [closeIssueOnResolve, setClose] = useState(true);
+  const [postRepliesToIssue, setPostReplies] = useState(false);
   const { run, error, pending: busy } = useAction();
   const set = (key: keyof TrackerSettings) => (e: { target: { value: string } }) =>
     setSettings((s) => ({ ...s, [key]: e.target.value }));
@@ -262,7 +475,7 @@ function AddTracker({ projectId }: { projectId: string }) {
     const added = await run(() =>
       api.post("/api/projects/{projectId}/issue-trackers", {
         params: { path: { projectId } },
-        body: { kind, name: name || undefined, token, settings, closeIssueOnResolve },
+        body: { kind, name: name || undefined, token, settings, closeIssueOnResolve, postRepliesToIssue },
       }),
     );
     if (added.ok) {
@@ -369,6 +582,10 @@ function AddTracker({ projectId }: { projectId: string }) {
       <label className="flex items-center gap-2 text-sm">
         <Checkbox checked={closeIssueOnResolve} onCheckedChange={(on) => setClose(on === true)} />
         Close the issue when its comment is resolved
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={postRepliesToIssue} onCheckedChange={(on) => setPostReplies(on === true)} />
+        Post replies written in Inklayer to the issue (as the token's account)
       </label>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={busy}>

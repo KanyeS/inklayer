@@ -10,16 +10,21 @@ namespace Inklayer.Api.Features.Issues;
 
 /// <param name="TokenHint">The token's last four characters; the token itself is never returned.</param>
 public sealed record TrackerConnectionResponse(
-    Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Name, TrackerSettings Settings, bool CloseIssueOnResolve, string TokenHint, DateTime? LastErrorAt, string? LastError);
+    Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Name, TrackerSettings Settings, bool CloseIssueOnResolve, string TokenHint, DateTime? LastErrorAt, string? LastError,
+    bool PostRepliesToIssue);
 
 /// <summary>What Commenters need to pick a tracker.</summary>
 public sealed record TrackerChoiceResponse(Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Name);
 
-public sealed record CreateTrackerRequest(string Kind, string? Name, string Token, TrackerSettings Settings, bool CloseIssueOnResolve = true);
+public sealed record CreateTrackerRequest(string Kind, string? Name, string Token, TrackerSettings Settings, bool CloseIssueOnResolve = true, bool PostRepliesToIssue = false);
 
-public sealed record UpdateTrackerRequest(string? Name, string? Token, TrackerSettings? Settings, bool? CloseIssueOnResolve);
+public sealed record UpdateTrackerRequest(string? Name, string? Token, TrackerSettings? Settings, bool? CloseIssueOnResolve, bool? PostRepliesToIssue);
 
 public sealed record CreateIssueRequest(Guid ConnectionId, string? Title);
+
+/// <param name="Reference">The issue's address or number (<c>#12</c>, <c>ABC-12</c>, <c>ENG-5</c>), or a search result's url.</param>
+/// <param name="AddComment">Post the comment, with its replies, page and details, on the issue.</param>
+public sealed record LinkIssueRequest(Guid ConnectionId, [property: Required, StringLength(2000)] string? Reference, bool AddComment = true);
 
 /// <summary>
 /// Issue trackers: project Admins connect GitHub, GitLab, Forgejo or Gitea (such as Codeberg), Jira Cloud, Linear or
@@ -37,9 +42,13 @@ internal static class IssueEndpoints
         trackers.MapPatch("/{id:guid}", UpdateAsync).Produces<TrackerConnectionResponse>();
         trackers.MapDelete("/{id:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent);
         trackers.MapPost("/{id:guid}/test", TestAsync).Produces<TestResultResponse>().WithSummary("Check the connection still works");
+        trackers.MapGet("/{id:guid}/search", SearchIssuesAsync).Produces<List<FoundIssue>>()
+            .WithSummary("Open issues matching a title, or the issue an address or number points to (Commenters)");
 
         app.MapPost("/api/annotations/{annotationId:guid}/issues", CreateIssueAsync).Produces<IssueResponse>(StatusCodes.Status201Created).WithTags("Issues").RequireAuthorization()
             .WithSummary("Create an issue from a comment, with its replies, page and page details");
+        app.MapPost("/api/annotations/{annotationId:guid}/issues/link", LinkIssueAsync).Produces<IssueResponse>(StatusCodes.Status201Created).WithTags("Issues").RequireAuthorization()
+            .WithSummary("Link an issue that already exists to a comment, optionally adding the comment to it");
         return app;
     }
 
@@ -111,6 +120,7 @@ internal static class IssueEndpoints
             Settings = IssueService.SettingsJson(request.Settings),
             ProtectedToken = secrets.Protect(token),
             CloseIssueOnResolve = request.CloseIssueOnResolve,
+            PostRepliesToIssue = request.PostRepliesToIssue,
             CreatedByUserId = currentUser.Id!.Value,
             CreatedAt = clock.GetUtcNow().UtcDateTime,
         };
@@ -157,6 +167,7 @@ internal static class IssueEndpoints
         connection.ProtectedToken = secrets.Protect(token);
         connection.Name = request.Name is null ? connection.Name : Name(request.Name, connection.Kind, settings);
         connection.CloseIssueOnResolve = request.CloseIssueOnResolve ?? connection.CloseIssueOnResolve;
+        connection.PostRepliesToIssue = request.PostRepliesToIssue ?? connection.PostRepliesToIssue;
         connection.LastError = null;
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(ToResponse(connection, secrets));
@@ -231,6 +242,109 @@ internal static class IssueEndpoints
         }
     }
 
+    internal static async Task<IResult> SearchIssuesAsync(
+        Guid projectId, Guid id, string? q, AccessService access, InklayerDbContext db, IssueService issues, CancellationToken ct)
+    {
+        var check = await access.CheckProjectAsync(projectId, Permission.Comment, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        var connection = await db.IssueTrackerConnections.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id && c.ProjectId == projectId, ct);
+        if (connection is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var query = (q ?? "").Trim();
+        try
+        {
+            if (!LooksLikeReference(query))
+            {
+                return TypedResults.Ok((await issues.SearchAsync(connection, query.Length > 200 ? query[..200] : query, ct)).ToList());
+            }
+
+            try
+            {
+                return TypedResults.Ok(new List<FoundIssue> { await issues.FindAsync(connection, query, ct) });
+            }
+            catch (HttpRequestException ex) when (ex.Message.StartsWith("Not found", StringComparison.Ordinal))
+            {
+                return TypedResults.Ok(new List<FoundIssue>());
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Invalid("q", ex.Message);
+        }
+        catch (HttpRequestException ex)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status502BadGateway, title: $"{TrackerKinds.Name(connection.Kind)} didn't answer the search.", detail: ex.Message);
+        }
+    }
+
+    /// <summary>An address, a number (<c>12</c>, <c>#12</c>) or a key (<c>ABC-12</c>), rather than words to search titles for.</summary>
+    private static bool LooksLikeReference(string query) =>
+        query.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || query.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+        || System.Text.RegularExpressions.Regex.IsMatch(query, @"^(#?\d{1,12}|[A-Za-z][A-Za-z0-9_]*-\d{1,12})$");
+
+    internal static async Task<IResult> LinkIssueAsync(
+        Guid annotationId, LinkIssueRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct)
+    {
+        var comment = await db.Annotations.SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
+        if (comment is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var check = await access.CheckProjectAsync(comment.ProjectId, Permission.Comment, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        var connection = await db.IssueTrackerConnections.SingleOrDefaultAsync(c => c.Id == request.ConnectionId && c.ProjectId == comment.ProjectId, ct);
+        if (connection is null)
+        {
+            return Invalid("connectionId", "That tracker isn't connected to this comment's project.");
+        }
+
+        if (request.Reference?.Trim() is not { Length: > 0 } reference)
+        {
+            return Invalid("reference", "Give the issue's address or number.");
+        }
+
+        FoundIssue found;
+        try
+        {
+            found = await issues.FindAsync(connection, reference, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Invalid("reference", ex.Message);
+        }
+        catch (HttpRequestException ex)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status502BadGateway, title: $"{TrackerKinds.Name(connection.Kind)} didn't find the issue.", detail: ex.Message);
+        }
+
+        if (await db.AnnotationIssues.AnyAsync(i => i.AnnotationId == comment.Id && i.ConnectionId == connection.Id && i.ExternalId == found.ExternalId, ct))
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: $"{found.Key} is already linked to this comment.");
+        }
+
+        try
+        {
+            var issue = await issues.LinkAsync(comment, connection, found, request.AddComment, currentUser.Id!.Value, ct);
+            return TypedResults.Created(issue.Url, new IssueResponse(issue.Id, connection.Kind, issue.Key, issue.Url, issue.State));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status502BadGateway, title: $"{TrackerKinds.Name(connection.Kind)} didn't take the comment.", detail: ex.Message);
+        }
+    }
+
     private static IResult? Validate(string kind, TrackerSettings s)
     {
         bool Blank(string? v) => string.IsNullOrWhiteSpace(v);
@@ -275,7 +389,7 @@ internal static class IssueEndpoints
     {
         var token = secrets.Unprotect(c.ProtectedToken);
         return new TrackerConnectionResponse(c.Id, c.Kind, c.Name, IssueService.SettingsOf(c), c.CloseIssueOnResolve,
-            token.Length > 4 ? $"…{token[^4..]}" : "…", c.LastErrorAt, c.LastError);
+            token.Length > 4 ? $"…{token[^4..]}" : "…", c.LastErrorAt, c.LastError, c.PostRepliesToIssue);
     }
 
     private static IResult Invalid(string field, string message) =>

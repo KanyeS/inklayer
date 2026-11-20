@@ -207,7 +207,9 @@ Step-by-step setup for each tracker: [docs/integrations.md](docs/integrations.md
 How it works:
 - **Connecting:** Inklayer checks the credentials before saving them. Tokens are stored encrypted, and only their last four characters are shown again.
 - **Creating issues:** Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The issue gets the comment, its replies, the page address, a link back to the comment, and the page details (browser, window size, console errors, failed requests). The issue then shows on the comment.
-- **Closing:** resolving a comment closes its issues, unless the connection is set to leave them open.
+- **Linking existing issues:** instead of creating one, choose **Link existing issue** and search the tracker's open issues, or paste the issue's address or number. Inklayer can add the comment to the issue as a note.
+- **Comments both ways:** comments written on a linked issue in the tracker show in the Inklayer thread, and notify the people in it. Replies written in Inklayer are posted to the issue too, if the connection is set to.
+- **Closing:** resolving a comment closes its issues, unless the connection is set to leave them open. An issue linked to several comments closes when the last of them is resolved.
 - **Keeping in step:** trackers can't reach a server behind the VPN, so Inklayer asks them every 5 minutes instead. An issue closed in the tracker resolves its comment, with a reply saying so, and notifies the comment's author and the person who created the issue. An issue reopened there reopens the comment.
 
 ### Sharing read-only links
@@ -260,7 +262,7 @@ For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the env
 ### Using Inklayer from Claude (MCP)
 Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs in as you and can do what your role allows:
 - **Read:** comments and replies on a page, pages with comments, docs (search, read, links and backlinks), tags, history and activity.
-- **Write:** reply to, resolve and edit comments, create issues from comments in a connected tracker, and create, edit, rename, move and delete docs. Doc edits appear live to anyone editing the doc in the browser.
+- **Write:** reply to, resolve and edit comments, create issues from comments in a connected tracker or link existing ones, and create, edit, rename, move and delete docs. Doc edits appear live to anyone editing the doc in the browser.
 
 To connect (the home page's **Connected apps** section has these filled in for your server, with copy buttons):
 - **Claude Code:** run `claude mcp add --transport http inklayer https://<your server>/api/mcp`, then `/mcp` to sign in.

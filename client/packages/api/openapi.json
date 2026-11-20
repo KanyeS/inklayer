@@ -107,6 +107,47 @@
         }
       }
     },
+    "/api/annotations/{annotationId}/issues/link": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Link an issue that already exists to a comment, optionally adding the comment to it",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/shares": {
       "get": {
         "tags": [
@@ -2004,6 +2045,56 @@
         }
       }
     },
+    "/api/projects/{projectId}/issue-trackers/{id}/search": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Open issues matching a title, or the issue an address or number points to (Commenters)",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FoundIssue"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/shares": {
       "post": {
         "tags": [
@@ -3409,6 +3500,15 @@
             "items": {
               "$ref": "#/components/schemas/IssueResponse"
             }
+          },
+          "issueComments": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/IssueCommentResponse"
+            }
           }
         }
       },
@@ -3617,6 +3717,15 @@
             ],
             "items": {
               "$ref": "#/components/schemas/IssueResponse"
+            }
+          },
+          "issueComments": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/IssueCommentResponse"
             }
           }
         }
@@ -4092,6 +4201,10 @@
           "closeIssueOnResolve": {
             "type": "boolean",
             "default": true
+          },
+          "postRepliesToIssue": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -4770,6 +4883,37 @@
           }
         }
       },
+      "FoundIssue": {
+        "required": [
+          "externalId",
+          "key",
+          "title",
+          "url",
+          "state"
+        ],
+        "type": "object",
+        "properties": {
+          "externalId": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          }
+        }
+      },
       "InboxResponse": {
         "required": [
           "unread",
@@ -4911,6 +5055,63 @@
           }
         }
       },
+      "IssueCommentResponse": {
+        "required": [
+          "id",
+          "kind",
+          "issueKey",
+          "issueUrl",
+          "authorName",
+          "authorUrl",
+          "body",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "github",
+              "jira",
+              "linear",
+              "azuredevops",
+              "gitlab",
+              "forgejo"
+            ],
+            "type": "string"
+          },
+          "issueKey": {
+            "type": "string"
+          },
+          "issueUrl": {
+            "type": "string"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "authorUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "IssueResponse": {
         "required": [
           "id",
@@ -4952,6 +5153,30 @@
         }
       },
       "JsonElement": {},
+      "LinkIssueRequest": {
+        "required": [
+          "connectionId"
+        ],
+        "type": "object",
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reference": {
+            "maxLength": 2000,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "addComment": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
       "LivePageAnnotationsResponse": {
         "required": [
           "projectId",
@@ -5336,7 +5561,8 @@
               "mention",
               "reply",
               "resolved",
-              "issue_closed"
+              "issue_closed",
+              "issue_comment"
             ],
             "type": "string"
           },
@@ -5958,7 +6184,8 @@
           "closeIssueOnResolve",
           "tokenHint",
           "lastErrorAt",
-          "lastError"
+          "lastError",
+          "postRepliesToIssue"
         ],
         "type": "object",
         "properties": {
@@ -6001,6 +6228,9 @@
               "null",
               "string"
             ]
+          },
+          "postRepliesToIssue": {
+            "type": "boolean"
           }
         }
       },
@@ -6364,6 +6594,12 @@
             ]
           },
           "closeIssueOnResolve": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "postRepliesToIssue": {
             "type": [
               "null",
               "boolean"

@@ -12,11 +12,35 @@ An administrator can turn each of these off for the whole server; see [Turning f
 
 Project Admins connect trackers in the project's **Settings** tab, under **Issue trackers**. A project can have as many as you like, of any kind. Each connection asks for:
 - a **Name**, which commenters see when they choose where an issue goes;
-- whether to **close the issue when its comment is resolved** (on by default).
+- whether to **close the issue when its comment is resolved** (on by default);
+- whether to **post replies written in Inklayer to the issue** (off by default; see [below](#following-an-issues-comments)).
 
 Inklayer checks the credentials before it saves them. Tokens are stored encrypted, and only their last four characters are shown again. **Test** on a connection checks it again later, and the connection shows the last error if syncing fails, for example when a token has expired.
 
 Once a tracker is connected, Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The issue includes the comment, its replies, the page address, a link back, and the page details (browser, window size, console errors, failed requests). Inklayer checks linked issues every 5 minutes. Closing an issue in the tracker resolves its comment, and reopening it reopens the comment.
+
+### Linking an issue that already exists
+
+When the problem is already tracked, link the comment to that issue instead of creating a duplicate. Choose **Link existing issue** on the comment's page, or **Link issue** in the extension. Then either:
+- **search:** type words from the title, and pick from the tracker's open issues. An empty box lists the most recently updated ones;
+- **paste:** give the issue's address, or its number or key (`#12`, `ABC-12`, `ENG-5`).
+
+With **Add this comment to the issue** (on by default), Inklayer posts the comment on the issue as a note: its text, replies, page address, page details and a link back. The note is posted as the connection's token account. Turn it off to link without posting anything.
+
+Several comments can link to the same issue. Closing the issue resolves all of them. Resolving them in Inklayer closes the issue only when the last one is resolved, so one fix doesn't close an issue that still has open reports.
+
+An address from another repository or project is refused, as is a GitHub or Forgejo pull request.
+
+### Following an issue's comments
+
+Comments written on a linked issue in the tracker show in the Inklayer thread, mixed in with the replies by time. Each is marked with the issue it came from, such as "on GitHub #12". They are read-only in Inklayer.
+- They arrive within about 5 minutes, when Inklayer next checks the issue. Linking an issue brings in its earlier comments straight away (up to 100).
+- New ones notify the comment's author, the people who replied, and whoever created or linked the issue.
+- Comments are read while the issue is open, and for 14 days after it closes.
+- Edits made in the tracker are picked up. Deletions aren't yet: a comment deleted in the tracker stays in Inklayer.
+- GitLab's system notes ("changed the description") are left out. Jira and Azure DevOps comments are shown as plain text.
+
+**Posting replies back.** With **Post replies** turned on for a connection (in the project's **Settings → Issue trackers**, or when connecting it), each reply written in Inklayer on a linked comment is also posted on the issue, as **Name (via Inklayer): reply**, with a link back. It's posted as the token's account, so people in the tracker see that account as the author. Inklayer recognises what it posted and doesn't show it twice. Editing or deleting a reply in Inklayer doesn't change the posted copy.
 
 ### GitHub
 
@@ -81,7 +105,7 @@ You need an Atlassian account that can work in the Jira project, and an **API to
 
 1. Sign in to Atlassian as that account and open [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
 2. Choose **Create API token** (not "Create API token with scopes": scoped tokens don't work with the site address Inklayer uses). Name it, choose an expiry, and copy the token.
-3. Make sure the account has these permissions in the Jira project: **Browse projects**, **Create issues** and **Transition issues**. Inklayer needs the last one to move issues to Done when comments are resolved.
+3. Make sure the account has these permissions in the Jira project: **Browse projects**, **Create issues**, **Transition issues** and **Add comments**. Inklayer needs Transition issues to move issues to Done when comments are resolved, and Add comments to post on linked issues.
 4. In Inklayer, choose **Jira** and fill in:
 
    | Field | Example | Where to find it |

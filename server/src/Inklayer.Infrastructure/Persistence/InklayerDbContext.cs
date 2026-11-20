@@ -60,6 +60,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<AnnotationIssue> AnnotationIssues => Set<AnnotationIssue>();
 
+    public DbSet<IssueComment> IssueComments => Set<IssueComment>();
+
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
 
     public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();

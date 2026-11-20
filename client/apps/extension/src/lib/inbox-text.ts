@@ -8,11 +8,12 @@ export const INBOX_TEXT: Readonly<Record<string, string>> = {
   reply: "replied",
   resolved: "resolved your comment",
   issue_closed: "An issue for your comment was closed",
+  issue_comment: "New comment on a linked issue",
 };
 
-/** Who a notification is from: nobody for a closed issue (the tracker closed it), "Someone" if unknown. */
+/** Who a notification is from: nobody for tracker news (a closed issue, a comment there), "Someone" if unknown. */
 export function inboxActor(item: Pick<InboxItem, "kind" | "actor">): string | null {
-  return item.kind === "issue_closed" ? null : (item.actor?.displayName ?? "Someone");
+  return item.kind === "issue_closed" || item.kind === "issue_comment" ? null : (item.actor?.displayName ?? "Someone");
 }
 
 /** Where a notification opens in the web app: its comment, its doc, or the home page. */
