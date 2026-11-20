@@ -1,6 +1,17 @@
+import { h, render } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocLookup, PersonLookup } from "../src/lib/live";
-import { applySuggestion, pickedIn, type Suggestion, typedTrigger, withSuggestions } from "../src/live/suggestions";
+import {
+  applySuggestion,
+  draftBody,
+  draftOf,
+  EMPTY_DRAFT,
+  SuggestBox,
+  type Suggestion,
+  type TextDraft,
+  typedTrigger,
+} from "../src/live/suggestions";
+import { mount } from "./live-fixtures";
 
 const doc = (title: string): Suggestion => ({ kind: "doc", doc: { id: "d1", folder: "", title } as DocLookup });
 const person = (displayName: string, id = "p1"): Suggestion => ({
@@ -57,32 +68,48 @@ describe("putting a suggestion in", () => {
   });
 });
 
-describe("people picked in a box", () => {
-  it("is one map per box, kept", () => {
-    const a = document.createElement("textarea");
-    const b = document.createElement("textarea");
-    pickedIn(a).set("Alice", "p1");
-    expect(pickedIn(a).get("Alice")).toBe("p1");
-    expect(pickedIn(b).size).toBe(0);
+describe("drafts", () => {
+  it("save picked @names as mentions, and show mentions as names for editing", () => {
+    const id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+    expect(draftBody({ text: " hi @Alice ", picked: new Map([["Alice", id]]) })).toBe(`hi <@${id}>`);
+    const draft = draftOf(`hi <@${id}>`, [{ id, displayName: "Alice", fullName: "Alice Smith" }]);
+    expect(draft.text).toBe("hi @Alice");
+    expect(draft.picked.get("Alice")).toBe(id);
   });
 });
+
+/** A suggestion box whose draft is kept here, re-rendered on every change (as the panel does). */
+function suggestBox(orgId: string | null) {
+  const root = mount(null);
+  let draft: TextDraft = EMPTY_DRAFT;
+  const draw = () =>
+    render(
+      h(SuggestBox, {
+        draft,
+        onChange: (next) => {
+          draft = next;
+          draw();
+        },
+        organizationId: () => orgId,
+        docsOn: true,
+      }),
+      root,
+    );
+  draw();
+  return { root, box: root.querySelector("textarea") as HTMLTextAreaElement, draft: () => draft };
+}
 
 describe("the suggestion list", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
+    document.body.replaceChildren();
   });
 
-  it("wraps the box once and reuses its list", () => {
-    const input = document.createElement("textarea");
-    const first = withSuggestions(input, () => null, true);
-    const list = first.querySelector<HTMLUListElement>("ul.suggest");
-    expect(first.className).toBe("suggest-wrap");
-    expect(list?.hidden).toBe(true);
-    // A re-render wraps the same box again: the list moves with it, so nothing typed or shown is lost.
-    const second = withSuggestions(input, () => null, true);
-    expect(second.querySelector("ul.suggest")).toBe(list);
-    expect(second.querySelector("textarea")).toBe(input);
+  it("sits under the box, hidden until there's something to suggest", () => {
+    const { root } = suggestBox(null);
+    expect(root.querySelector(".suggest-wrap textarea")).not.toBeNull();
+    expect(root.querySelector<HTMLUListElement>("ul.suggest")?.hidden).toBe(true);
   });
 
   it("looks up people, shows them, and picks one with Enter", async () => {
@@ -92,24 +119,22 @@ describe("the suggestion list", () => {
       value: [{ id: "p9", displayName: "Alice", fullName: "Alice Smith" }],
     }));
     vi.stubGlobal("chrome", { runtime: { sendMessage } });
-    const input = document.createElement("textarea");
-    const wrap = withSuggestions(input, () => "org1", true);
-    document.body.append(wrap);
+    const { root, box, draft } = suggestBox("org1");
 
-    input.value = "hi @al";
-    input.setSelectionRange(6, 6);
-    input.dispatchEvent(new Event("input"));
+    box.value = "hi @al";
+    box.setSelectionRange(6, 6);
+    box.dispatchEvent(new Event("input"));
     await vi.advanceTimersByTimeAsync(200);
 
     expect(sendMessage).toHaveBeenCalledWith({ type: "live.people", orgId: "org1", q: "al" });
-    const items = wrap.querySelectorAll("li");
+    const items = root.querySelectorAll("li");
     expect(items).toHaveLength(1);
     expect(items[0]?.textContent).toBe("@Alice Alice Smith");
 
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", cancelable: true }));
-    expect(input.value).toBe("hi @Alice ");
-    expect(pickedIn(input).get("Alice")).toBe("p9");
-    expect(wrap.querySelector("ul")?.hidden).toBe(true);
-    wrap.remove();
+    box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", cancelable: true }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(box.value).toBe("hi @Alice ");
+    expect(draft().picked.get("Alice")).toBe("p9");
+    expect(root.querySelector("ul")?.hidden).toBe(true);
   });
 });

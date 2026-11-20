@@ -1,5 +1,9 @@
 import { BubbleLayer, type BubblePosition, followColorScheme } from "@inklayer/overlay";
+import { type ComponentChild, render } from "preact";
 import type { PageAnnotation } from "./context";
+
+/** Unmounts a bubble's content before its card is removed. */
+const unmount = (card: HTMLElement) => render(null, card);
 
 /** How long a hover bubble stays after the pointer leaves its mark, so it can move into the bubble. */
 const HIDE_BUBBLE_MS = 350;
@@ -16,7 +20,7 @@ export interface HoverBubblesSource {
   /** A reply is being written in this comment's bubble, so it mustn't close. */
   keepOpen(id: string): boolean;
   /** A comment's bubble content. */
-  content(a: PageAnnotation, pinned: boolean, togglePin: () => void): Node[];
+  content(a: PageAnnotation, pinned: boolean, togglePin: () => void): ComponentChild;
 }
 
 /**
@@ -84,16 +88,20 @@ export class HoverBubbles {
 
   render(): void {
     if (!this.#source.marksVisible()) {
-      this.#layer.show([], () => []);
+      this.#layer.showEach([], () => undefined, unmount);
       return;
     }
     const visible = new Map(this.#source.visible().map((a) => [a.id, a]));
     const allOpen = this.#source.allOpen();
     const ids = [...visible.keys()].filter((id) => allOpen || this.#pinned.has(id) || id === this.#hoverId);
-    this.#layer.show(ids, (id) => {
-      const a = visible.get(id);
-      return a ? this.#source.content(a, this.#pinned.has(id), () => this.#togglePin(id)) : [];
-    });
+    this.#layer.showEach(
+      ids,
+      (id, card) => {
+        const a = visible.get(id);
+        render(a ? this.#source.content(a, this.#pinned.has(id), () => this.#togglePin(id)) : null, card);
+      },
+      unmount,
+    );
   }
 
   #togglePin(id: string): void {

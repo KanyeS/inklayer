@@ -85,4 +85,25 @@ describe("comment bubbles", () => {
     expect(box.selectionStart).toBe(4);
     layer.destroy();
   });
+
+  it("lets the caller fill each card, and says which cards it removes", () => {
+    fakeLayout(1200, 100);
+    const layer = new BubbleLayer(
+      "",
+      () => undefined,
+      () => undefined,
+    );
+    layer.setPositions({ a: { x: 100, y: 200 }, b: { x: 100, y: 400 } });
+    const released: string[] = [];
+    const fill = (id: string, card: HTMLElement) => {
+      card.textContent = `card ${id}`;
+    };
+    const release = (card: HTMLElement) => released.push(card.dataset.id ?? "");
+    layer.showEach(["a", "b"], fill, release);
+    expect(cards(layer).map((c) => c.textContent)).toEqual(["card a", "card b"]);
+    layer.showEach(["b"], fill, release);
+    expect(released).toEqual(["a"]);
+    expect(cards(layer).map((c) => c.textContent)).toEqual(["card b"]);
+    layer.destroy();
+  });
 });

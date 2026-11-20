@@ -70,6 +70,14 @@ export class BubbleLayer {
 
   /** Shows a card for each id (in that order), with content from `build`; removes the rest. */
   show(ids: string[], build: (id: string) => Node[]): void {
+    this.showEach(ids, (id, card) => card.replaceChildren(...build(id)));
+  }
+
+  /**
+   * Shows a card for each id, letting `fill` put the content in the card element itself (for code that renders into
+   * an element, like a UI library); removes the rest, calling `release` on each card removed.
+   */
+  showEach(ids: string[], fill: (id: string, card: HTMLElement) => void, release?: (card: HTMLElement) => void): void {
     const active =
       this.#root.getRootNode() instanceof ShadowRoot ? (this.#root.getRootNode() as ShadowRoot).activeElement : null;
     const focus =
@@ -80,6 +88,7 @@ export class BubbleLayer {
     const wanted = new Set(ids.filter((id) => this.#positions[id]));
     for (const [id, card] of this.#cards) {
       if (!wanted.has(id)) {
+        release?.(card);
         card.remove();
         this.#cards.delete(id);
       }
@@ -93,7 +102,7 @@ export class BubbleLayer {
         this.#cards.set(id, card);
         this.#root.append(card);
       }
-      card.replaceChildren(...build(id));
+      fill(id, card);
     }
 
     if (focus?.el.isConnected) {

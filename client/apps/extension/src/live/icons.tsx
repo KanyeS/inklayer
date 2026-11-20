@@ -1,6 +1,7 @@
-import { lineIcon } from "@inklayer/overlay";
+/** @jsxImportSource preact */
+import type { ComponentChild } from "preact";
 
-/** The live panel's icons: Lucide's path data, built as DOM (never parsed from markup). */
+/** The live panel's icons: Lucide's path data, rendered as SVG elements (never parsed from markup). */
 
 const PATHS = {
   /** A pushpin: keep a bubble open, or keep the panel in place. */
@@ -50,9 +51,23 @@ const PATHS = {
 
 export type IconName = keyof typeof PATHS;
 
-/** A new SVG element for the named icon. */
-export function icon(name: IconName): SVGSVGElement {
-  return lineIcon(PATHS[name]);
+/** The named icon: a line drawing on Lucide's 24×24 grid, in the current text colour. */
+export function icon(name: IconName): ComponentChild {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      {PATHS[name].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
 }
 
 /** Every icon name, for tests. */

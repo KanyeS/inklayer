@@ -1,3 +1,4 @@
+import { h, render } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { inboxItemUrl } from "../src/lib/inbox-text";
 import { ICON_NAMES, icon } from "../src/live/icons";
@@ -15,7 +16,18 @@ import { bubbleContent, type CommentActions, type ListEntryOptions, listEntry } 
 import { CommentParts } from "../src/live/views/comment-parts";
 import { cannotComment, draftBox, isChosen, scopeChooser, toolbar } from "../src/live/views/composer";
 import { InboxView } from "../src/live/views/inbox";
-import { ALL_FEATURES, annotation, clickButton, fakeChrome, fakeContext, init, project, texts } from "./live-fixtures";
+import {
+  ALL_FEATURES,
+  annotation,
+  clickButton,
+  fakeChrome,
+  fakeContext,
+  init,
+  mount,
+  mountOne,
+  project,
+  texts,
+} from "./live-fixtures";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -24,7 +36,7 @@ afterEach(() => {
 
 describe("icons", () => {
   it.each(ICON_NAMES)("%s is a line icon with paths", (name) => {
-    const svg = icon(name);
+    const svg = mountOne(icon(name));
     expect(svg.getAttribute("viewBox")).toBe("0 0 24 24");
     expect(svg.getAttribute("aria-hidden")).toBe("true");
     expect(svg.querySelectorAll("path").length).toBeGreaterThan(0);
@@ -33,7 +45,9 @@ describe("icons", () => {
 
 describe("launcher", () => {
   it("shows open comments and unread notifications", () => {
-    const button = launcher({ openCount: 3, unread: 120, pinned: true, onOpen: vi.fn(), onDragStart: vi.fn() });
+    const button = mountOne(
+      launcher({ openCount: 3, unread: 120, pinned: true, onOpen: vi.fn(), onDragStart: vi.fn() }),
+    );
     expect(button.querySelector(".count")?.textContent).toBe("3");
     expect(button.querySelector(".count")?.getAttribute("title")).toBe("3 open comments on this page");
     expect(button.querySelector(".bell-count")?.textContent).toBe("99");
@@ -41,7 +55,9 @@ describe("launcher", () => {
   });
 
   it("greys out a zero count and hides the bell with nothing unread", () => {
-    const button = launcher({ openCount: 0, unread: 0, pinned: false, onOpen: vi.fn(), onDragStart: vi.fn() });
+    const button = mountOne(
+      launcher({ openCount: 0, unread: 0, pinned: false, onOpen: vi.fn(), onDragStart: vi.fn() }),
+    );
     expect(button.querySelector(".count")?.className).toBe("count zero");
     expect(button.querySelector(".bell-count")).toBeNull();
     expect(button.classList.contains("movable")).toBe(true);
@@ -50,7 +66,7 @@ describe("launcher", () => {
   it("opens on click and starts a drag on press", () => {
     const onOpen = vi.fn();
     const onDragStart = vi.fn();
-    const button = launcher({ openCount: 1, unread: 0, pinned: true, onOpen, onDragStart });
+    const button = mountOne(launcher({ openCount: 1, unread: 0, pinned: true, onOpen, onDragStart }));
     button.click();
     button.dispatchEvent(new Event("pointerdown"));
     expect(onOpen).toHaveBeenCalledOnce();
@@ -79,14 +95,14 @@ describe("header", () => {
   });
 
   it("has the two tabs, with the current one active", () => {
-    const bar = header(options({ view: "activity" }));
+    const bar = mountOne(header(options({ view: "activity" })));
     expect(texts(bar, ".tab")).toEqual(["Comments", "Activity"]);
     expect(bar.querySelector(".tab.active")?.textContent).toBe("Activity");
   });
 
   it("switches tabs, and the bell toggles the inbox", () => {
     const o = options({ unread: 4 });
-    const bar = header(o);
+    const bar = mountOne(header(o));
     clickButton(bar, "Activity");
     expect(o.onView).toHaveBeenCalledWith("activity");
     (bar.querySelector(".bell") as HTMLButtonElement).click();
@@ -95,13 +111,13 @@ describe("header", () => {
   });
 
   it("leaves out sharing when there's nothing to share", () => {
-    expect(header(options()).querySelectorAll(".actions button")).toHaveLength(5);
-    expect(header(options({ shareProject: null })).querySelectorAll(".actions button")).toHaveLength(4);
+    expect(mountOne(header(options())).querySelectorAll(".actions button")).toHaveLength(5);
+    expect(mountOne(header(options({ shareProject: null }))).querySelectorAll(".actions button")).toHaveLength(4);
   });
 
   it("toggles bubbles and marks to the opposite of now", () => {
     const o = options({ bubblesOpen: true, marksVisible: false });
-    const bar = header(o);
+    const bar = mountOne(header(o));
     (bar.querySelector('[aria-pressed="true"]') as HTMLButtonElement).click();
     expect(o.onBubblesOpen).toHaveBeenCalledWith(false);
     (bar.querySelector('[title="Show marks on the page"]') as HTMLButtonElement).click();
@@ -109,9 +125,9 @@ describe("header", () => {
   });
 
   it("shows a grip and resets on double-click only while unpinned", () => {
-    expect(header(options()).querySelector(".grip")).toBeNull();
+    expect(mountOne(header(options())).querySelector(".grip")).toBeNull();
     const o = options({ pinned: false });
-    const bar = header(o);
+    const bar = mountOne(header(o));
     expect(bar.querySelector(".grip")).not.toBeNull();
     bar.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     expect(o.onResetPosition).toHaveBeenCalledOnce();
@@ -119,7 +135,7 @@ describe("header", () => {
 
   it("swallows the click that ends a drag", () => {
     const o = options({ justDragged: () => true });
-    const bar = header(o);
+    const bar = mountOne(header(o));
     clickButton(bar, "Activity");
     expect(o.onView).not.toHaveBeenCalled();
   });
@@ -128,24 +144,26 @@ describe("header", () => {
 describe("notices", () => {
   it("pins and unpins from the corner", () => {
     const onToggle = vi.fn();
-    const pin = cornerPin(true, onToggle);
+    const pin = mountOne(cornerPin(true, onToggle));
     expect(pin.className).toBe("corner-pin on");
     expect(pin.getAttribute("aria-pressed")).toBe("true");
     pin.click();
     expect(onToggle).toHaveBeenCalledOnce();
-    expect(cornerPin(false, onToggle).className).toBe("corner-pin");
+    expect(mountOne(cornerPin(false, onToggle)).className).toBe("corner-pin");
   });
 
   it("says what size the page is shown at", () => {
-    expect(sizeBar({ width: 390, height: 844 }, vi.fn()).textContent).toContain("390×844.");
-    expect(sizeBar({ width: 390, height: null }, vi.fn()).textContent).toContain("390px wide.");
-    expect(sizeBar("unknown", vi.fn()).textContent).toContain("resized to a commenter's size");
+    expect(mountOne(sizeBar({ width: 390, height: 844 }, vi.fn())).textContent).toContain("390×844.");
+    expect(mountOne(sizeBar({ width: 390, height: null }, vi.fn())).textContent).toContain("390px wide.");
+    expect(mountOne(sizeBar("unknown", vi.fn())).textContent).toContain("resized to a commenter's size");
   });
 
   it("explains a share link", () => {
-    const box = sharedBox(
-      { url: "https://ink.test/s/abc", existing: true, expiresAt: null, projectName: "Website", copied: true },
-      vi.fn(),
+    const box = mountOne(
+      sharedBox(
+        { url: "https://ink.test/s/abc", existing: true, expiresAt: null, projectName: "Website", copied: true },
+        vi.fn(),
+      ),
     );
     expect(box.querySelector("strong")?.textContent).toBe("This page's share link");
     expect(box.querySelector(".share-url")?.getAttribute("href")).toBe("https://ink.test/s/abc");
@@ -157,7 +175,7 @@ describe("notices", () => {
   it("copy buttons say whether copying worked, then reset", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn(async () => undefined) } });
-    const button = copyButton("Copy link", "https://x.test");
+    const button = mountOne(copyButton("Copy link", "https://x.test"));
     button.click();
     await vi.advanceTimersByTimeAsync(0);
     expect(button.textContent).toBe("Copied");
@@ -179,7 +197,7 @@ describe("making a comment", () => {
       onTool: vi.fn(),
       onColor: vi.fn(),
     });
-    expect(one[0]?.textContent).toBe("New comments go to Website.");
+    expect(mount(one).firstElementChild?.textContent).toBe("New comments go to Website.");
 
     const two = [project(), project({ id: "p2", name: "App" })];
     const onTarget = vi.fn();
@@ -193,7 +211,7 @@ describe("making a comment", () => {
       onTool: vi.fn(),
       onColor: vi.fn(),
     });
-    const select = (many[0] as HTMLElement).querySelector("select") as HTMLSelectElement;
+    const select = mount(many).querySelector("select") as HTMLSelectElement;
     expect(texts(select, "option")).toEqual(["Acme / Website", "Acme / App"]);
     select.value = "p2";
     select.dispatchEvent(new Event("change"));
@@ -213,8 +231,7 @@ describe("making a comment", () => {
       onTool,
       onColor,
     });
-    const root = document.createElement("div");
-    root.append(...parts);
+    const root = mount(parts);
     expect(root.querySelector(".tool.active")?.textContent).toBe("Box");
     expect(root.querySelector(".swatch.active")?.getAttribute("title")).toBe("#3b82f6");
     expect((root.querySelector(".swatch") as HTMLElement).style.background).not.toBe("");
@@ -226,18 +243,16 @@ describe("making a comment", () => {
   });
 
   it("explains why someone can't comment", () => {
-    expect(cannotComment(true).textContent).toContain("(Viewer)");
-    expect(cannotComment(false).textContent).toContain("not in any project");
+    expect(mountOne(cannotComment(true)).textContent).toContain("(Viewer)");
+    expect(mountOne(cannotComment(false)).textContent).toContain("not in any project");
   });
 
   it("offers where a comment shows only when the address has more than a path", () => {
     expect(scopeChooser("https://a.test/page", { includeQuery: false, includeHash: false }, vi.fn())).toBeNull();
     const onChange = vi.fn();
-    const fieldset = scopeChooser(
-      "https://a.test/page?v=1",
-      { includeQuery: true, includeHash: false },
-      onChange,
-    ) as HTMLElement;
+    const fieldset = mountOne(
+      scopeChooser("https://a.test/page?v=1", { includeQuery: true, includeHash: false }, onChange),
+    );
     const radios = [...fieldset.querySelectorAll<HTMLInputElement>("input[type=radio]")];
     expect(radios.map((r) => r.checked)).toEqual([false, true]);
     radios[0]?.dispatchEvent(new Event("change"));
@@ -253,15 +268,17 @@ describe("making a comment", () => {
   it("builds the draft box with Save, Cancel and the attach option", () => {
     const onSave = vi.fn();
     const onAttachContext = vi.fn();
-    const box = draftBox({
-      input: document.createElement("textarea"),
-      scope: null,
-      busy: false,
-      attachContext: true,
-      onAttachContext,
-      onSave,
-      onCancel: vi.fn(),
-    });
+    const box = mountOne(
+      draftBox({
+        input: h("textarea", null),
+        scope: null,
+        busy: false,
+        attachContext: true,
+        onAttachContext,
+        onSave,
+        onCancel: vi.fn(),
+      }),
+    );
     clickButton(box, "Save");
     expect(onSave).toHaveBeenCalledOnce();
     const attach = box.querySelector<HTMLInputElement>(".attach input") as HTMLInputElement;
@@ -271,15 +288,17 @@ describe("making a comment", () => {
   });
 
   it("leaves out the attach option without bug context, and says when it's saving", () => {
-    const box = draftBox({
-      input: document.createElement("textarea"),
-      scope: null,
-      busy: true,
-      attachContext: null,
-      onAttachContext: vi.fn(),
-      onSave: vi.fn(),
-      onCancel: vi.fn(),
-    });
+    const box = mountOne(
+      draftBox({
+        input: h("textarea", null),
+        scope: null,
+        busy: true,
+        attachContext: null,
+        onAttachContext: vi.fn(),
+        onSave: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
     expect(box.querySelector(".attach")).toBeNull();
     expect(box.querySelector<HTMLButtonElement>(".primary")?.textContent).toBe("Saving…");
     expect(box.querySelector<HTMLButtonElement>(".primary")?.disabled).toBe(true);
@@ -316,7 +335,7 @@ describe("a comment", () => {
 
   it("shows its number, author and text in the list", () => {
     const ctx = fakeContext();
-    const li = listEntry(ctx, parts(ctx), annotation(), entryOptions());
+    const li = mountOne(listEntry(ctx, parts(ctx), annotation(), entryOptions()));
     expect(li.dataset.id).toBe("a1");
     expect(li.querySelector(".badge")?.textContent).toBe("2");
     expect(li.querySelector(".meta strong")?.textContent).toBe("Ann");
@@ -328,14 +347,14 @@ describe("a comment", () => {
   it("offers only what the user may do", () => {
     const ctx = fakeContext();
     const a = annotation({ canEdit: false, canDelete: false, status: "Resolved" });
-    const li = listEntry(ctx, parts(ctx), a, entryOptions({ canComment: false }));
+    const li = mountOne(listEntry(ctx, parts(ctx), a, entryOptions({ canComment: false })));
     expect(texts(li, ".actions button")).toEqual(["Copy link"]);
     expect(li.classList.contains("resolved")).toBe(true);
   });
 
   it("marks a moved comment and names its project when there are several", () => {
     const ctx = fakeContext();
-    const li = listEntry(ctx, parts(ctx), annotation(), entryOptions({ orphaned: true, projectName: "App" }));
+    const li = mountOne(listEntry(ctx, parts(ctx), annotation(), entryOptions({ orphaned: true, projectName: "App" })));
     expect(li.querySelector(".warn")?.textContent).toBe("moved");
     expect(li.textContent).toContain("· App");
   });
@@ -343,7 +362,7 @@ describe("a comment", () => {
   it("resolves, and asks before deleting", () => {
     const ctx = fakeContext();
     const o = entryOptions();
-    const li = listEntry(ctx, parts(ctx), annotation(), o);
+    const li = mountOne(listEntry(ctx, parts(ctx), annotation(), o));
     clickButton(li, "Resolve");
     expect(o.actions.setResolved).toHaveBeenCalledWith(true);
     vi.stubGlobal("confirm", () => false);
@@ -369,20 +388,23 @@ describe("a comment", () => {
     };
     const a = annotation({ replies: [reply, { ...reply, id: "r2" }] });
     const p = parts(ctx);
-    expect(listEntry(ctx, p, a, entryOptions()).querySelector(".replies-count")?.textContent).toBe("2 replies");
-    const selected = listEntry(ctx, p, a, entryOptions({ selected: true }));
+    expect(mountOne(listEntry(ctx, p, a, entryOptions())).querySelector(".replies-count")?.textContent).toBe(
+      "2 replies",
+    );
+    const selected = mountOne(listEntry(ctx, p, a, entryOptions({ selected: true })));
     expect(selected.querySelectorAll(".reply")).toHaveLength(2);
     expect(selected.querySelector("textarea.reply-box")).not.toBeNull();
   });
 
   it("shows the edit box instead of the text while editing", () => {
     const ctx = fakeContext();
-    const input = document.createElement("textarea");
-    const o = entryOptions({ editing: { input, wrapper: input } });
-    const li = listEntry(ctx, parts(ctx), annotation(), o);
+    const draft = { text: "Fix this", picked: new Map<string, string>() };
+    const o = entryOptions({ editing: { draft, onChange: vi.fn(), organizationId: () => "o1" } });
+    const li = mountOne(listEntry(ctx, parts(ctx), annotation(), o));
     expect(li.querySelector(".body")).toBeNull();
     clickButton(li, "Save");
-    expect(o.actions.saveEdit).toHaveBeenCalledWith(input);
+    expect(li.querySelector("textarea")?.value).toBe("Fix this");
+    expect(o.actions.saveEdit).toHaveBeenCalledWith(draft);
   });
 
   it("links docs that mention it", () => {
@@ -393,7 +415,7 @@ describe("a comment", () => {
         { docId: "d2", title: "Notes" },
       ],
     });
-    const line = listEntry(ctx, parts(ctx), a, entryOptions()).querySelector(".mentions") as HTMLElement;
+    const line = mountOne(listEntry(ctx, parts(ctx), a, entryOptions())).querySelector(".mentions") as HTMLElement;
     expect(line.textContent).toBe("Mentioned in Plan, Notes");
     expect(line.querySelector("a")?.getAttribute("href")).toBe("https://ink.test/orgs/o1/docs/d1");
   });
@@ -402,15 +424,14 @@ describe("a comment", () => {
     const ctx = fakeContext();
     const onTogglePin = vi.fn();
     const setResolved = vi.fn();
-    const nodes = bubbleContent(ctx, parts(ctx), annotation({ status: "Resolved" }), {
+    const content = bubbleContent(ctx, parts(ctx), annotation({ status: "Resolved" }), {
       pinned: true,
       canComment: true,
       onTogglePin,
       onShowInList: vi.fn(),
       actions: { setResolved },
     });
-    const root = document.createElement("div");
-    root.append(...nodes);
+    const root = mount(content);
     expect(root.querySelector(".pin-toggle.on")).not.toBeNull();
     expect(root.querySelector(".bubble-head")?.textContent).toContain("· resolved");
     (root.querySelector(".pin-toggle") as HTMLButtonElement).click();
@@ -438,7 +459,7 @@ describe("a comment's parts", () => {
       ],
       people: [{ id: "0f8fad5b-d9cb-469f-a165-70867728950e", displayName: "Bo", fullName: "Bo Diaz" }],
     });
-    const p = parts().body(a);
+    const p = mountOne(parts().body(a));
     expect(p.querySelector("a.doclink")?.getAttribute("href")).toBe("https://ink.test/orgs/o1/docs/d1");
     expect(p.querySelector(".doclink.missing")?.textContent).toBe("Missing");
     expect(p.querySelector(".mention")?.textContent).toBe("@Bo");
@@ -447,7 +468,7 @@ describe("a comment's parts", () => {
   it("shows [[links]] as text while docs are off", () => {
     const ctx = fakeContext({ init: init({ features: { ...ALL_FEATURES, docs: false } }) });
     const a = annotation({ body: "See [[Plan]]", docLinks: [{ text: "Plan", docId: "d1", title: "Plan" }] });
-    const p = parts(ctx).body(a);
+    const p = mountOne(parts(ctx).body(a));
     expect(p.querySelector("a")).toBeNull();
     expect(p.textContent).toBe("See [[Plan]]");
   });
@@ -468,7 +489,7 @@ describe("a comment's parts", () => {
         capturedAt: "",
       },
     });
-    const details = parts().details(a) as HTMLDetailsElement;
+    const details = mountOne(parts().details(a));
     expect(details.querySelector("summary")?.textContent).toBe("Firefox · Linux · 800×600 · 1 console error");
     expect(details.textContent).toContain("Element: #buy");
     expect(details.querySelector("li.error")?.textContent).toBe("error: boom");
@@ -476,10 +497,9 @@ describe("a comment's parts", () => {
 
   it("shows nothing for details, screenshots or issues that aren't there", () => {
     const p = parts();
-    for (const node of [p.details(annotation()), p.screenshot(annotation()), p.size(annotation())]) {
-      expect(node.nodeType).toBe(Node.TEXT_NODE);
-      expect(node.textContent).toBe("");
-    }
+    expect(p.details(annotation())).toBeNull();
+    expect(p.screenshot(annotation())).toBeNull();
+    expect(p.size(annotation())).toBeNull();
   });
 
   it("links issues on https only", () => {
@@ -490,7 +510,7 @@ describe("a comment's parts", () => {
         { id: "i2", kind: "jira", key: "WEB-1", url: "javascript:alert(1)", state: "closed" },
       ],
     });
-    const row = parts().issues(a) as HTMLElement;
+    const row = mountOne(parts().issues(a));
     expect(texts(row, "a.issue")).toEqual(["● GitHub #12"]);
   });
 
@@ -502,7 +522,7 @@ describe("a comment's parts", () => {
       lightboxParent: document.body,
       matchSize,
     });
-    const row = p.size(annotation({ viewportWidth: 390, context: null })) as HTMLElement;
+    const row = mountOne(p.size(annotation({ viewportWidth: 390, context: null })));
     expect(row.textContent).toContain(`Made at 390px wide · you're at ${innerWidth}px`);
     clickButton(row, "Match their size");
     expect(matchSize).toHaveBeenCalledWith("a1", 390, null, null);
@@ -514,12 +534,21 @@ describe("a comment's parts", () => {
     vi.stubGlobal("chrome", fake.chrome);
     const p = parts(ctx);
     const a = annotation();
-    const box = p.replyBox(a, "panel").querySelector("textarea") as HTMLTextAreaElement;
-    expect(p.replyBox(a, "panel").querySelector("textarea")).toBe(box);
-    expect(p.replyBox(a, "bubble").querySelector("textarea")).not.toBe(box);
+    // Re-render when the parts ask to, as the session does.
+    const root = mount(null);
+    const draw = () => render(p.replyBox(a, "panel"), root);
+    ctx.render.mockImplementation(draw);
+    draw();
+    const box = root.querySelector("textarea") as HTMLTextAreaElement;
 
     box.value = "On it";
+    box.dispatchEvent(new Event("input"));
+    draw();
+    expect(root.querySelector("textarea")).toBe(box);
+    expect(box.value).toBe("On it");
     expect(p.hasReplyDraft("panel", "a1")).toBe(true);
+    expect(p.hasReplyDraft("bubble", "a1")).toBe(false);
+
     box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
     expect(box.value).toBe("");
     expect(ctx.mutate).toHaveBeenCalledOnce();
@@ -558,15 +587,14 @@ describe("activity", () => {
     vi.stubGlobal("chrome", fake.chrome);
     const ctx = fakeContext({ onThisPage: ["a1"] });
     const view = new ActivityView(ctx);
-    expect(view.parts()).toEqual([]);
+    expect(view.parts()).toBeNull();
     view.open();
     view.open();
     await vi.waitFor(() => expect(ctx.render).toHaveBeenCalledTimes(2));
     expect(fake.sendMessage).toHaveBeenCalledOnce();
     expect(fake.sendMessage).toHaveBeenCalledWith({ type: "live.activity", thisSite: true });
 
-    const root = document.createElement("div");
-    root.append(...view.parts());
+    const root = mount(view.parts());
     const item = root.querySelector("li.item") as HTMLLIElement;
     expect(item.textContent).toContain("Ann commented");
     expect(item.querySelector(".where a")?.textContent).toBe("site.test/page");
@@ -613,8 +641,7 @@ describe("inbox", () => {
     expect(view.idle).toBe(false);
     await view.load();
     expect(view.idle).toBe(true);
-    const root = document.createElement("div");
-    root.append(...view.parts());
+    const root = mount(view.parts());
     expect(root.querySelector(".inbox-head strong")?.textContent).toBe("1 unread");
     expect(root.querySelector(".unread-dot")?.getAttribute("role")).toBe("img");
     expect(root.querySelector("li.item")?.textContent).toContain("Bo mentioned you");
@@ -624,8 +651,7 @@ describe("inbox", () => {
     vi.stubGlobal("chrome", fakeChrome(() => ({ unread: 0, serverUrl: "https://ink.test", items: [] })).chrome);
     const view = new InboxView(fakeContext());
     await view.load();
-    const root = document.createElement("div");
-    root.append(...view.parts());
+    const root = mount(view.parts());
     expect(root.querySelector(".inbox-head strong")?.textContent).toBe("All read");
     expect(root.querySelector(".empty")?.textContent).toContain("Nothing yet.");
   });

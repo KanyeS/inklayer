@@ -1,3 +1,4 @@
+import { type ComponentChild, render } from "preact";
 import { vi } from "vitest";
 import type { Features } from "../src/lib/api";
 import type { LiveInit, LiveProject } from "../src/lib/live";
@@ -118,4 +119,19 @@ export function clickButton(root: ParentNode, label: string): void {
   const button = [...root.querySelectorAll("button")].find((b) => b.textContent === label);
   if (!button) throw new Error(`No "${label}" button`);
   button.click();
+}
+
+/** Renders panel content into a new element in the document, and returns that element. */
+export function mount(content: ComponentChild): HTMLElement {
+  const root = document.createElement("div");
+  document.body.append(root);
+  render(content, root);
+  return root;
+}
+
+/** Renders panel content and returns the first element it made. */
+export function mountOne(content: ComponentChild): HTMLElement {
+  const el = mount(content).firstElementChild;
+  if (!(el instanceof HTMLElement || el instanceof SVGElement)) throw new Error("Nothing was rendered");
+  return el as HTMLElement;
 }

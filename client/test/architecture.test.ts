@@ -85,22 +85,34 @@ describe("project boundaries", () => {
     expect(undeclared).toEqual([]);
   });
 
-  it("the overlay package doesn't use React (it runs inside other people's pages)", () => {
-    const react = filesIn("packages/overlay/src", CODE).filter((f) =>
-      importsOf(f).some((s) => /^react(-dom)?\b/.test(s)),
+  it("the overlay package uses no UI library (it runs inside other people's pages, and the viewer and site share it)", () => {
+    const framework = filesIn("packages/overlay/src", CODE).filter((f) =>
+      importsOf(f).some((s) => /^(react(-dom)?|preact)\b/.test(s)),
     );
-    expect(react).toEqual([]);
+    expect(framework).toEqual([]);
   });
 
-  it("content scripts don't pull in React or the UI components (they're injected into every page)", () => {
+  it("content scripts render with Preact, not React or the UI components (they're injected into every page)", () => {
     const heavy = files
       .filter(CONTENT_SCRIPT)
       .flatMap((f) => importsOf(f).map((s) => ({ f, s })))
       .filter(
-        ({ s }) => /^react(-dom)?\b/.test(s) || /^@inklayer\/ui\/components\b/.test(s) || /^lucide-react\b/.test(s),
+        ({ s }) =>
+          /^react(-dom)?\b/.test(s) ||
+          // compat would let React libraries in
+          /^preact\/compat\b/.test(s) ||
+          /^@inklayer\/ui\/components\b/.test(s) ||
+          /^lucide-react\b/.test(s),
       )
       .map(({ f, s }) => `${f} imports ${s}`);
     expect(heavy).toEqual([]);
+  });
+
+  it("content scripts' JSX compiles to Preact (without the pragma it would quietly bundle React)", () => {
+    const withoutPragma = files
+      .filter((f) => CONTENT_SCRIPT(f) && f.endsWith(".tsx"))
+      .filter((f) => !read(f).startsWith("/** @jsxImportSource preact */"));
+    expect(withoutPragma).toEqual([]);
   });
 });
 

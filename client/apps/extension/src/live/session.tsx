@@ -1,14 +1,12 @@
+/** @jsxImportSource preact */
 import {
   type Anchor,
   type AnchorQuality,
   type AnnotationKind,
   copyText,
   type Draft,
-  decodeMentions,
-  encodeMentions,
   followColorScheme,
   type Geometry,
-  h,
   Overlay,
   type OverlayAnnotation,
   type OverlayMessage,
@@ -17,6 +15,7 @@ import {
   type Tool,
 } from "@inklayer/overlay";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
+import { type ComponentChild, render } from "preact";
 import type { LiveAnnotation, LiveInit, LivePage, LiveProject } from "../lib/live";
 import { attachPageDetails } from "./bug-context";
 import { call, messageOf, remember } from "./call";
@@ -27,7 +26,7 @@ import { COLORS } from "./labels";
 import { loadPanelFont } from "./page-io";
 import { PanelMover } from "./panel-mover";
 import panelCss from "./styles/panel.css?inline";
-import { pickedIn, withSuggestions } from "./suggestions";
+import { draftBody, draftOf, EMPTY_DRAFT, SuggestBox, type TextDraft } from "./suggestions";
 import { ActivityView } from "./views/activity";
 import { cornerPin, header, launcher, type SharedLink, type SizeMatch, sharedBox, sizeBar } from "./views/chrome";
 import { bubbleContent, type CommentActions, listEntry } from "./views/comment";
@@ -58,8 +57,8 @@ type ChosenScope = { includeQuery: boolean; includeHash: boolean };
  * <li>Adds a small panel, in a closed shadow root, for the tools and the comment list.</li>
  * <li>All API calls go through the background worker, which checks them against this page's origin; the page never sees a token.</li>
  * </ul>
- * Everything shown is set with textContent, never parsed as HTML. This class keeps the state and decides what's shown;
- * the panel's pieces are built by the modules in views/, and bubbles, dragging and bug context have modules of their own.
+ * Everything shown is rendered as text by Preact, never parsed as HTML. This class keeps the state and decides what's
+ * shown; the panel's pieces come from the modules in views/, and bubbles, dragging and bug context have modules of their own.
  */
 export class LiveSession {
   readonly #init: LiveInit;
@@ -82,8 +81,10 @@ export class LiveSession {
 
   // Making a comment
   #draft: Draft | null = null;
-  #draftInput: HTMLTextAreaElement | null = null;
-  #editing: { id: string; input: HTMLTextAreaElement } | null = null;
+  #draftText: TextDraft = EMPTY_DRAFT;
+  /** Counts drafts, so each new one gets a fresh (and focused) comment box. */
+  #draftNumber = 0;
+  #editing: { id: string; draft: TextDraft } | null = null;
   #tool: Tool = "select";
   #color: string = COLORS[0];
   #scope: Scope = { query: false, hash: false };
@@ -122,10 +123,13 @@ export class LiveSession {
     this.#host = document.createElement("inklayer-live");
     this.#host.setAttribute("style", "all:initial;position:fixed;right:16px;bottom:16px;z-index:2147483647;");
     this.#shadow = this.#host.attachShadow({ mode: "closed" });
-    this.#shadow.append(h("style", { textContent: PANEL_STYLES }));
+    const style = document.createElement("style");
+    style.textContent = PANEL_STYLES;
+    this.#shadow.append(style);
     followColorScheme(this.#host);
     void loadPanelFont();
-    this.#root = h("div", { className: "root" });
+    this.#root = document.createElement("div");
+    this.#root.className = "root";
     this.#shadow.append(this.#root);
     // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
     for (const type of ["keydown", "keyup", "keypress"] as const) this.#root.addEventListener(type, stopPropagation);
@@ -393,16 +397,12 @@ export class LiveSession {
       setResolved: (resolved) => update({ status: resolved ? "Resolved" : "Open" }),
       remove: () => void this.#mutate(() => call({ type: "live.delete", id: a.id, version: a.version })),
       startEdit: () => {
-        const input = h("textarea", { rows: 3, onclick: stopPropagation });
-        input.value = decodeMentions(a.body, a.people ?? [], pickedIn(input));
-        this.#editing = { id: a.id, input };
+        this.#editing = { id: a.id, draft: draftOf(a.body, a.people ?? []) };
         this.#render();
-        input.focus();
       },
-      saveEdit: (input) => {
-        const body = encodeMentions(input.value, pickedIn(input));
+      saveEdit: (draft) => {
         this.#editing = null;
-        update({ body });
+        update({ body: draftBody(draft) });
       },
       cancelEdit: () => {
         this.#editing = null;
@@ -417,10 +417,10 @@ export class LiveSession {
     switch (message.type) {
       case "draft":
         this.#draft = message.draft;
-        this.#draftInput = null;
+        this.#draftText = EMPTY_DRAFT;
+        this.#draftNumber++;
         this.#open = true;
-        this.#render(); // creates the comment box
-        (this.#draftInput as HTMLTextAreaElement | null)?.focus();
+        this.#render(); // a new comment box, focused
         break;
       case "selected":
         this.#selected = message.id;
@@ -465,14 +465,14 @@ export class LiveSession {
 
   #cancelDraft(): void {
     this.#draft = null;
-    this.#draftInput = null;
+    this.#draftText = EMPTY_DRAFT;
     this.#overlay.handle({ type: "clearDraft" });
     this.#render();
   }
 
   async #saveDraft(): Promise<void> {
     const draft = this.#draft;
-    const body = this.#draftInput ? encodeMentions(this.#draftInput.value.trim(), pickedIn(this.#draftInput)) : "";
+    const body = draftBody(this.#draftText);
     const target = this.#target;
     if (!draft || !target || this.#busy) return;
     await this.#mutate(async () => {
@@ -494,7 +494,7 @@ export class LiveSession {
         else await this.#load(); // the screenshot is there: show it
       }
       this.#draft = null;
-      this.#draftInput = null;
+      this.#draftText = EMPTY_DRAFT;
       this.#selected = created.id;
       this.#overlay.handle({ type: "clearDraft" });
       this.#setTool("select");
@@ -566,48 +566,41 @@ export class LiveSession {
 
   /* ------------------------------------------------------------------ rendering */
 
-  /** Redraws the panel and bubbles, keeping focus and the cursor in a comment box the user is typing in. */
+  /** Redraws the panel and bubbles. Preact updates what changed, so boxes being typed in keep their text and focus. */
   #render(): void {
-    const focused = this.#shadow.activeElement;
-    const typing =
-      focused instanceof HTMLTextAreaElement
-        ? { el: focused, start: focused.selectionStart, end: focused.selectionEnd }
-        : null;
-    this.#draw();
-    if (typing?.el.isConnected) {
-      typing.el.focus();
-      typing.el.setSelectionRange(typing.start, typing.end);
-    }
+    render(this.#draw(), this.#root);
+    this.#mover.place();
     this.#bubbles.render();
   }
 
-  #draw(): void {
-    if (this.#open) {
-      this.#root.replaceChildren(
-        h("div", { className: "panel" }, ...this.#panelTop(), ...this.#viewContent()),
-        cornerPin(this.#mover.pinned, () => this.#mover.setPinned(!this.#mover.pinned)),
-      );
-    } else {
-      this.#root.replaceChildren(
-        launcher({
-          openCount: this.#annotations.filter((a) => a.status === "Open").length,
-          unread: this.#inbox.unread,
-          pinned: this.#mover.pinned,
-          onOpen: () => {
-            if (this.#mover.justDragged) return;
-            this.#open = true;
-            this.#render();
-          },
-          onDragStart: (e) => this.#mover.startDrag(e),
-        }),
-      );
+  #draw(): ComponentChild {
+    if (!this.#open) {
+      return launcher({
+        openCount: this.#annotations.filter((a) => a.status === "Open").length,
+        unread: this.#inbox.unread,
+        pinned: this.#mover.pinned,
+        onOpen: () => {
+          if (this.#mover.justDragged) return;
+          this.#open = true;
+          this.#render();
+        },
+        onDragStart: (e) => this.#mover.startDrag(e),
+      });
     }
-    this.#mover.place();
+    return (
+      <>
+        <div className="panel">
+          {this.#panelTop()}
+          {this.#viewContent()}
+        </div>
+        {cornerPin(this.#mover.pinned, () => this.#mover.setPinned(!this.#mover.pinned))}
+      </>
+    );
   }
 
   /** The header and any notices under it. */
-  #panelTop(): Node[] {
-    const parts: Node[] = [
+  #panelTop(): ComponentChild[] {
+    return [
       header({
         view: this.#view,
         busy: this.#busy,
@@ -632,35 +625,33 @@ export class LiveSession {
         onDragStart: (e) => this.#mover.startDrag(e),
         onResetPosition: () => this.#mover.reset(),
       }),
+      this.#sizeMatched && sizeBar(this.#sizeMatched, () => void this.#restoreSize()),
+      this.#shared &&
+        sharedBox(this.#shared, () => {
+          this.#shared = null;
+          this.#render();
+        }),
+      this.#note && <p className="hint">{this.#note}</p>,
     ];
-    if (this.#sizeMatched) parts.push(sizeBar(this.#sizeMatched, () => void this.#restoreSize()));
-    if (this.#shared) {
-      const closeShared = () => {
-        this.#shared = null;
-        this.#render();
-      };
-      parts.push(sharedBox(this.#shared, closeShared));
-    }
-    if (this.#note) parts.push(h("p", { className: "hint", textContent: this.#note }));
-    return parts;
   }
 
-  #viewContent(): Node[] {
+  #viewContent(): ComponentChild {
     if (this.#view === "inbox") return this.#inbox.parts();
     if (this.#view === "activity") return this.#activity.parts();
     return this.#commentsView();
   }
 
   /** The Comments tab: tools for a new comment, the draft being written, and the page's comments. */
-  #commentsView(): Node[] {
-    const parts: Node[] = this.#target ? this.#toolbar(this.#target) : [cannotComment(this.#init.projects.length > 0)];
-    if (this.#draft) parts.push(this.#draftBox());
-    if (this.#error) parts.push(h("p", { className: "error", textContent: this.#error }));
-    parts.push(...this.#commentList());
-    return parts;
+  #commentsView(): ComponentChild[] {
+    return [
+      this.#target ? this.#toolbar(this.#target) : cannotComment(this.#init.projects.length > 0),
+      this.#draft && this.#draftBox(),
+      this.#error && <p className="error">{this.#error}</p>,
+      ...this.#commentList(),
+    ];
   }
 
-  #toolbar(target: LiveProject): Node[] {
+  #toolbar(target: LiveProject): ComponentChild {
     return toolbar({
       commentable: this.#init.projects.filter((p) => p.canComment),
       target,
@@ -679,14 +670,29 @@ export class LiveSession {
     });
   }
 
-  #draftBox(): HTMLElement {
-    this.#draftInput ??= h("textarea", { placeholder: "Add a comment (optional). Ctrl+Enter to save.", rows: 3 });
-    this.#draftInput.onkeydown = (e) => {
+  #draftBox(): ComponentChild {
+    const keys = (e: KeyboardEvent) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void this.#saveDraft();
       if (e.key === "Escape") this.#cancelDraft();
     };
+    const input = (
+      <SuggestBox
+        key={this.#draftNumber}
+        draft={this.#draftText}
+        onChange={(draft) => {
+          this.#draftText = draft;
+          this.#render();
+        }}
+        organizationId={() => this.#target?.organizationId ?? null}
+        docsOn={this.#init.features.docs}
+        placeholder="Add a comment (optional). Ctrl+Enter to save."
+        rows={3}
+        autoFocus
+        onKeyDown={keys}
+      />
+    );
     return draftBox({
-      input: withSuggestions(this.#draftInput, () => this.#target?.organizationId ?? null, this.#init.features.docs),
+      input,
       scope: scopeChooser(location.href, this.#chosenScope(), (scope) => {
         this.#scope = scope;
         this.#render();
@@ -696,6 +702,7 @@ export class LiveSession {
       onAttachContext: (attach) => {
         this.#attachContext = attach;
         remember({ attachContext: attach });
+        this.#render();
       },
       onSave: () => void this.#saveDraft(),
       onCancel: () => this.#cancelDraft(),
@@ -703,31 +710,33 @@ export class LiveSession {
   }
 
   /** The page's comments, and "Show resolved" when some are hidden. */
-  #commentList(): Node[] {
+  #commentList(): ComponentChild[] {
     const visible = this.#visible();
     const resolvedCount = this.#annotations.filter((a) => a.status !== "Open").length;
-    const list = h("ol", { className: "list" }, ...visible.map((a) => this.#listEntry(a)));
-    if (visible.length === 0) {
-      const empty = this.#annotations.length ? "No open comments." : "No comments on this page yet.";
-      list.append(h("li", { className: "empty", textContent: empty }));
-    }
+    const empty = this.#annotations.length ? "No open comments." : "No comments on this page yet.";
+    const list = (
+      <ol className="list">
+        {visible.map((a) => this.#listEntry(a))}
+        {visible.length === 0 && <li className="empty">{empty}</li>}
+      </ol>
+    );
     if (resolvedCount === 0) return [list];
-    const toggle = h("button", {
-      className: "link",
-      textContent: this.#showResolved ? "Hide resolved" : `Show resolved (${resolvedCount})`,
-      onclick: () => {
-        this.#showResolved = !this.#showResolved;
-        this.#syncOverlay();
-        this.#render();
-      },
-    });
-    return [list, toggle];
+    const toggle = () => {
+      this.#showResolved = !this.#showResolved;
+      this.#syncOverlay();
+      this.#render();
+    };
+    return [
+      list,
+      <button key="resolved" type="button" className="link" onClick={toggle}>
+        {this.#showResolved ? "Hide resolved" : `Show resolved (${resolvedCount})`}
+      </button>,
+    ];
   }
 
-  #listEntry(a: PageAnnotation): HTMLLIElement {
+  #listEntry(a: PageAnnotation): ComponentChild {
     const multiProject = new Set(this.#annotations.map((x) => x.projectId)).size > 1;
-    const editing = this.#editing?.id === a.id ? this.#editing.input : null;
-    const docsOn = this.#init.features.docs;
+    const editing = this.#editing?.id === a.id ? this.#editing : null;
     return listEntry(this.#ctx, this.#parts, a, {
       label: this.#labelOf(a.id),
       selected: a.id === this.#selected,
@@ -736,8 +745,12 @@ export class LiveSession {
       showAddress: location.search.length > 1 || location.hash.length > 1,
       canComment: this.#canCommentIn(a.projectId),
       editing: editing && {
-        input: editing,
-        wrapper: withSuggestions(editing, () => this.#organizationOf(a.projectId), docsOn),
+        draft: editing.draft,
+        onChange: (draft) => {
+          this.#editing = { id: a.id, draft };
+          this.#render();
+        },
+        organizationId: () => this.#organizationOf(a.projectId),
       },
       onSelect: () => {
         this.#selected = a.id;
