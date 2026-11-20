@@ -10,7 +10,7 @@ RUN npm ci --no-audit --no-fund \
 
 # The SDK stage runs on the build machine's own architecture and cross-compiles for the
 # target (amd64/arm64). Multi-arch images build fast, with no QEMU emulation.
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 ARG VERSION=0.0.0-dev
 ARG TARGETARCH
 WORKDIR /src
