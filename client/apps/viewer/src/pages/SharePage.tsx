@@ -1,42 +1,21 @@
+import type { PublicShareResponse } from "@inklayer/api";
 import { enhance } from "@inklayer/docs/enhance";
 import { renderMarkdown } from "@inklayer/docs/reading";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Eye, FileText, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
-import { ApiError, get } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
-interface PublicReply {
-  author: string;
-  body: string;
-  createdAt: string;
-}
-
-interface PublicComment {
-  id: string;
-  body: string;
-  status: "Open" | "Resolved";
-  author: string;
-  createdAt: string;
-  hasScreenshot: boolean;
-  replies: PublicReply[];
-}
-
-interface PublicShare {
-  kind: "page" | "project" | "doc";
-  title: string;
-  expiresAt: string | null;
-  pages: { pageUrl: string; comments: PublicComment[] }[] | null;
-  doc: { markdown: string; updatedAt: string; links: { key: string; token: string }[] } | null;
-}
+type PublicShare = PublicShareResponse;
 
 /**
  * What a share link shows, to anyone with it: a page's or project's comments, or a doc. Read-only, and no sign-in: this
  * page never asks the server who you are.
  */
 export function SharePage({ token }: { token: string }) {
-  const share = useAsync(() => get<PublicShare>(`/api/public/shares/${encodeURIComponent(token)}`), [token]);
+  const share = useAsync(() => api.get("/api/public/shares/{token}", { params: { path: { token } } }), [token]);
 
   return (
     <div className="min-h-svh bg-background">

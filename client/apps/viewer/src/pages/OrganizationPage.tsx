@@ -21,20 +21,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { IntegrationsSection } from "@/components/IntegrationsSection";
 import { ErrorText, Loading, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { LinkCards } from "@/components/LinkCards";
-import {
-  atLeast,
-  del,
-  get,
-  type Invitation,
-  type Member,
-  type Organization,
-  type Project,
-  patch,
-  post,
-  put,
-  ROLES,
-  type Role,
-} from "@/lib/api";
+import { api, atLeast, type Invitation, type Member, type Organization, ROLES, type Role } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { personTitle } from "@/lib/people";
 import { Link, navigate } from "@/lib/router";
@@ -42,8 +29,8 @@ import { useAsync } from "@/lib/useAsync";
 
 export function OrganizationPage({ orgId }: { orgId: string }) {
   const { me } = useMe();
-  const org = useAsync(() => get<Organization>(`/api/orgs/${orgId}`), [orgId]);
-  const projects = useAsync(() => get<Project[]>(`/api/orgs/${orgId}/projects`), [orgId]);
+  const org = useAsync(() => api.get("/api/orgs/{orgId}", { params: { path: { orgId } } }), [orgId]);
+  const projects = useAsync(() => api.get("/api/orgs/{orgId}/projects", { params: { path: { orgId } } }), [orgId]);
 
   if (org.error)
     return (
@@ -128,7 +115,7 @@ function CreateProject({ orgId }: { orgId: string }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const project = await post<Project>(`/api/orgs/${orgId}/projects`, { name });
+      const project = await api.post("/api/orgs/{orgId}/projects", { params: { path: { orgId } }, body: { name } });
       navigate(`/projects/${project.id}`);
     } catch (err) {
       setError(err as Error);
@@ -155,9 +142,15 @@ function Members({ org }: { org: Organization }) {
   const { me } = useMe();
   const isAdmin = atLeast(org.myRole, "Admin");
   const isOwner = org.myRole === "Owner";
-  const members = useAsync(() => get<Member[]>(`/api/orgs/${org.id}/members`), [org.id]);
+  const members = useAsync(
+    () => api.get("/api/orgs/{orgId}/members", { params: { path: { orgId: org.id } } }),
+    [org.id],
+  );
   const invitations = useAsync(
-    () => (isAdmin ? get<Invitation[]>(`/api/orgs/${org.id}/invitations`) : Promise.resolve([])),
+    () =>
+      isAdmin
+        ? api.get("/api/orgs/{orgId}/invitations", { params: { path: { orgId: org.id } } })
+        : Promise.resolve<Invitation[]>([]),
     [org.id, isAdmin],
   );
   const [error, setError] = useState<Error | null>(null);
@@ -177,7 +170,9 @@ function Members({ org }: { org: Organization }) {
   };
   const assignable = ROLES.filter((r) => isOwner || r !== "Owner");
   const remove = async (m: Member) => {
-    const ok = await act(() => del(`/api/orgs/${org.id}/members/${m.userId}`));
+    const ok = await act(() =>
+      api.delete("/api/orgs/{orgId}/members/{userId}", { params: { path: { orgId: org.id, userId: m.userId } } }),
+    );
     if (ok && m.userId === me.id) window.location.href = "/";
   };
 
@@ -190,7 +185,10 @@ function Members({ org }: { org: Organization }) {
           onSubmit={(e) => {
             e.preventDefault();
             void act(async () => {
-              await post(`/api/orgs/${org.id}/invitations`, { email, role });
+              await api.post("/api/orgs/{orgId}/invitations", {
+                params: { path: { orgId: org.id } },
+                body: { email, role },
+              });
               setEmail("");
             });
           }}
@@ -242,7 +240,12 @@ function Members({ org }: { org: Organization }) {
                       aria-label={`Role for ${m.displayName}`}
                       value={m.role}
                       onChange={(e) =>
-                        void act(() => put(`/api/orgs/${org.id}/members/${m.userId}`, { role: e.target.value }))
+                        void act(() =>
+                          api.put("/api/orgs/{orgId}/members/{userId}", {
+                            params: { path: { orgId: org.id, userId: m.userId } },
+                            body: { role: e.target.value as Role },
+                          }),
+                        )
                       }
                     >
                       {assignable.map((r) => (
@@ -283,7 +286,13 @@ function Members({ org }: { org: Organization }) {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => void act(() => del(`/api/orgs/${org.id}/invitations/${i.id}`))}
+                      onClick={() =>
+                        void act(() =>
+                          api.delete("/api/orgs/{orgId}/invitations/{invitationId}", {
+                            params: { path: { orgId: org.id, invitationId: i.id } },
+                          }),
+                        )
+                      }
                     >
                       Revoke
                     </Button>
@@ -309,10 +318,9 @@ function Settings({ org, onSaved }: { org: Organization; onSaved: () => Promise<
     setError(null);
     setSaved(false);
     try {
-      await patch(`/api/orgs/${org.id}`, {
-        name,
-        defaultRole,
-        allowedDomains: domains.split(/[\s,]+/).filter(Boolean),
+      await api.patch("/api/orgs/{orgId}", {
+        params: { path: { orgId: org.id } },
+        body: { name, defaultRole, allowedDomains: domains.split(/[\s,]+/).filter(Boolean) },
       });
       await onSaved();
       setSaved(true);

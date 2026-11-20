@@ -1,20 +1,13 @@
+import type { FeatureSettingResponse } from "@inklayer/api";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { useState } from "react";
 import { useMe } from "@/App";
 import { ErrorText, Loading, SectionTitle } from "@/components/Layout";
-import { get, put } from "@/lib/api";
+import { api, type Features } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 
-interface FeatureSetting {
-  feature: "docs" | "liveCursors" | "mcp" | "bugContext" | "issueTrackers" | "sharing";
-  name: string;
-  description: string;
-  enabled: boolean;
-  source: "Default" | "Config" | "Admin";
-  /** On or off in the server's configuration. */
-  configured: boolean;
-}
+type FeatureSetting = FeatureSettingResponse & { feature: keyof Features };
 
 /** The startup setting for each feature, for telling admins which variable sets it. */
 const ENV_NAMES: Record<FeatureSetting["feature"], string> = {
@@ -29,7 +22,7 @@ const ENV_NAMES: Record<FeatureSetting["feature"], string> = {
 /** Instance admins turn major features on or off for everyone. Changes apply straight away. */
 export function FeaturesSection() {
   const { reloadMe } = useMe();
-  const features = useAsync(() => get<FeatureSetting[]>("/api/admin/features"), []);
+  const features = useAsync(() => api.get("/api/admin/features") as Promise<FeatureSetting[]>, []);
   const [error, setError] = useState<Error | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -37,7 +30,7 @@ export function FeaturesSection() {
     setBusy(feature.feature);
     setError(null);
     try {
-      await put<FeatureSetting[]>("/api/admin/features", { [feature.feature]: enabled });
+      await api.put("/api/admin/features", { body: { [feature.feature]: enabled } });
       await features.reload();
       await reloadMe();
     } catch (e) {

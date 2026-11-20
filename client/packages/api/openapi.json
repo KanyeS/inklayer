@@ -1,0 +1,6425 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Inklayer.Api | v1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/features": {
+      "get": {
+        "tags": [
+          "Features"
+        ],
+        "summary": "Which features are on, so apps can show or hide them",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeaturesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/members/lookup": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Members whose name matches ?q=, for @mentions (names only)",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/annotations/{annotationId}/issues": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Create an issue from a comment, with its replies, page and page details",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIssueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/shares": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Sharing"
+        ],
+        "summary": "Every working link (instance administrators)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShareResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activity": {
+      "get": {
+        "tags": [
+          "Activity"
+        ],
+        "summary": "Activity log, newest first. ?kind=comments|docs|signins|errors (default: all you can see), ?site=\u003Corigin\u003E (comments on one site), ?before=\u003CoccurredAt\u003E, ?limit=",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "site",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/version": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Server version",
+        "operationId": "GetVersion",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/providers": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "The sign-in providers configured on this server",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SignInProvider"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "End the browser session",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "The signed-in user and their organisations",
+        "operationId": "GetMe",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Change the name you\u0027re shown as (empty: your real name, from your sign-in provider)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/sessions/revoke": {
+      "post": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Sign out everywhere: ends every browser session and extension token for this user",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/me/apps": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Apps you\u0027ve allowed to use Inklayer as you",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectedAppResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/apps/{clientId}": {
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Disconnect an app: revokes its access and tokens",
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/orgs": {
+      "post": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Create an organisation (instance administrators only); the creator becomes Owner",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrganizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "operationId": "GetOrganization",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Rename, set the default role, or replace the allowed email domains",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrganizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/members": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/members/{userId}": {
+      "put": {
+        "tags": [
+          "Organizations"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Remove a member, or leave the organisation (your own user id)",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/invitations": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InvitationResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Allow an email address to join. They are added when they next sign in with that verified address.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/invitations/{invitationId}": {
+      "delete": {
+        "tags": [
+          "Organizations"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/audit": {
+      "get": {
+        "tags": [
+          "Organizations"
+        ],
+        "summary": "Audit log, newest first. Page with ?before=\u003CoccurredAt\u003E.",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEventResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/projects": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "operationId": "GetProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Projects"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/members": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Every organisation member\u0027s effective role in this project",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectMemberResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/members/{userId}": {
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Override a member\u0027s role in this project (Viewer, Commenter or Editor). Doesn\u0027t apply to organisation Admins and Owners.",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetProjectRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Remove the override; the organisation role applies again",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/admin/network": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "The networks (e.g. VPN ranges) Inklayer answers requests from",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkAccessResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Replace the allowed networks. An empty list allows every network.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNetworkAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkAccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/features": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Each major feature, whether it\u0027s on, and why",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureSettingResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Turn features on or off for everyone. Takes effect straight away.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFeaturesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureSettingResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/email": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Whether the server can send email (set with INKLAYER_SMTP_*)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailSetupResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/email/test": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Send yourself a test email",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUserResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users/{userId}/disable": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Disable a user and immediately end all their sessions and extension tokens",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/admin/users/{userId}/enable": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/annotations/{annotationId}": {
+      "get": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "One comment, with its project, page and the docs that mention it",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Annotations"
+        ],
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnnotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Soft-delete; send ?version= to guard against deleting a changed annotation",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/annotations/{annotationId}/history": {
+      "get": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Every revision, oldest first",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnnotationRevisionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/annotations/{annotationId}/replies": {
+      "post": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Reply in a comment\u0027s thread (Commenters and above)",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replies/{replyId}": {
+      "patch": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Edit your reply (project Admins: anyone\u0027s)",
+        "parameters": [
+          {
+            "name": "replyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplyResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Delete a reply: ?version=",
+        "parameters": [
+          {
+            "name": "replyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/annotations/{annotationId}/context": {
+      "put": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Add the page details captured with your comment (once)",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnotationContextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/annotations/{annotationId}/screenshot": {
+      "put": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Add a screenshot to your comment: a WebP, JPEG or PNG body, at most 600 KB",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "width",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "The screenshot taken with a comment",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Your notifications, newest first, with how many are unread: ?before=\u0026limit=",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/read": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark notifications as read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/integrations": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Where the organisation\u0027s notifications go (organisation Admins)",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IntegrationResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Add an email, Slack or webhook integration",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationCreatedResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/integrations/{id}": {
+      "patch": {
+        "tags": [
+          "Notifications"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Notifications"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/integrations/{id}/test": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Send a test message now",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/issue-trackers": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "The project\u0027s issue tracker connections (project Admins)",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerConnectionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Connect GitHub, Jira Cloud or Linear (checked before saving)",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrackerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackerConnectionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/issue-trackers/choices": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Trackers a Commenter can create issues in",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerChoiceResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/issue-trackers/{id}": {
+      "patch": {
+        "tags": [
+          "Issues"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTrackerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackerConnectionResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Issues"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/issue-trackers/{id}/test": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Check the connection still works",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestResultResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares": {
+      "post": {
+        "tags": [
+          "Sharing"
+        ],
+        "summary": "Create a read-only link to a page\u0027s or project\u0027s comments, or make a doc public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Sharing"
+        ],
+        "summary": "A project\u0027s links (?projectId=) or a doc\u0027s public link (?docId=)",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "docId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShareResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shares/{id}": {
+      "delete": {
+        "tags": [
+          "Sharing"
+        ],
+        "summary": "Revoke a link: it stops working at once",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/public/shares/{token}": {
+      "get": {
+        "tags": [
+          "Sharing"
+        ],
+        "summary": "A shared page, project or doc, read-only",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicShareResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/shares/{token}/screenshots/{commentId}": {
+      "get": {
+        "tags": [
+          "Sharing"
+        ],
+        "summary": "A shared comment\u0027s screenshot",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/live/origins": {
+      "get": {
+        "tags": [
+          "Live"
+        ],
+        "summary": "Sites (scheme://host[:port]) with live comments the caller can see",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/live/projects": {
+      "get": {
+        "tags": [
+          "Live"
+        ],
+        "summary": "Projects the caller can use on live pages, with their role",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LiveProjectResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/live/pages": {
+      "get": {
+        "tags": [
+          "Live"
+        ],
+        "summary": "Every page with comments in every project the caller can view, most recently active first",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LivePageSummaryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/live/annotations": {
+      "get": {
+        "tags": [
+          "Live"
+        ],
+        "summary": "Comments on one live page across the caller\u0027s projects: ?url=\u003Cthe page\u0027s address\u003E",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LivePageAnnotationsResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/live/annotations": {
+      "post": {
+        "tags": [
+          "Live"
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLiveAnnotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/live/pages": {
+      "get": {
+        "tags": [
+          "Live"
+        ],
+        "summary": "Live pages with comments, most recently active first",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LivePageSummaryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/presence/ticket": {
+      "post": {
+        "tags": [
+          "Presence"
+        ],
+        "summary": "A single-use ticket, valid for a few seconds, for opening the presence connection",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceTicketResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/docs": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Folders and docs, with tags",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocTreeResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Create an empty doc (Commenter and above)",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDocRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/docs/folders": {
+      "post": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Create an empty folder",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocFolderResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Rename or move a folder, with everything in it",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveFolderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocFolderMovedResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Delete an empty folder: ?path=",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/docs/search": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Full-text search: ?q=",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocSearchResultResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/docs/lookup": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Docs whose title matches ?q=, for link suggestions",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocSummaryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/docs/tags": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Tags with how many docs have each, and each tag\u0027s icon and colour",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocTagCountResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/docs/tags/{tag}": {
+      "put": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Set a #tag\u0027s icon and colour (Commenter and above); both empty for the defaults",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocAppearanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocTagCountResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/docs/graph": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Docs and comments as nodes, links as edges",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocGraphResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docs/{docId}": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "A doc\u0027s details, links and backlinks (the text comes from the docs hub)",
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Rename or move a doc",
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDocRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocChangedResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Delete a doc: ?version=",
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/docs/{docId}/appearance": {
+      "put": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Set the doc\u0027s icon and colour (Commenter and above)",
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocAppearanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docs/{docId}/history": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocRevisionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docs/{docId}/history/{revisionId}": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocRevisionContentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActivityActor": {
+        "required": [
+          "id",
+          "displayName",
+          "email"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "ActivityItemResponse": {
+        "required": [
+          "id",
+          "kind",
+          "action",
+          "occurredAt",
+          "actor",
+          "projectId",
+          "projectName",
+          "pageUrl",
+          "annotationId",
+          "detail"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "comments",
+              "docs",
+              "signins",
+              "errors"
+            ],
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityActor"
+              }
+            ]
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pageUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "annotationId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "docId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "docTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "organizationId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "ActivityResponse": {
+        "required": [
+          "items",
+          "kinds",
+          "nextBefore"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityItemResponse"
+            }
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "comments",
+                "docs",
+                "signins",
+                "errors"
+              ],
+              "type": "string"
+            }
+          },
+          "nextBefore": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "AdminUserResponse": {
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "isSystemAdmin",
+          "isDisabled",
+          "createdAt",
+          "lastSignInAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "isSystemAdmin": {
+            "type": "boolean"
+          },
+          "isDisabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSignInAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "preferredName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AnnotationContextRequest": {
+        "required": [
+          "viewportWidth",
+          "viewportHeight",
+          "devicePixelRatio"
+        ],
+        "type": "object",
+        "properties": {
+          "browser": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "os": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "userAgent": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "viewportWidth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "viewportHeight": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "devicePixelRatio": {
+            "type": "number",
+            "format": "double"
+          },
+          "selector": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "elementHtml": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "console": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ConsoleEntry"
+            }
+          },
+          "network": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/NetworkEntry"
+            }
+          },
+          "zoom": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "AnnotationContextResponse": {
+        "required": [
+          "browser",
+          "os",
+          "userAgent",
+          "viewportWidth",
+          "viewportHeight",
+          "devicePixelRatio",
+          "selector",
+          "elementHtml",
+          "console",
+          "network",
+          "capturedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "browser": {
+            "type": "string"
+          },
+          "os": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "viewportWidth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "viewportHeight": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "devicePixelRatio": {
+            "type": "number",
+            "format": "double"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "elementHtml": {
+            "type": "string"
+          },
+          "console": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsoleEntry"
+            }
+          },
+          "network": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetworkEntry"
+            }
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "zoom": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "AnnotationDetailResponse": {
+        "required": [
+          "id",
+          "organizationId",
+          "projectId",
+          "projectName",
+          "pageUrl",
+          "body",
+          "status",
+          "author",
+          "createdAt",
+          "docLinks",
+          "mentionedIn",
+          "replies",
+          "canReply"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "pageUrl": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnnotationStatus"
+          },
+          "author": {
+            "$ref": "#/components/schemas/AuthorSummary"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "docLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnnotationDocLink"
+            }
+          },
+          "mentionedIn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnnotationMention"
+            }
+          },
+          "replies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplyResponse"
+            }
+          },
+          "canReply": {
+            "type": "boolean"
+          },
+          "context": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationContextResponse"
+              }
+            ]
+          },
+          "hasScreenshot": {
+            "type": "boolean",
+            "default": false
+          },
+          "people": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PersonResponse"
+            }
+          },
+          "issues": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/IssueResponse"
+            }
+          }
+        }
+      },
+      "AnnotationDocLink": {
+        "required": [
+          "text",
+          "docId",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "docId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AnnotationKind": {
+        "enum": [
+          "Pin",
+          "Element",
+          "Highlight",
+          "Rect",
+          "Arrow",
+          "Ink"
+        ]
+      },
+      "AnnotationMention": {
+        "required": [
+          "docId",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "docId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "AnnotationResponse": {
+        "required": [
+          "id",
+          "projectId",
+          "pageUrl",
+          "kind",
+          "status",
+          "body",
+          "color",
+          "anchor",
+          "geometry",
+          "viewportWidth",
+          "version",
+          "author",
+          "createdAt",
+          "updatedAt",
+          "resolvedAt",
+          "resolvedByUserId",
+          "canEdit",
+          "canDelete",
+          "organizationId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pageUrl": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AnnotationKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnnotationStatus"
+          },
+          "body": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "viewportWidth": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "author": {
+            "$ref": "#/components/schemas/AuthorSummary"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolvedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "resolvedByUserId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "canDelete": {
+            "type": "boolean"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "docLinks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AnnotationDocLink"
+            }
+          },
+          "mentionedIn": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AnnotationMention"
+            }
+          },
+          "replies": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ReplyResponse"
+            }
+          },
+          "context": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationContextResponse"
+              }
+            ]
+          },
+          "hasScreenshot": {
+            "type": "boolean",
+            "default": false
+          },
+          "people": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PersonResponse"
+            }
+          },
+          "issues": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/IssueResponse"
+            }
+          }
+        }
+      },
+      "AnnotationRevisionResponse": {
+        "required": [
+          "version",
+          "action",
+          "actor",
+          "occurredAt",
+          "state"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/AuthorSummary"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        }
+      },
+      "AnnotationStatus": {
+        "enum": [
+          "Open",
+          "Resolved"
+        ]
+      },
+      "AuditEventResponse": {
+        "required": [
+          "id",
+          "occurredAt",
+          "actorUserId",
+          "actorEmail",
+          "action",
+          "targetType",
+          "targetId",
+          "data",
+          "ipAddress"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorUserId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "actorEmail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "targetId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "data": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "ipAddress": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "AuthorSummary": {
+        "required": [
+          "id",
+          "displayName",
+          "avatarUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "fullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          }
+        }
+      },
+      "ConnectedAppResponse": {
+        "required": [
+          "clientId",
+          "name",
+          "authorizedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "authorizedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ConsoleEntry": {
+        "required": [
+          "level",
+          "message",
+          "at"
+        ],
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateDocRequest": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateIntegrationRequest": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "events": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "CreateInvitationRequest": {
+        "required": [
+          "email"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 0,
+            "type": "string"
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          }
+        }
+      },
+      "CreateIssueRequest": {
+        "required": [
+          "connectionId"
+        ],
+        "type": "object",
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CreateLiveAnnotationRequest": {
+        "required": [
+          "anchor",
+          "geometry",
+          "viewportWidth"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "maxLength": 4096,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationKind"
+              }
+            ]
+          },
+          "body": {
+            "maxLength": 10000,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "maxLength": 7,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "anchor": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/JsonElement"
+          },
+          "viewportWidth": {
+            "maximum": 20000,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32"
+          },
+          "includeQuery": {
+            "type": "boolean",
+            "default": false
+          },
+          "includeHash": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "CreateOrganizationRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "defaultRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "allowedDomains": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateProjectRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      },
+      "CreateReplyRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "maxLength": 10000,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "CreateShareRequest": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "pageUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "docId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "includeResolved": {
+            "type": "boolean",
+            "default": false
+          },
+          "expiresInDays": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CreateTrackerRequest": {
+        "required": [
+          "kind",
+          "token",
+          "settings"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "token": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/TrackerSettings"
+          },
+          "closeIssueOnResolve": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "DocActor": {
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DocAppearanceRequest": {
+        "type": "object",
+        "properties": {
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DocChangedResponse": {
+        "required": [
+          "doc",
+          "relinkDocs"
+        ],
+        "type": "object",
+        "properties": {
+          "doc": {
+            "$ref": "#/components/schemas/DocResponse"
+          },
+          "relinkDocs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "DocCommentLinkResponse": {
+        "required": [
+          "annotationId",
+          "projectId",
+          "projectName",
+          "pageUrl",
+          "body",
+          "status",
+          "author"
+        ],
+        "type": "object",
+        "properties": {
+          "annotationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "pageUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "Open",
+              "Resolved"
+            ],
+            "type": "string"
+          },
+          "author": {
+            "$ref": "#/components/schemas/DocActor"
+          }
+        }
+      },
+      "DocFolderMovedResponse": {
+        "required": [
+          "relinkDocs"
+        ],
+        "type": "object",
+        "properties": {
+          "relinkDocs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "DocFolderResponse": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "DocGraphEdge": {
+        "required": [
+          "source",
+          "target"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        }
+      },
+      "DocGraphNode": {
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "docId",
+          "annotationId",
+          "folder"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "doc",
+              "comment"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "docId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "annotationId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "folder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DocGraphResponse": {
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocGraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocGraphEdge"
+            }
+          }
+        }
+      },
+      "DocLinkResponse": {
+        "required": [
+          "text",
+          "docId",
+          "title",
+          "folder"
+        ],
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "docId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "folder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DocResponse": {
+        "required": [
+          "id",
+          "organizationId",
+          "folder",
+          "title",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "updatedBy",
+          "canEdit",
+          "tags",
+          "backlinks",
+          "commentBacklinks",
+          "links",
+          "commentLinks"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocActor"
+              }
+            ]
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "backlinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocSummaryResponse"
+            }
+          },
+          "commentBacklinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocCommentLinkResponse"
+            }
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocLinkResponse"
+            }
+          },
+          "commentLinks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "people": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PersonResponse"
+            }
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DocRevisionContentResponse": {
+        "required": [
+          "id",
+          "version",
+          "action",
+          "actor",
+          "occurredAt",
+          "folder",
+          "title",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/DocActor"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "DocRevisionResponse": {
+        "required": [
+          "id",
+          "version",
+          "action",
+          "actor",
+          "occurredAt",
+          "folder",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/DocActor"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "DocSearchResultResponse": {
+        "required": [
+          "id",
+          "folder",
+          "title",
+          "snippet"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          }
+        }
+      },
+      "DocSummaryResponse": {
+        "required": [
+          "id",
+          "folder",
+          "title",
+          "updatedAt",
+          "tags"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DocTagCountResponse": {
+        "required": [
+          "tag",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "DocTreeResponse": {
+        "required": [
+          "folders",
+          "docs",
+          "canEdit"
+        ],
+        "type": "object",
+        "properties": {
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "docs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DocSummaryResponse"
+            }
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DocTagCountResponse"
+            }
+          }
+        }
+      },
+      "EmailSetupResponse": {
+        "required": [
+          "configured",
+          "from"
+        ],
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "from": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "FeatureSettingResponse": {
+        "required": [
+          "feature",
+          "name",
+          "description",
+          "enabled",
+          "source",
+          "configured"
+        ],
+        "type": "object",
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/FeatureSource"
+          },
+          "configured": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FeatureSource": {
+        "enum": [
+          "Default",
+          "Config",
+          "Admin"
+        ]
+      },
+      "FeaturesResponse": {
+        "required": [
+          "docs",
+          "liveCursors",
+          "mcp",
+          "bugContext",
+          "issueTrackers",
+          "sharing"
+        ],
+        "type": "object",
+        "properties": {
+          "docs": {
+            "type": "boolean"
+          },
+          "liveCursors": {
+            "type": "boolean"
+          },
+          "mcp": {
+            "type": "boolean"
+          },
+          "bugContext": {
+            "type": "boolean"
+          },
+          "issueTrackers": {
+            "type": "boolean"
+          },
+          "sharing": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FolderRequest": {
+        "required": [
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "InboxResponse": {
+        "required": [
+          "unread",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "unread": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationResponse"
+            }
+          }
+        }
+      },
+      "IntegrationCreatedResponse": {
+        "required": [
+          "integration",
+          "secret"
+        ],
+        "type": "object",
+        "properties": {
+          "integration": {
+            "$ref": "#/components/schemas/IntegrationResponse"
+          },
+          "secret": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "IntegrationResponse": {
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "enabled",
+          "events",
+          "projectId",
+          "target",
+          "lastSuccessAt",
+          "lastErrorAt",
+          "lastError"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "email",
+              "slack",
+              "webhook"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "target": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastSuccessAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastErrorAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "InvitationResponse": {
+        "required": [
+          "id",
+          "email",
+          "role",
+          "createdAt",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "IssueResponse": {
+        "required": [
+          "id",
+          "kind",
+          "key",
+          "url",
+          "state"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "github",
+              "jira",
+              "linear"
+            ],
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "JsonElement": {},
+      "LivePageAnnotationsResponse": {
+        "required": [
+          "projectId",
+          "pageUrl",
+          "annotations"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pageUrl": {
+            "type": "string"
+          },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnnotationResponse"
+            }
+          }
+        }
+      },
+      "LivePageSummaryResponse": {
+        "required": [
+          "pageUrl",
+          "openCount",
+          "resolvedCount",
+          "lastActivityAt",
+          "projectId",
+          "projectName",
+          "organizationName",
+          "issueCount",
+          "openIssueCount"
+        ],
+        "type": "object",
+        "properties": {
+          "pageUrl": {
+            "type": "string"
+          },
+          "openCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resolvedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "organizationName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "issueCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "openIssueCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LiveProjectResponse": {
+        "required": [
+          "id",
+          "name",
+          "organizationId",
+          "organizationName",
+          "myRole",
+          "canComment"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationName": {
+            "type": "string"
+          },
+          "myRole": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "canComment": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MarkReadRequest": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "all": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "MeResponse": {
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "avatarUrl",
+          "isSystemAdmin",
+          "organizations",
+          "features",
+          "fullName",
+          "preferredName",
+          "emailNotifications"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isSystemAdmin": {
+            "type": "boolean"
+          },
+          "organizations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MyOrganization"
+            }
+          },
+          "features": {
+            "$ref": "#/components/schemas/FeaturesResponse"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "preferredName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "emailNotifications": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MemberResponse": {
+        "required": [
+          "userId",
+          "email",
+          "displayName",
+          "avatarUrl",
+          "role",
+          "joinedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fullName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "MoveFolderRequest": {
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        }
+      },
+      "MyOrganization": {
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "NetworkAccessResponse": {
+        "required": [
+          "allowedNetworks",
+          "source",
+          "restrictionDisabled",
+          "yourAddress",
+          "yourAddressAllowed"
+        ],
+        "type": "object",
+        "properties": {
+          "allowedNetworks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/NetworkListSource"
+          },
+          "restrictionDisabled": {
+            "type": "boolean"
+          },
+          "yourAddress": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "yourAddressAllowed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "NetworkEntry": {
+        "required": [
+          "method",
+          "url",
+          "status",
+          "ms",
+          "at"
+        ],
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ms": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "at": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "NetworkListSource": {
+        "enum": [
+          "None",
+          "Config",
+          "Admin"
+        ]
+      },
+      "NotificationActor": {
+        "required": [
+          "id",
+          "displayName",
+          "fullName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          }
+        }
+      },
+      "NotificationResponse": {
+        "required": [
+          "id",
+          "kind",
+          "actor",
+          "organizationId",
+          "annotationId",
+          "docId",
+          "preview",
+          "where",
+          "createdAt",
+          "read"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "mention",
+              "reply",
+              "resolved",
+              "issue_closed"
+            ],
+            "type": "string"
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotificationActor"
+              }
+            ]
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "annotationId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "docId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "preview": {
+            "type": "string"
+          },
+          "where": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "read": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OrganizationResponse": {
+        "required": [
+          "id",
+          "name",
+          "defaultRole",
+          "allowedDomains",
+          "createdAt",
+          "myRole"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "defaultRole": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "myRole": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "PersonResponse": {
+        "required": [
+          "id",
+          "displayName",
+          "fullName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          }
+        }
+      },
+      "PresenceTicketResponse": {
+        "required": [
+          "ticket",
+          "expiresInSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "ticket": {
+            "type": "string"
+          },
+          "expiresInSeconds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ProjectMemberResponse": {
+        "required": [
+          "userId",
+          "email",
+          "displayName",
+          "organizationRole",
+          "projectRole",
+          "effectiveRole"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "organizationRole": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "projectRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "effectiveRole": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "ProjectResponse": {
+        "required": [
+          "id",
+          "organizationId",
+          "name",
+          "isArchived",
+          "createdAt",
+          "myRole"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isArchived": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "myRole": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
+      "PublicCommentResponse": {
+        "required": [
+          "id",
+          "body",
+          "status",
+          "author",
+          "createdAt",
+          "hasScreenshot",
+          "replies"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hasScreenshot": {
+            "type": "boolean"
+          },
+          "replies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicReplyResponse"
+            }
+          }
+        }
+      },
+      "PublicDocLinkResponse": {
+        "required": [
+          "key",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicDocResponse": {
+        "required": [
+          "markdown",
+          "updatedAt",
+          "links"
+        ],
+        "type": "object",
+        "properties": {
+          "markdown": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDocLinkResponse"
+            }
+          }
+        }
+      },
+      "PublicPageResponse": {
+        "required": [
+          "pageUrl",
+          "comments"
+        ],
+        "type": "object",
+        "properties": {
+          "pageUrl": {
+            "type": "string"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicCommentResponse"
+            }
+          }
+        }
+      },
+      "PublicReplyResponse": {
+        "required": [
+          "author",
+          "body",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicShareResponse": {
+        "required": [
+          "kind",
+          "title",
+          "expiresAt",
+          "pages",
+          "doc"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "page",
+              "project",
+              "doc"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "pages": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PublicPageResponse"
+            }
+          },
+          "doc": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PublicDocResponse"
+              }
+            ]
+          }
+        }
+      },
+      "ReplyResponse": {
+        "required": [
+          "id",
+          "body",
+          "author",
+          "createdAt",
+          "updatedAt",
+          "version",
+          "canEdit",
+          "canDelete"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author": {
+            "$ref": "#/components/schemas/AuthorSummary"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "canDelete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Role": {
+        "enum": [
+          "Viewer",
+          "Commenter",
+          "Editor",
+          "Admin",
+          "Owner"
+        ]
+      },
+      "SetProjectRoleRequest": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          }
+        }
+      },
+      "SetRoleRequest": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          }
+        }
+      },
+      "ShareResponse": {
+        "required": [
+          "id",
+          "kind",
+          "url",
+          "organizationId",
+          "projectId",
+          "projectName",
+          "pageUrl",
+          "docId",
+          "docTitle",
+          "includeResolved",
+          "createdBy",
+          "createdAt",
+          "expiresAt",
+          "expired",
+          "viewCount",
+          "lastViewedAt",
+          "canRevoke"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "page",
+              "project",
+              "doc"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pageUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "docId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "docTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "includeResolved": {
+            "type": "boolean"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "expired": {
+            "type": "boolean"
+          },
+          "viewCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastViewedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "canRevoke": {
+            "type": "boolean"
+          },
+          "existing": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "SignInProvider": {
+        "required": [
+          "id",
+          "displayName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        }
+      },
+      "TestResultResponse": {
+        "required": [
+          "ok",
+          "error"
+        ],
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TrackerChoiceResponse": {
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "github",
+              "jira",
+              "linear"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "TrackerConnectionResponse": {
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "settings",
+          "closeIssueOnResolve",
+          "tokenHint",
+          "lastErrorAt",
+          "lastError"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "enum": [
+              "github",
+              "jira",
+              "linear"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/TrackerSettings"
+          },
+          "closeIssueOnResolve": {
+            "type": "boolean"
+          },
+          "tokenHint": {
+            "type": "string"
+          },
+          "lastErrorAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TrackerSettings": {
+        "type": "object",
+        "properties": {
+          "owner": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "repo": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "apiUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "site": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "projectKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "issueType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "teamId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "UpdateAnnotationRequest": {
+        "required": [
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "body": {
+            "maxLength": 10000,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "maxLength": 7,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationStatus"
+              }
+            ]
+          },
+          "anchor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "geometry": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "viewportWidth": {
+            "maximum": 20000,
+            "minimum": 0,
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateDocRequest": {
+        "required": [
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "folder": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "UpdateFeaturesRequest": {
+        "type": "object",
+        "properties": {
+          "docs": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "liveCursors": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "mcp": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "bugContext": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "issueTrackers": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "sharing": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "UpdateIntegrationRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "events": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "clearProject": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "UpdateMeRequest": {
+        "type": "object",
+        "properties": {
+          "preferredName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "emailNotifications": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "UpdateNetworkAccessRequest": {
+        "type": "object",
+        "properties": {
+          "allowedNetworks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateOrganizationRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "defaultRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "allowedDomains": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UpdateProjectRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isArchived": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "UpdateReplyRequest": {
+        "required": [
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": "integer",
+            "format": "int32"
+          },
+          "body": {
+            "maxLength": 10000,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "UpdateTrackerRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "settings": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TrackerSettings"
+              }
+            ]
+          },
+          "closeIssueOnResolve": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "VersionResponse": {
+        "required": [
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Features"
+    },
+    {
+      "name": "Organizations"
+    },
+    {
+      "name": "Issues"
+    },
+    {
+      "name": "Admin"
+    },
+    {
+      "name": "Sharing"
+    },
+    {
+      "name": "Activity"
+    },
+    {
+      "name": "System"
+    },
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "Me"
+    },
+    {
+      "name": "Projects"
+    },
+    {
+      "name": "Annotations"
+    },
+    {
+      "name": "Notifications"
+    },
+    {
+      "name": "Live"
+    },
+    {
+      "name": "Presence"
+    },
+    {
+      "name": "Docs"
+    }
+  ]
+}

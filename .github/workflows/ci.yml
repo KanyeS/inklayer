@@ -73,6 +73,8 @@ jobs:
       - name: Known vulnerabilities (npm, high and critical)
         run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
+      - name: API types match openapi.json (the server tests keep openapi.json in step with the server)
+        run: npm run api:generate && git diff --exit-code packages/api/src/schema.d.ts
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

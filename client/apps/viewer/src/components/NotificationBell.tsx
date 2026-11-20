@@ -1,22 +1,12 @@
+import type { InboxResponse, NotificationResponse } from "@inklayer/api";
 import { Button } from "@inklayer/ui/components/button";
 import { Bell } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { get, post } from "@/lib/api";
+import { api } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { navigate } from "@/lib/router";
 
-interface InboxItem {
-  id: string;
-  kind: "mention" | "reply" | "resolved" | "issue_closed";
-  actor: { id: string; displayName: string; fullName: string } | null;
-  organizationId: string;
-  annotationId: string | null;
-  docId: string | null;
-  preview: string;
-  where: string;
-  createdAt: string;
-  read: boolean;
-}
+type InboxItem = NotificationResponse;
 
 const KIND_TEXT: Record<InboxItem["kind"], string> = {
   mention: "mentioned you",
@@ -27,13 +17,14 @@ const KIND_TEXT: Record<InboxItem["kind"], string> = {
 
 /** The in-app inbox: a bell with the unread count, and the recent notifications. Checks for new ones every minute. */
 export function NotificationBell() {
-  const [inbox, setInbox] = useState<{ unread: number; items: InboxItem[] }>({ unread: 0, items: [] });
+  const [inbox, setInbox] = useState<InboxResponse>({ unread: 0, items: [] });
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
   const load = useCallback(
     () =>
-      void get<{ unread: number; items: InboxItem[] }>("/api/notifications?limit=20")
+      void api
+        .get("/api/notifications", { params: { query: { limit: 20 } } })
         .then(setInbox)
         .catch(() => undefined),
     [],
@@ -54,7 +45,7 @@ export function NotificationBell() {
 
   const go = async (item: InboxItem) => {
     setOpen(false);
-    if (!item.read) await post("/api/notifications/read", { ids: [item.id] }).catch(() => undefined);
+    if (!item.read) await api.post("/api/notifications/read", { body: { ids: [item.id] } }).catch(() => undefined);
     load();
     navigate(
       item.annotationId
@@ -91,7 +82,7 @@ export function NotificationBell() {
                 size="sm"
                 className="h-auto px-0"
                 onClick={async () => {
-                  await post("/api/notifications/read", { all: true });
+                  await api.post("/api/notifications/read", { body: { all: true } });
                   load();
                 }}
               >

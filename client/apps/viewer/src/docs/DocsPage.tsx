@@ -3,7 +3,7 @@ import { cn } from "@inklayer/ui/lib/utils";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ErrorText, Loading } from "@/components/Layout";
-import { get, type Organization } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 import { DocView } from "./DocView";
@@ -20,7 +20,7 @@ const TREE_REFRESH_MS = 30_000;
  * links and history on the right. Ctrl/Cmd+K opens the quick switcher.
  */
 export function DocsPage({ orgId, docId }: { orgId: string; docId?: string }) {
-  const org = useAsync(() => get<Organization>(`/api/orgs/${orgId}`), [orgId]);
+  const org = useAsync(() => api.get("/api/orgs/{orgId}", { params: { path: { orgId } } }), [orgId]);
   const tree = useAsync(() => docsApi.tree(orgId), [orgId]);
   const [tag, setTag] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);

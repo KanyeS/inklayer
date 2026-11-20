@@ -19,7 +19,7 @@ public sealed record LivePageAnnotationsResponse(Guid ProjectId, string PageUrl,
 /// <summary>A page with comments in one project: how many are open and resolved, and the issues made from them.</summary>
 public sealed record LivePageSummaryResponse(
     string PageUrl, int OpenCount, int ResolvedCount, DateTime LastActivityAt,
-    Guid ProjectId = default, string? ProjectName = null, string? OrganizationName = null, int IssueCount = 0, int OpenIssueCount = 0);
+    Guid ProjectId, string? ProjectName, string? OrganizationName, int IssueCount, int OpenIssueCount);
 
 /// <summary>
 /// Live mode: annotations on real pages, on any site, shown by the browser extension.
@@ -37,14 +37,14 @@ internal static class LiveEndpoints
     public static IEndpointRouteBuilder MapLiveEndpoints(this IEndpointRouteBuilder app)
     {
         var live = app.MapGroup("/api/live").WithTags("Live").RequireAuthorization();
-        live.MapGet("/origins", OriginsAsync).WithSummary("Sites (scheme://host[:port]) with live comments the caller can see");
-        live.MapGet("/projects", ProjectsAsync).WithSummary("Projects the caller can use on live pages, with their role");
-        live.MapGet("/pages", AllPagesAsync).WithSummary("Every page with comments in every project the caller can view, most recently active first");
-        live.MapGet("/annotations", ListAsync).WithSummary("Comments on one live page across the caller's projects: ?url=<the page's address>");
+        live.MapGet("/origins", OriginsAsync).Produces<List<string>>().WithSummary("Sites (scheme://host[:port]) with live comments the caller can see");
+        live.MapGet("/projects", ProjectsAsync).Produces<List<LiveProjectResponse>>().WithSummary("Projects the caller can use on live pages, with their role");
+        live.MapGet("/pages", AllPagesAsync).Produces<List<LivePageSummaryResponse>>().WithSummary("Every page with comments in every project the caller can view, most recently active first");
+        live.MapGet("/annotations", ListAsync).Produces<List<LivePageAnnotationsResponse>>().WithSummary("Comments on one live page across the caller's projects: ?url=<the page's address>");
 
         var byProject = app.MapGroup("/api/projects/{projectId:guid}/live").WithTags("Live").RequireAuthorization();
-        byProject.MapPost("/annotations", CreateAsync);
-        byProject.MapGet("/pages", PagesAsync).WithSummary("Live pages with comments, most recently active first");
+        byProject.MapPost("/annotations", CreateAsync).Produces<AnnotationResponse>(StatusCodes.Status201Created);
+        byProject.MapGet("/pages", PagesAsync).Produces<List<LivePageSummaryResponse>>().WithSummary("Live pages with comments, most recently active first");
 
         return app;
     }

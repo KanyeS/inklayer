@@ -1,13 +1,10 @@
+import type { PersonResponse } from "@inklayer/api";
 import { encodeMentions } from "@inklayer/overlay";
 import { Textarea } from "@inklayer/ui/components/textarea";
 import { type ComponentProps, forwardRef, type KeyboardEvent, useImperativeHandle, useRef, useState } from "react";
-import { get } from "@/lib/api";
+import { lookupPeople } from "@/lib/api";
 
-interface Person {
-  id: string;
-  displayName: string;
-  fullName: string;
-}
+type Person = PersonResponse;
 
 export interface MentionTextareaHandle {
   /** The text with @Name turned back into <@id> for people picked from the suggestions. */
@@ -35,7 +32,7 @@ export const MentionTextarea = forwardRef<
     const at = typed(text, caret);
     if (!at) return setPeople([]);
     timer.current = window.setTimeout(() => {
-      get<Person[]>(`/api/orgs/${orgId}/members/lookup?q=${encodeURIComponent(at[1]!)}`)
+      lookupPeople(orgId, at[1] ?? "")
         .then((found) => {
           setPeople(found);
           setActive(0);

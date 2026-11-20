@@ -8,7 +8,15 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/package-lock.json", "!apps/site/public"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/package-lock.json",
+      "!apps/site/public",
+      "!packages/api/openapi.json",
+      "!packages/api/src/schema.d.ts"
+    ]
   },
   "formatter": {
     "enabled": true,

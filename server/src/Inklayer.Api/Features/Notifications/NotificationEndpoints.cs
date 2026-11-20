@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using Inklayer.Api.Access;
 using Inklayer.Domain.Authorization;
@@ -11,7 +12,7 @@ namespace Inklayer.Api.Features.Notifications;
 public sealed record NotificationActor(Guid Id, string DisplayName, string FullName);
 
 public sealed record NotificationResponse(
-    Guid Id, string Kind, NotificationActor? Actor, Guid OrganizationId, Guid? AnnotationId, Guid? DocId, string Preview, string Where, DateTime CreatedAt, bool Read);
+    Guid Id, [property: AllowedValues(NotificationKinds.Mention, NotificationKinds.Reply, NotificationKinds.Resolved, NotificationKinds.IssueClosed)] string Kind, NotificationActor? Actor, Guid OrganizationId, Guid? AnnotationId, Guid? DocId, string Preview, string Where, DateTime CreatedAt, bool Read);
 
 public sealed record InboxResponse(int Unread, IReadOnlyList<NotificationResponse> Items);
 
@@ -22,7 +23,7 @@ public sealed record PersonResponse(Guid Id, string DisplayName, string FullName
 
 /// <param name="Target">Where it sends to, shortened (e.g. hooks.slack.com/…/a1b2), never the full secret address.</param>
 public sealed record IntegrationResponse(
-    Guid Id, string Kind, string Name, bool Enabled, IReadOnlyList<string> Events, Guid? ProjectId, string? Target,
+    Guid Id, [property: AllowedValues(IntegrationKinds.Email, IntegrationKinds.Slack, IntegrationKinds.Webhook)] string Kind, string Name, bool Enabled, IReadOnlyList<string> Events, Guid? ProjectId, string? Target,
     DateTime? LastSuccessAt, DateTime? LastErrorAt, string? LastError);
 
 /// <param name="Secret">Webhooks only, and only now: the key receivers check signatures with.</param>
@@ -45,18 +46,18 @@ internal static class NotificationEndpoints
     public static IEndpointRouteBuilder MapNotificationEndpoints(this IEndpointRouteBuilder app)
     {
         var inbox = app.MapGroup("/api/notifications").WithTags("Notifications").RequireAuthorization();
-        inbox.MapGet("/", InboxAsync).WithSummary("Your notifications, newest first, with how many are unread: ?before=&limit=");
-        inbox.MapPost("/read", MarkReadAsync).WithSummary("Mark notifications as read");
+        inbox.MapGet("/", InboxAsync).Produces<InboxResponse>().WithSummary("Your notifications, newest first, with how many are unread: ?before=&limit=");
+        inbox.MapPost("/read", MarkReadAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Mark notifications as read");
 
-        app.MapGet("/api/orgs/{orgId:guid}/members/lookup", LookupAsync).WithTags("Organizations").RequireAuthorization()
+        app.MapGet("/api/orgs/{orgId:guid}/members/lookup", LookupAsync).Produces<List<PersonResponse>>().WithTags("Organizations").RequireAuthorization()
             .WithSummary("Members whose name matches ?q=, for @mentions (names only)");
 
         var integrations = app.MapGroup("/api/orgs/{orgId:guid}/integrations").WithTags("Notifications").RequireAuthorization();
-        integrations.MapGet("/", ListAsync).WithSummary("Where the organisation's notifications go (organisation Admins)");
-        integrations.MapPost("/", CreateAsync).WithSummary("Add an email, Slack or webhook integration");
-        integrations.MapPatch("/{id:guid}", UpdateAsync);
-        integrations.MapDelete("/{id:guid}", DeleteAsync);
-        integrations.MapPost("/{id:guid}/test", TestAsync).WithSummary("Send a test message now");
+        integrations.MapGet("/", ListAsync).Produces<List<IntegrationResponse>>().WithSummary("Where the organisation's notifications go (organisation Admins)");
+        integrations.MapPost("/", CreateAsync).Produces<IntegrationCreatedResponse>(StatusCodes.Status201Created).WithSummary("Add an email, Slack or webhook integration");
+        integrations.MapPatch("/{id:guid}", UpdateAsync).Produces<IntegrationResponse>();
+        integrations.MapDelete("/{id:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent);
+        integrations.MapPost("/{id:guid}/test", TestAsync).Produces<TestResultResponse>().WithSummary("Send a test message now");
         return app;
     }
 

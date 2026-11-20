@@ -1,0 +1,81 @@
+import { describe, expect, it } from "vitest";
+import { ApiError, createApi, errorMessage } from "../src/index";
+
+describe("errorMessage", () => {
+  it("prefers the problem's detail, then its title, then the status", () => {
+    expect(errorMessage(409, { title: "Conflict", detail: "Changed by someone else." })).toBe(
+      "Changed by someone else.",
+    );
+    expect(errorMessage(403, { title: "Forbidden" })).toBe("Forbidden");
+    expect(errorMessage(500, null)).toBe("Request failed (500)");
+    expect(errorMessage(502, "<html>bad gateway</html>")).toBe("Request failed (502)");
+  });
+
+  it("adds field errors after the title", () => {
+    expect(errorMessage(400, { title: "Invalid.", errors: { name: ["Too long."], email: ["Required."] } })).toBe(
+      "Invalid. Too long. Required.",
+    );
+  });
+});
+
+describe("createApi", () => {
+  const recorded: Request[] = [];
+  const api = createApi({
+    baseUrl: "https://inklayer.test",
+    fetch: async (request) => {
+      recorded.push(request);
+      if (request.url.endsWith("/api/docs/missing-doc")) {
+        return new Response(JSON.stringify({ title: "Not found." }), { status: 404 });
+      }
+      if (request.method === "DELETE") return new Response(null, { status: 204 });
+      return Response.json({ id: "d1", title: "Hello", path: new URL(request.url).pathname });
+    },
+  });
+
+  it("fills in path and query parameters and returns the body", async () => {
+    const doc = await api.get("/api/docs/{docId}", { params: { path: { docId: "d1" } } });
+    expect(doc.title).toBe("Hello");
+    await api.get("/api/orgs/{orgId}/docs/search", { params: { path: { orgId: "o1" }, query: { q: "a b" } } });
+    expect(recorded.at(-1)?.url).toBe("https://inklayer.test/api/orgs/o1/docs/search?q=a%20b");
+  });
+
+  it("sends JSON bodies", async () => {
+    await api.post("/api/orgs/{orgId}/docs", { params: { path: { orgId: "o1" } }, body: { title: "New" } });
+    const request = recorded.at(-1);
+    expect(request?.headers.get("Content-Type")).toBe("application/json");
+    expect(await request?.json()).toEqual({ title: "New" });
+  });
+
+  it("resolves empty responses", async () => {
+    await expect(
+      api.delete("/api/docs/{docId}", { params: { path: { docId: "d1" }, query: { version: 3 } } }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("throws ApiError with the server's message", async () => {
+    const error = await api
+      .get("/api/docs/{docId}", { params: { path: { docId: "missing-doc" } } })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(404);
+    expect((error as ApiError).message).toBe("Not found.");
+  });
+});
+
+describe("types (checked by tsc)", () => {
+  it("rejects unknown paths, missing parameters and wrong bodies", () => {
+    const api = createApi({ baseUrl: "https://inklayer.test", fetch: async () => Response.json({}) });
+    const typed = async () => {
+      const doc = await api.get("/api/docs/{docId}", { params: { path: { docId: "d1" } } });
+      const version: number = doc.version;
+      // @ts-expect-error: not a server path
+      await api.get("/api/nope");
+      // @ts-expect-error: docId is required
+      await api.get("/api/docs/{docId}", { params: { path: {} } });
+      // @ts-expect-error: title must be a string
+      await api.post("/api/orgs/{orgId}/docs", { params: { path: { orgId: "o1" } }, body: { title: 1 } });
+      return version;
+    };
+    expect(typed).toBeTypeOf("function");
+  });
+});

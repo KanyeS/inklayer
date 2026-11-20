@@ -56,7 +56,7 @@ internal static class AdminEndpoints
             await db.SaveChangesAsync(ct);
             await MeEndpoints.RevokeUserAccessAsync(userId, db, context.RequestServices, ct);
             return Results.NoContent();
-        }).WithSummary("Disable a user and immediately end all their sessions and extension tokens");
+        }).Produces(StatusCodes.Status204NoContent).WithSummary("Disable a user and immediately end all their sessions and extension tokens");
 
         admin.MapPost("/users/{userId:guid}/enable", async (Guid userId, InklayerDbContext db, AuditLog audit, Auth.SessionGuard guard, CancellationToken ct) =>
         {
@@ -71,7 +71,7 @@ internal static class AdminEndpoints
             await db.SaveChangesAsync(ct);
             guard.Invalidate(userId);
             return Results.NoContent();
-        });
+        }).Produces(StatusCodes.Status204NoContent);
 
         return app;
     }

@@ -21,6 +21,10 @@ const comment = (overrides: Partial<CommentInfo> = {}): CommentInfo => ({
   author: { id: "u1", displayName: "Ann" } as CommentInfo["author"],
   createdAt: "",
   mentionedIn: [],
+  docLinks: [],
+  replies: [],
+  canReply: true,
+  hasScreenshot: false,
   ...overrides,
 });
 

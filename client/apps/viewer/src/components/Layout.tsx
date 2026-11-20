@@ -5,14 +5,14 @@ import { cn } from "@inklayer/ui/lib/utils";
 import type { ReactNode } from "react";
 import { useMe } from "@/App";
 import { NotificationBell } from "@/components/NotificationBell";
-import { post } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Link } from "@/lib/router";
 
 /** @param wide Full-width pages (docs) use the whole window; others sit in a centred column. */
 export function Layout({ children, wide }: { children: ReactNode; wide?: boolean }) {
   const { me } = useMe();
   const signOut = async () => {
-    await post("/auth/logout");
+    await api.post("/auth/logout");
     window.location.href = "/";
   };
   return (

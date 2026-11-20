@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
 using Inklayer.Api.Access;
@@ -15,7 +16,7 @@ namespace Inklayer.Api.Features.Sharing;
 public sealed record CreateShareRequest(string Kind, Guid? ProjectId = null, string? PageUrl = null, Guid? DocId = null, bool IncludeResolved = false, int? ExpiresInDays = null);
 
 public sealed record ShareResponse(
-    Guid Id, string Kind, string Url, Guid OrganizationId, Guid? ProjectId, string? ProjectName, string? PageUrl, Guid? DocId, string? DocTitle,
+    Guid Id, [property: AllowedValues(ShareKinds.Page, ShareKinds.Project, ShareKinds.Doc)] string Kind, string Url, Guid OrganizationId, Guid? ProjectId, string? ProjectName, string? PageUrl, Guid? DocId, string? DocTitle,
     bool IncludeResolved, string CreatedBy, DateTime CreatedAt, DateTime? ExpiresAt, bool Expired, int ViewCount, DateTime? LastViewedAt, bool CanRevoke,
     bool Existing = false);
 
@@ -30,10 +31,10 @@ internal static class ShareEndpoints
     public static IEndpointRouteBuilder MapShareEndpoints(this IEndpointRouteBuilder app)
     {
         var shares = app.MapGroup("/api/shares").WithTags("Sharing").RequireAuthorization();
-        shares.MapPost("/", CreateAsync).WithSummary("Create a read-only link to a page's or project's comments, or make a doc public");
-        shares.MapGet("/", ListAsync).WithSummary("A project's links (?projectId=) or a doc's public link (?docId=)");
-        shares.MapDelete("/{id:guid}", RevokeAsync).WithSummary("Revoke a link: it stops working at once");
-        app.MapGet("/api/admin/shares", AdminListAsync).WithTags("Admin", "Sharing").RequireAuthorization().WithSummary("Every working link (instance administrators)");
+        shares.MapPost("/", CreateAsync).Produces<ShareResponse>(StatusCodes.Status201Created).Produces<ShareResponse>().WithSummary("Create a read-only link to a page's or project's comments, or make a doc public");
+        shares.MapGet("/", ListAsync).Produces<List<ShareResponse>>().WithSummary("A project's links (?projectId=) or a doc's public link (?docId=)");
+        shares.MapDelete("/{id:guid}", RevokeAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Revoke a link: it stops working at once");
+        app.MapGet("/api/admin/shares", AdminListAsync).Produces<List<ShareResponse>>().WithTags("Admin", "Sharing").RequireAuthorization().WithSummary("Every working link (instance administrators)");
         return app;
     }
 

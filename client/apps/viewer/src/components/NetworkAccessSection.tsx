@@ -6,7 +6,7 @@ import { Textarea } from "@inklayer/ui/components/textarea";
 import { ShieldCheckIcon, ShieldOffIcon, TriangleAlertIcon } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { ErrorText, Loading, SectionTitle } from "@/components/Layout";
-import { get, type NetworkAccess, put } from "@/lib/api";
+import { api, type NetworkAccess } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 
 const SOURCE_TEXT: Record<NetworkAccess["source"], string> = {
@@ -18,7 +18,7 @@ const SOURCE_TEXT: Record<NetworkAccess["source"], string> = {
 
 /** Instance admins limit the whole server to the company VPN (or any other networks). */
 export function NetworkAccessSection() {
-  const network = useAsync(() => get<NetworkAccess>("/api/admin/network"), []);
+  const network = useAsync(() => api.get("/api/admin/network"), []);
   const [text, setText] = useState("");
   const [error, setError] = useState<Error | null>(null);
   const [saved, setSaved] = useState(false);
@@ -35,7 +35,7 @@ export function NetworkAccessSection() {
     setError(null);
     setSaved(false);
     try {
-      await put<NetworkAccess>("/api/admin/network", { allowedNetworks: entries });
+      await api.put("/api/admin/network", { body: { allowedNetworks: entries } });
       await network.reload();
       setSaved(true);
     } catch (err) {

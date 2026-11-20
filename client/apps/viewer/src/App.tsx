@@ -1,6 +1,6 @@
 import { createContext, lazy, type ReactNode, Suspense, useContext } from "react";
 import { Layout, Loading, Page, PageTitle } from "./components/Layout";
-import { ApiError, get, type Me } from "./lib/api";
+import { ApiError, api, type Me } from "./lib/api";
 import { findRoute, match, type Route, usePath } from "./lib/router";
 import { useAsync } from "./lib/useAsync";
 import { AdminPage } from "./pages/AdminPage";
@@ -39,7 +39,7 @@ export function App() {
 }
 
 function SignedInApp({ path }: { path: string }) {
-  const { data: me, error, loading, reload } = useAsync(() => get<Me>("/api/me"), []);
+  const { data: me, error, loading, reload } = useAsync(() => api.get("/api/me"), []);
 
   if (loading && !me)
     return (

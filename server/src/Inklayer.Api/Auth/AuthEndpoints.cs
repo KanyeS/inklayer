@@ -52,7 +52,7 @@ internal static class AuthEndpoints
         {
             await context.SignOutAsync(AuthSchemes.Cookie);
             return Results.NoContent();
-        }).WithSummary("End the browser session");
+        }).Produces(StatusCodes.Status204NoContent).WithSummary("End the browser session");
 
         auth.MapGet("/denied", (string? reason) => Results.Content(DeniedPage(reason), "text/html; charset=utf-8"))
             .ExcludeFromDescription();

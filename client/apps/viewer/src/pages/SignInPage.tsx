@@ -1,18 +1,14 @@
+import type { SignInProvider } from "@inklayer/api";
 import { buttonVariants } from "@inklayer/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@inklayer/ui/components/card";
 import { useEffect, useState } from "react";
-import { get } from "@/lib/api";
-
-interface SignInProvider {
-  id: string;
-  displayName: string;
-}
+import { api } from "@/lib/api";
 
 export function SignInPage() {
   const returnUrl = window.location.pathname + window.location.search;
   const [providers, setProviders] = useState<SignInProvider[] | null>(null);
   useEffect(() => {
-    get<SignInProvider[]>("/auth/providers").then(setProviders, () => setProviders([]));
+    api.get("/auth/providers").then(setProviders, () => setProviders([]));
   }, []);
 
   const loginUrl = (provider?: string) =>

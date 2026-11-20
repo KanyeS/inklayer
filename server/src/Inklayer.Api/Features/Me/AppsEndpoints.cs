@@ -19,8 +19,8 @@ internal static class AppsEndpoints
     public static IEndpointRouteBuilder MapAppsEndpoints(this IEndpointRouteBuilder app)
     {
         var apps = app.MapGroup("/api/me/apps").WithTags("Me").RequireAuthorization();
-        apps.MapGet("/", ListAsync).WithSummary("Apps you've allowed to use Inklayer as you");
-        apps.MapDelete("/{clientId}", DisconnectAsync).WithSummary("Disconnect an app: revokes its access and tokens");
+        apps.MapGet("/", ListAsync).Produces<List<ConnectedAppResponse>>().WithSummary("Apps you've allowed to use Inklayer as you");
+        apps.MapDelete("/{clientId}", DisconnectAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Disconnect an app: revokes its access and tokens");
         return app;
     }
 

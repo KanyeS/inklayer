@@ -1,59 +1,20 @@
+import type { AnnotationContextResponse } from "@inklayer/api";
 import { commentParts, openOnPageUrl } from "@inklayer/overlay";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Check, Copy, ExternalLink, FileText, MessageSquare } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
 import { useMe } from "@/App";
-import { CreateIssueButton, type Issue, IssueChips } from "@/components/Issues";
+import { CreateIssueButton, IssueChips } from "@/components/Issues";
 import { ErrorText, Loading, Page } from "@/components/Layout";
 import { MentionTextarea, type MentionTextareaHandle } from "@/components/MentionTextarea";
-import { ApiError, del, get, post } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { personTitle } from "@/lib/people";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 
-interface CommentDetail {
-  id: string;
-  organizationId: string;
-  projectId: string;
-  projectName: string;
-  pageUrl: string;
-  body: string;
-  status: "Open" | "Resolved";
-  author: { id: string; displayName: string; fullName?: string | null; role?: string | null };
-  createdAt: string;
-  docLinks: { text: string; docId: string | null; title: string | null }[];
-  mentionedIn: { docId: string; title: string }[];
-  replies: Reply[];
-  canReply: boolean;
-  context?: PageContext | null;
-  hasScreenshot: boolean;
-  people?: { id: string; displayName: string; fullName: string }[];
-  issues?: Issue[];
-}
-
-interface PageContext {
-  browser: string;
-  os: string;
-  viewportWidth: number;
-  viewportHeight: number;
-  devicePixelRatio: number;
-  zoom?: number | null;
-  selector: string;
-  elementHtml: string;
-  console: { level: string; message: string; at: string | null }[];
-  network: { method: string; url: string; status: number; ms: number | null }[];
-}
-
-interface Reply {
-  id: string;
-  body: string;
-  author: { id: string; displayName: string; fullName?: string | null; role?: string | null };
-  createdAt: string;
-  version: number;
-  canDelete: boolean;
-}
+type PageContext = AnnotationContextResponse;
 
 /**
  * One page comment, for links from docs (and "Copy link" in the extension): what it says, where it is, and which docs
@@ -61,7 +22,10 @@ interface Reply {
  */
 export function CommentPage({ commentId }: { commentId: string }) {
   const { me } = useMe();
-  const comment = useAsync(() => get<CommentDetail>(`/api/annotations/${commentId}`), [commentId]);
+  const comment = useAsync(
+    () => api.get("/api/annotations/{annotationId}", { params: { path: { annotationId: commentId } } }),
+    [commentId],
+  );
   const [copied, setCopied] = useState(false);
 
   if (comment.error) {
@@ -192,7 +156,9 @@ export function CommentPage({ commentId }: { commentId: string }) {
                   size="sm"
                   className="ml-auto h-auto px-0 text-destructive"
                   onClick={async () => {
-                    await del(`/api/replies/${r.id}?version=${r.version}`);
+                    await api.delete("/api/replies/{replyId}", {
+                      params: { path: { replyId: r.id }, query: { version: r.version } },
+                    });
                     await comment.reload();
                   }}
                 >
@@ -243,7 +209,10 @@ function ReplyForm({ commentId, orgId, onSent }: { commentId: string; orgId: str
     if (!body.trim()) return;
     setBusy(true);
     try {
-      await post(`/api/annotations/${commentId}/replies`, { body: box.current?.encoded() ?? body });
+      await api.post("/api/annotations/{annotationId}/replies", {
+        params: { path: { annotationId: commentId } },
+        body: { body: box.current?.encoded() ?? body },
+      });
       setBody("");
       setError(null);
       await onSent();

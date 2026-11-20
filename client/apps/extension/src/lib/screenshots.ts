@@ -1,5 +1,5 @@
 import type { Rect } from "@inklayer/overlay";
-import { api, apiBytes } from "./api";
+import { apiBytes, putBytes } from "./api";
 import { bytesToBase64 } from "./base64";
 
 /**
@@ -59,11 +59,7 @@ async function uploadScreenshot(
 
   const blob = await compress(canvas);
   const query = `width=${canvas.width}&height=${canvas.height}`;
-  await api<null>(`/api/annotations/${encodeURIComponent(annotationId)}/screenshot?${query}`, {
-    method: "PUT",
-    headers: { "Content-Type": blob.type },
-    body: blob,
-  });
+  await putBytes(`/api/annotations/${encodeURIComponent(annotationId)}/screenshot?${query}`, blob);
 }
 
 /** The message for a failed capture: browsers only allow screenshots with access to all sites (or just after a click). */

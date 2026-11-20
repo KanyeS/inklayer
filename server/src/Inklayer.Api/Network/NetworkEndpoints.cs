@@ -60,7 +60,7 @@ internal static class NetworkEndpoints
             await db.SaveChangesAsync(ct);
             access.Save(list);
             return Results.Ok(ToResponse(list, NetworkListSource.Admin, access, context));
-        }).WithSummary("Replace the allowed networks. An empty list allows every network.");
+        }).Produces<NetworkAccessResponse>().WithSummary("Replace the allowed networks. An empty list allows every network.");
 
         return admin;
     }

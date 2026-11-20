@@ -9,7 +9,14 @@ import { dirname, join, relative, resolve } from "node:path";
 export const CLIENT_ROOT = resolve(import.meta.dirname, "..");
 
 /** The workspace projects, by folder. */
-export const PROJECTS = ["packages/overlay", "packages/ui", "apps/extension", "apps/viewer", "apps/site"] as const;
+export const PROJECTS = [
+  "packages/api",
+  "packages/overlay",
+  "packages/ui",
+  "apps/extension",
+  "apps/viewer",
+  "apps/site",
+] as const;
 export type Project = (typeof PROJECTS)[number];
 
 const SKIP = new Set(["node_modules", "dist", "public"]);
@@ -66,7 +73,7 @@ export function resolveRelative(from: string, specifier: string): string {
 
 /** Whether a resolved import path exists as written, or with a .ts/.tsx/index.ts ending. */
 export function exists(path: string): boolean {
-  const candidates = [path, `${path}.ts`, `${path}.tsx`, `${path}/index.ts`];
+  const candidates = [path, `${path}.ts`, `${path}.tsx`, `${path}.d.ts`, `${path}/index.ts`];
   return candidates.some((c) => existsSync(join(CLIENT_ROOT, c)));
 }
 

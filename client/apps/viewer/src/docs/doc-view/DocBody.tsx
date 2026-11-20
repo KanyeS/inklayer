@@ -1,6 +1,6 @@
 import { createEditor, type DocEditor } from "@inklayer/docs/editor";
 import { type RefObject, useCallback, useEffect, useRef } from "react";
-import { get } from "@/lib/api";
+import { lookupPeople } from "@/lib/api";
 import { navigate } from "@/lib/router";
 import type { DocSession } from "../collab";
 import { type DocTree, docPath } from "../docsApi";
@@ -79,9 +79,7 @@ export function DocBody(props: DocBodyProps) {
       openComment: (id) => navigate(`/comments/${id}`),
       commentLabel: (id) => labels.current.get(id),
       people: async (q) => {
-        const found = await get<PersonLookup[]>(`/api/orgs/${orgId}/members/lookup?q=${encodeURIComponent(q)}`).catch(
-          () => [],
-        );
+        const found = await lookupPeople(orgId, q).catch(() => []);
         for (const p of found) names.current.set(p.id.toLowerCase(), p);
         return found;
       },

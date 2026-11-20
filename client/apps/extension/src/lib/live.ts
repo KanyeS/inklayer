@@ -1,20 +1,8 @@
 import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2?url";
-import { api, type Features, postJson, putJson } from "./api";
+import { api } from "./api";
 import { NotSignedInError } from "./auth";
 import { bytesToBase64 } from "./base64";
-import type {
-  ActivityPage,
-  DocLookup,
-  LinkedIssue,
-  LiveAnnotation,
-  LiveInit,
-  LivePage,
-  LiveProject,
-  LiveReply,
-  LiveRequest,
-  PersonLookup,
-  TrackerChoice,
-} from "./live-types";
+import type { LiveInit, LiveRequest } from "./live-types";
 import { inbox, markRead } from "./notifications";
 import { captureScreenshot, screenshotForPage, uploadResult } from "./screenshots";
 import { getSettings } from "./settings";
@@ -37,7 +25,7 @@ const SCRIPT_ID = "inklayer-live";
 const CAPTURE_SCRIPT_ID = "inklayer-capture";
 const ALL_SITES = ["https://*/*", "http://*/*"];
 const CACHE_MS = 5 * 60 * 1000;
-const ACTIVITY_PAGE_SIZE = "30";
+const ACTIVITY_PAGE_SIZE = 30;
 const INBOX_SIZE = 20;
 const MAX_PEOPLE_QUERY = 100;
 const MAX_DOCS_QUERY = 200;
@@ -70,9 +58,9 @@ class Cached<T> {
 }
 
 /** The sites (origins only) that have comments the user can see. */
-const origins = new Cached(async () => new Set(await api<string[]>("/api/live/origins")));
-const projects = new Cached(() => api<LiveProject[]>("/api/live/projects"));
-const features = new Cached(() => api<Features>("/api/features"));
+const origins = new Cached(async () => new Set(await api.get("/api/live/origins")));
+const projects = new Cached(() => api.get("/api/live/projects"));
+const features = new Cached(() => api.get("/api/features"));
 
 async function signedIn(): Promise<boolean> {
   const { serverUrl, tokens } = await getSettings();
@@ -173,8 +161,6 @@ function tabOf(sender: Sender): number {
   return sender.tabId;
 }
 
-const enc = encodeURIComponent;
-
 /** Lookups are limited to organisations the user has projects in, so a page can't make the extension probe others. */
 async function checkOrganization(orgId: string): Promise<void> {
   if (!(await projects.get()).some((p) => p.organizationId === orgId)) throw new Error("Unknown organisation.");
@@ -191,31 +177,49 @@ const HANDLERS: Handlers = {
     if (!(await signedIn())) throw new NotSignedInError();
     return init(r.url);
   },
-  "live.list": (r) => api<LivePage[]>(`/api/live/annotations?url=${enc(r.url)}`),
+  "live.list": (r) => pageComments(r.url),
 
   /* ---------------- comments */
   "live.create": async (r, { origin }) => {
     const { type: _type, projectId, ...body } = r;
-    const created = await postJson<LiveAnnotation>(`/api/projects/${enc(projectId)}/live/annotations`, body);
+    const created = await api.post("/api/projects/{projectId}/live/annotations", {
+      params: { path: { projectId } },
+      body,
+    });
     origins.peek()?.add(origin);
     await chrome.storage.local.set({ lastLiveProjectId: projectId });
     return created;
   },
   "live.update": ({ id, version, status, body }) =>
-    api<LiveAnnotation>(`/api/annotations/${enc(id)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version, status, body }),
+    api.patch("/api/annotations/{annotationId}", {
+      params: { path: { annotationId: id } },
+      body: { version, status, body },
     }),
-  "live.delete": (r) => api<null>(`/api/annotations/${enc(r.id)}?version=${r.version}`, { method: "DELETE" }),
-  "live.reply": (r) => postJson<LiveReply>(`/api/annotations/${enc(r.annotationId)}/replies`, { body: r.body }),
-  "live.replyDelete": (r) => api<null>(`/api/replies/${enc(r.id)}?version=${r.version}`, { method: "DELETE" }),
+  "live.delete": async (r) => {
+    await api.delete("/api/annotations/{annotationId}", {
+      params: { path: { annotationId: r.id }, query: { version: r.version } },
+    });
+    return null;
+  },
+  "live.reply": (r) =>
+    api.post("/api/annotations/{annotationId}/replies", {
+      params: { path: { annotationId: r.annotationId } },
+      body: { body: r.body },
+    }),
+  "live.replyDelete": async (r) => {
+    await api.delete("/api/replies/{replyId}", { params: { path: { replyId: r.id }, query: { version: r.version } } });
+    return null;
+  },
 
   /* ---------------- bug context */
   // The tab's zoom, which the page itself can't read, so the page can be seen as the commenter saw it.
   "live.context": async (r, { tabId }) => {
     const zoom = tabId === undefined ? null : await chrome.tabs.getZoom(tabId).catch(() => null);
-    return putJson<null>(`/api/annotations/${enc(r.annotationId)}/context`, { ...r.context, zoom });
+    await api.put("/api/annotations/{annotationId}/context", {
+      params: { path: { annotationId: r.annotationId } },
+      body: { ...r.context, zoom },
+    });
+    return null;
   },
   "live.capture": async (r, sender) => {
     await captureScreenshot(windowOf(sender), r.annotationId, r.area, r.viewportWidth);
@@ -232,29 +236,31 @@ const HANDLERS: Handlers = {
   // Only the user's own projects, so a page can't make the extension probe others.
   "live.trackers": async (r) => {
     if (!(await projects.get()).some((p) => p.id === r.projectId)) throw new Error("Unknown project.");
-    return api<TrackerChoice[]>(`/api/projects/${enc(r.projectId)}/issue-trackers/choices`);
+    return api.get("/api/projects/{projectId}/issue-trackers/choices", {
+      params: { path: { projectId: r.projectId } },
+    });
   },
   "live.issue": (r) =>
-    postJson<LinkedIssue>(`/api/annotations/${enc(r.annotationId)}/issues`, { connectionId: r.connectionId }),
+    api.post("/api/annotations/{annotationId}/issues", {
+      params: { path: { annotationId: r.annotationId } },
+      body: { connectionId: r.connectionId },
+    }),
   // A read-only link to this page's open comments in one project. The page address is the sender's own (checked above).
   "live.share": (r) =>
-    postJson<{ url: string }>("/api/shares", {
-      kind: "page",
-      projectId: r.projectId,
-      pageUrl: r.url,
-      expiresInDays: 30,
-    }),
+    api.post("/api/shares", { body: { kind: "page", projectId: r.projectId, pageUrl: r.url, expiresInDays: 30 } }),
 
   /* ---------------- suggestions */
   "live.people": async (r) => {
     await checkOrganization(r.orgId);
-    const q = enc(r.q.slice(0, MAX_PEOPLE_QUERY));
-    return api<PersonLookup[]>(`/api/orgs/${enc(r.orgId)}/members/lookup?q=${q}`);
+    return api.get("/api/orgs/{orgId}/members/lookup", {
+      params: { path: { orgId: r.orgId }, query: { q: r.q.slice(0, MAX_PEOPLE_QUERY) } },
+    });
   },
   "live.docs": async (r) => {
     await checkOrganization(r.orgId);
-    const q = enc(r.q.slice(0, MAX_DOCS_QUERY));
-    return api<DocLookup[]>(`/api/orgs/${enc(r.orgId)}/docs/lookup?q=${q}`);
+    return api.get("/api/orgs/{orgId}/docs/lookup", {
+      params: { path: { orgId: r.orgId }, query: { q: r.q.slice(0, MAX_DOCS_QUERY) } },
+    });
   },
 
   /* ---------------- the window's size and zoom */
@@ -270,12 +276,13 @@ const HANDLERS: Handlers = {
   /* ---------------- activity, notifications and the panel */
   // "This site" is always the sender's own origin, never a site the page names.
   "live.activity": (r, { origin }) => {
-    const query = new URLSearchParams();
-    if (r.thisSite) query.set("site", origin);
-    if (r.kind) query.set("kind", r.kind);
-    if (r.before) query.set("before", r.before);
-    query.set("limit", ACTIVITY_PAGE_SIZE);
-    return api<ActivityPage>(`/api/activity?${query}`);
+    const query = {
+      site: r.thisSite ? origin : undefined,
+      kind: r.kind,
+      before: r.before,
+      limit: ACTIVITY_PAGE_SIZE,
+    };
+    return api.get("/api/activity", { params: { query } });
   },
   "live.inbox": () => inbox(INBOX_SIZE),
   "live.inboxRead": async (r) => {
@@ -286,6 +293,8 @@ const HANDLERS: Handlers = {
 };
 
 /* -------------------------------------------------------------- helpers */
+
+const pageComments = (url: string) => api.get("/api/live/annotations", { params: { query: { url } } });
 
 let panelFontData: Promise<string> | null = null;
 
@@ -308,7 +317,7 @@ function panelFont(): Promise<string> {
 async function init(url: string): Promise<LiveInit> {
   const [all, pages, stored, settings, on] = await Promise.all([
     projects.get(),
-    api<LivePage[]>(`/api/live/annotations?url=${enc(url)}`),
+    pageComments(url),
     chrome.storage.local.get("lastLiveProjectId"),
     getSettings(),
     features.get(),

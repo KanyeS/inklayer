@@ -1,3 +1,4 @@
+import type { IssueResponse, TrackerConnectionResponse, TrackerSettings } from "@inklayer/api";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
@@ -8,41 +9,13 @@ import { CircleCheck, CircleDot, ExternalLink, Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
-import { del, get, patch, post } from "@/lib/api";
+import { api } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
-export type TrackerKind = "github" | "jira" | "linear";
-
-export interface Issue {
-  id: string;
-  kind: TrackerKind;
-  key: string;
-  url: string;
-  state: "open" | "closed";
-}
-
-interface TrackerSettings {
-  owner?: string | null;
-  repo?: string | null;
-  apiUrl?: string | null;
-  site?: string | null;
-  projectKey?: string | null;
-  issueType?: string | null;
-  email?: string | null;
-  teamId?: string | null;
-}
-
-interface Tracker {
-  id: string;
-  kind: TrackerKind;
-  name: string;
-  settings: TrackerSettings;
-  closeIssueOnResolve: boolean;
-  tokenHint: string;
-  lastErrorAt: string | null;
-  lastError: string | null;
-}
+export type Issue = IssueResponse;
+export type TrackerKind = TrackerConnectionResponse["kind"];
+type Tracker = TrackerConnectionResponse;
 
 export const TRACKER_NAMES: Record<TrackerKind, string> = { github: "GitHub", jira: "Jira", linear: "Linear" };
 
@@ -84,7 +57,7 @@ export function CreateIssueButton({
   onCreated: () => Promise<void>;
 }) {
   const choices = useAsync(
-    () => get<{ id: string; kind: TrackerKind; name: string }[]>(`/api/projects/${projectId}/issue-trackers/choices`),
+    () => api.get("/api/projects/{projectId}/issue-trackers/choices", { params: { path: { projectId } } }),
     [projectId],
   );
   const [open, setOpen] = useState(false);
@@ -110,7 +83,10 @@ export function CreateIssueButton({
     e.preventDefault();
     setBusy(true);
     try {
-      await post(`/api/annotations/${commentId}/issues`, { connectionId: chosen, title: title.trim() || undefined });
+      await api.post("/api/annotations/{annotationId}/issues", {
+        params: { path: { annotationId: commentId } },
+        body: { connectionId: chosen, title: title.trim() || undefined },
+      });
       setOpen(false);
       setTitle("");
       setError(null);
@@ -168,7 +144,10 @@ const HELP: Record<TrackerKind, string> = {
 
 /** A project's connected issue trackers, for project Admins: any number of GitHub repositories, Jira projects and Linear teams. */
 export function IssueTrackersSection({ projectId }: { projectId: string }) {
-  const trackers = useAsync(() => get<Tracker[]>(`/api/projects/${projectId}/issue-trackers`), [projectId]);
+  const trackers = useAsync(
+    () => api.get("/api/projects/{projectId}/issue-trackers", { params: { path: { projectId } } }),
+    [projectId],
+  );
   const [error, setError] = useState<Error | null>(null);
   const [tested, setTested] = useState<Record<string, string>>({});
 
@@ -183,9 +162,9 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
   };
 
   const test = async (t: Tracker) => {
-    const result = await post<{ ok: boolean; error: string | null }>(
-      `/api/projects/${projectId}/issue-trackers/${t.id}/test`,
-    );
+    const result = await api.post("/api/projects/{projectId}/issue-trackers/{id}/test", {
+      params: { path: { projectId, id: t.id } },
+    });
     setTested((s) => ({ ...s, [t.id]: result.ok ? "Connected ✓" : `Failed: ${result.error}` }));
   };
 
@@ -228,8 +207,9 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
                 size="sm"
                 onClick={() =>
                   void run(() =>
-                    patch(`/api/projects/${projectId}/issue-trackers/${t.id}`, {
-                      closeIssueOnResolve: !t.closeIssueOnResolve,
+                    api.patch("/api/projects/{projectId}/issue-trackers/{id}", {
+                      params: { path: { projectId, id: t.id } },
+                      body: { closeIssueOnResolve: !t.closeIssueOnResolve },
                     }),
                   )
                 }
@@ -240,7 +220,13 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
                 title={`Disconnect ${t.name}?`}
                 description="Issues already created stay in the tracker; their links are removed from comments."
                 confirmLabel="Disconnect"
-                onConfirm={() => void run(() => del(`/api/projects/${projectId}/issue-trackers/${t.id}`))}
+                onConfirm={() =>
+                  void run(() =>
+                    api.delete("/api/projects/{projectId}/issue-trackers/{id}", {
+                      params: { path: { projectId, id: t.id } },
+                    }),
+                  )
+                }
               >
                 Disconnect
               </ConfirmButton>
@@ -268,12 +254,9 @@ function AddTracker({ projectId, onAdded }: { projectId: string; onAdded: () => 
     e.preventDefault();
     setBusy(true);
     try {
-      await post(`/api/projects/${projectId}/issue-trackers`, {
-        kind,
-        name: name || undefined,
-        token,
-        settings,
-        closeIssueOnResolve,
+      await api.post("/api/projects/{projectId}/issue-trackers", {
+        params: { path: { projectId } },
+        body: { kind, name: name || undefined, token, settings, closeIssueOnResolve },
       });
       setSettings({});
       setToken("");

@@ -5,7 +5,7 @@ import { Input } from "@inklayer/ui/components/input";
 import { type FormEvent, useState } from "react";
 import { useMe } from "@/App";
 import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
-import { type Me, patch } from "@/lib/api";
+import { api } from "@/lib/api";
 
 /** Your own settings: the name others see. */
 export function SettingsPage() {
@@ -18,7 +18,7 @@ export function SettingsPage() {
     e.preventDefault();
     setSaved(false);
     try {
-      await patch<Me>("/api/me", { preferredName: name });
+      await api.patch("/api/me", { body: { preferredName: name } });
       setError(null);
       setSaved(true);
       await reloadMe();
@@ -59,7 +59,7 @@ export function SettingsPage() {
           className="mt-0.5"
           checked={me.emailNotifications}
           onCheckedChange={async (checked) => {
-            await patch<Me>("/api/me", { emailNotifications: checked === true });
+            await api.patch("/api/me", { body: { emailNotifications: checked === true } });
             await reloadMe();
           }}
         />

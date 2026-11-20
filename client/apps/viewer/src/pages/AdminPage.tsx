@@ -11,14 +11,14 @@ import { FeaturesSection } from "@/components/FeaturesSection";
 import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { NetworkAccessSection } from "@/components/NetworkAccessSection";
 import { AdminSharesSection } from "@/components/Shares";
-import { type AdminUser, get, type Organization, post } from "@/lib/api";
+import { type AdminUser, api } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { navigate } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 
 export function AdminPage() {
   const { me, reloadMe } = useMe();
-  const users = useAsync(() => get<AdminUser[]>("/api/admin/users"), []);
+  const users = useAsync(() => api.get("/api/admin/users"), []);
   const [name, setName] = useState("");
   const [domains, setDomains] = useState("");
   const [error, setError] = useState<Error | null>(null);
@@ -33,9 +33,8 @@ export function AdminPage() {
   const create = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const org = await post<Organization>("/api/orgs", {
-        name,
-        allowedDomains: domains.split(/[\s,]+/).filter(Boolean),
+      const org = await api.post("/api/orgs", {
+        body: { name, allowedDomains: domains.split(/[\s,]+/).filter(Boolean) },
       });
       await reloadMe();
       navigate(`/orgs/${org.id}`);
@@ -45,7 +44,10 @@ export function AdminPage() {
   };
   const setDisabled = async (user: AdminUser, disabled: boolean) => {
     try {
-      await post(`/api/admin/users/${user.id}/${disabled ? "disable" : "enable"}`);
+      const path = { params: { path: { userId: user.id } } };
+      await (disabled
+        ? api.post("/api/admin/users/{userId}/disable", path)
+        : api.post("/api/admin/users/{userId}/enable", path));
       await users.reload();
     } catch (err) {
       setError(err as Error);

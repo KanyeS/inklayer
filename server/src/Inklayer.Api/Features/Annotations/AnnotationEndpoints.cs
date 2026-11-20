@@ -27,15 +27,15 @@ internal static partial class AnnotationEndpoints
     public static IEndpointRouteBuilder MapAnnotationEndpoints(this IEndpointRouteBuilder app)
     {
         var annotations = app.MapGroup("/api/annotations").WithTags("Annotations").RequireAuthorization();
-        annotations.MapGet("/{annotationId:guid}", GetAsync).WithSummary("One comment, with its project, page and the docs that mention it");
-        annotations.MapPatch("/{annotationId:guid}", UpdateAsync);
-        annotations.MapDelete("/{annotationId:guid}", DeleteAsync).WithSummary("Soft-delete; send ?version= to guard against deleting a changed annotation");
-        annotations.MapGet("/{annotationId:guid}/history", HistoryAsync).WithSummary("Every revision, oldest first");
-        annotations.MapPost("/{annotationId:guid}/replies", CreateReplyAsync).WithSummary("Reply in a comment's thread (Commenters and above)");
+        annotations.MapGet("/{annotationId:guid}", GetAsync).Produces<AnnotationDetailResponse>().WithSummary("One comment, with its project, page and the docs that mention it");
+        annotations.MapPatch("/{annotationId:guid}", UpdateAsync).Produces<AnnotationResponse>();
+        annotations.MapDelete("/{annotationId:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Soft-delete; send ?version= to guard against deleting a changed annotation");
+        annotations.MapGet("/{annotationId:guid}/history", HistoryAsync).Produces<List<AnnotationRevisionResponse>>().WithSummary("Every revision, oldest first");
+        annotations.MapPost("/{annotationId:guid}/replies", CreateReplyAsync).Produces<ReplyResponse>(StatusCodes.Status201Created).WithSummary("Reply in a comment's thread (Commenters and above)");
 
         var replies = app.MapGroup("/api/replies").WithTags("Annotations").RequireAuthorization();
-        replies.MapPatch("/{replyId:guid}", UpdateReplyAsync).WithSummary("Edit your reply (project Admins: anyone's)");
-        replies.MapDelete("/{replyId:guid}", DeleteReplyAsync).WithSummary("Delete a reply: ?version=");
+        replies.MapPatch("/{replyId:guid}", UpdateReplyAsync).Produces<ReplyResponse>().WithSummary("Edit your reply (project Admins: anyone's)");
+        replies.MapDelete("/{replyId:guid}", DeleteReplyAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Delete a reply: ?version=");
 
         return app;
     }

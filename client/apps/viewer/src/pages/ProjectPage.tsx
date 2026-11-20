@@ -18,13 +18,16 @@ import { IssueTrackersSection } from "@/components/Issues";
 import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { PagesTable } from "@/components/PagesTable";
 import { ProjectSharesSection } from "@/components/Shares";
-import { atLeast, get, type LivePageSummary, type Project, patch } from "@/lib/api";
+import { api, atLeast, type Project } from "@/lib/api";
 import { Link } from "@/lib/router";
 import { useAsync } from "@/lib/useAsync";
 
 export function ProjectPage({ projectId }: { projectId: string }) {
   const { me } = useMe();
-  const project = useAsync(() => get<Project>(`/api/projects/${projectId}`), [projectId]);
+  const project = useAsync(
+    () => api.get("/api/projects/{projectId}", { params: { path: { projectId } } }),
+    [projectId],
+  );
 
   if (project.error)
     return (
@@ -87,7 +90,10 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
 /** Pages with comments in this project. Opening one shows the comments on the page itself, through the extension. */
 function Pages({ project }: { project: Project }) {
-  const pages = useAsync(() => get<LivePageSummary[]>(`/api/projects/${project.id}/live/pages`), [project.id]);
+  const pages = useAsync(
+    () => api.get("/api/projects/{projectId}/live/pages", { params: { path: { projectId: project.id } } }),
+    [project.id],
+  );
 
   return (
     <div className="space-y-4">
@@ -121,7 +127,7 @@ function Settings({ project, onSaved }: { project: Project; onSaved: () => Promi
     setError(null);
     setSaved(false);
     try {
-      await patch(`/api/projects/${project.id}`, { name });
+      await api.patch("/api/projects/{projectId}", { params: { path: { projectId: project.id } }, body: { name } });
       await onSaved();
       setSaved(true);
     } catch (err) {

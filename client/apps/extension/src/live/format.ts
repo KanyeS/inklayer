@@ -1,4 +1,7 @@
-import type { PageContext } from "../lib/live";
+import type { AnnotationContextResponse } from "@inklayer/api";
+
+/** Page details as the server returns them (or as captured, before they're sent). */
+type ShownContext = Omit<AnnotationContextResponse, "capturedAt">;
 
 /**
  * Pure text helpers for the live panel: addresses, times, counts and summaries. Nothing here touches the DOM or the
@@ -88,7 +91,7 @@ export function percent(zoom: number): string {
  * The one-line summary of a comment's page details:
  * "Chrome · Windows · 1440×900 at 125% · 2 console errors · 1 failed request".
  */
-export function contextSummary(c: PageContext): string {
+export function contextSummary(c: ShownContext): string {
   const zoomed = c.zoom && Math.abs(c.zoom - 1) > 0.01 ? ` at ${percent(c.zoom)}` : "";
   const errors = c.console.filter((e) => e.level === "error").length;
   return [
@@ -101,7 +104,7 @@ export function contextSummary(c: PageContext): string {
 }
 
 /** One failed request in the page details, e.g. "GET /api → 500 (120 ms)". */
-export function networkLine(n: PageContext["network"][number]): string {
+export function networkLine(n: ShownContext["network"][number]): string {
   return `${n.method} ${n.url} → ${n.status || "failed"}${n.ms ? ` (${n.ms} ms)` : ""}`;
 }
 

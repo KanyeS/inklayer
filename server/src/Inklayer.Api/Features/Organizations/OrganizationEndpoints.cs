@@ -15,20 +15,20 @@ internal static class OrganizationEndpoints
     {
         var orgs = app.MapGroup("/api/orgs").WithTags("Organizations").RequireAuthorization();
 
-        orgs.MapPost("/", CreateAsync).WithSummary("Create an organisation (instance administrators only); the creator becomes Owner");
-        orgs.MapGet("/{orgId:guid}", GetAsync).WithName("GetOrganization");
-        orgs.MapPatch("/{orgId:guid}", UpdateAsync).WithSummary("Rename, set the default role, or replace the allowed email domains");
+        orgs.MapPost("/", CreateAsync).Produces<OrganizationResponse>(StatusCodes.Status201Created).WithSummary("Create an organisation (instance administrators only); the creator becomes Owner");
+        orgs.MapGet("/{orgId:guid}", GetAsync).Produces<OrganizationResponse>().WithName("GetOrganization");
+        orgs.MapPatch("/{orgId:guid}", UpdateAsync).Produces<OrganizationResponse>().WithSummary("Rename, set the default role, or replace the allowed email domains");
 
-        orgs.MapGet("/{orgId:guid}/members", ListMembersAsync);
-        orgs.MapPut("/{orgId:guid}/members/{userId:guid}", SetMemberRoleAsync);
-        orgs.MapDelete("/{orgId:guid}/members/{userId:guid}", RemoveMemberAsync).WithSummary("Remove a member, or leave the organisation (your own user id)");
+        orgs.MapGet("/{orgId:guid}/members", ListMembersAsync).Produces<List<MemberResponse>>();
+        orgs.MapPut("/{orgId:guid}/members/{userId:guid}", SetMemberRoleAsync).Produces(StatusCodes.Status204NoContent);
+        orgs.MapDelete("/{orgId:guid}/members/{userId:guid}", RemoveMemberAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Remove a member, or leave the organisation (your own user id)");
 
-        orgs.MapGet("/{orgId:guid}/invitations", ListInvitationsAsync);
-        orgs.MapPost("/{orgId:guid}/invitations", InviteAsync)
+        orgs.MapGet("/{orgId:guid}/invitations", ListInvitationsAsync).Produces<List<InvitationResponse>>();
+        orgs.MapPost("/{orgId:guid}/invitations", InviteAsync).Produces<InvitationResponse>(StatusCodes.Status201Created).Produces<InvitationResponse>()
             .WithSummary("Allow an email address to join. They are added when they next sign in with that verified address.");
-        orgs.MapDelete("/{orgId:guid}/invitations/{invitationId:guid}", RevokeInvitationAsync);
+        orgs.MapDelete("/{orgId:guid}/invitations/{invitationId:guid}", RevokeInvitationAsync).Produces(StatusCodes.Status204NoContent);
 
-        orgs.MapGet("/{orgId:guid}/audit", ListAuditAsync).WithSummary("Audit log, newest first. Page with ?before=<occurredAt>.");
+        orgs.MapGet("/{orgId:guid}/audit", ListAuditAsync).Produces<List<AuditEventResponse>>().WithSummary("Audit log, newest first. Page with ?before=<occurredAt>.");
 
         return app;
     }

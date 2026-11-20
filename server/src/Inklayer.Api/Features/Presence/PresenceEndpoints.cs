@@ -52,7 +52,7 @@ internal static class PresenceEndpoints
     public static IEndpointRouteBuilder MapPresenceEndpoints(this IEndpointRouteBuilder app)
     {
         var presence = app.MapGroup("/api/presence").WithTags("Presence");
-        presence.MapPost("/ticket", TicketAsync).RequireAuthorization()
+        presence.MapPost("/ticket", TicketAsync).Produces<PresenceTicketResponse>().RequireAuthorization()
             .WithSummary("A single-use ticket, valid for a few seconds, for opening the presence connection");
 
         // WebSockets only: the extension skips negotiation and connects straight to the hub.

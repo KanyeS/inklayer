@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Live;
 using Inklayer.Domain.Authorization;
@@ -21,7 +22,7 @@ public sealed record DocTreeResponse(IReadOnlyList<string> Folders, IReadOnlyLis
 
 public sealed record DocLinkResponse(string Text, Guid? DocId, string? Title, string? Folder);
 
-public sealed record DocCommentLinkResponse(Guid AnnotationId, Guid ProjectId, string ProjectName, string? PageUrl, string Body, string Status, DocActor Author);
+public sealed record DocCommentLinkResponse(Guid AnnotationId, Guid ProjectId, string ProjectName, string? PageUrl, string Body, [property: AllowedValues("Open", "Resolved")] string Status, DocActor Author);
 
 /// <param name="Backlinks">Docs that link here.</param>
 /// <param name="CommentBacklinks">Page comments that link here, in projects the caller can view.</param>
@@ -45,6 +46,11 @@ public sealed record DocAppearanceRequest(string? Icon, string? Color);
 
 public sealed record FolderRequest(string Path);
 
+public sealed record DocFolderResponse(string Path);
+
+/// <param name="RelinkDocs">Docs whose text links something in the old folder. The client that moved it rewrites those links.</param>
+public sealed record DocFolderMovedResponse(IReadOnlyCollection<Guid> RelinkDocs);
+
 public sealed record MoveFolderRequest(string From, string To);
 
 public sealed record DocRevisionResponse(Guid Id, int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title);
@@ -57,7 +63,7 @@ public sealed record DocSearchResultResponse(Guid Id, string Folder, string Titl
 /// <param name="Color">The tag's colour, <c>#rrggbb</c>, or null for the theme's.</param>
 public sealed record DocTagCountResponse(string Tag, int Count, string? Icon = null, string? Color = null);
 
-public sealed record DocGraphNode(string Id, string Kind, string Label, Guid? DocId, Guid? AnnotationId, string? Folder, string? Icon = null, string? Color = null);
+public sealed record DocGraphNode(string Id, [property: AllowedValues("doc", "comment")] string Kind, string Label, Guid? DocId, Guid? AnnotationId, string? Folder, string? Icon = null, string? Color = null);
 
 public sealed record DocGraphEdge(string Source, string Target);
 
@@ -72,27 +78,27 @@ internal static class DocEndpoints
     public static IEndpointRouteBuilder MapDocEndpoints(this IEndpointRouteBuilder app)
     {
         var byOrg = app.MapGroup("/api/orgs/{orgId:guid}/docs").WithTags("Docs").RequireAuthorization();
-        byOrg.MapGet("/", TreeAsync).WithSummary("Folders and docs, with tags");
-        byOrg.MapPost("/", CreateAsync).WithSummary("Create an empty doc (Commenter and above)");
-        byOrg.MapPost("/folders", CreateFolderAsync).WithSummary("Create an empty folder");
-        byOrg.MapPatch("/folders", MoveFolderAsync).WithSummary("Rename or move a folder, with everything in it");
-        byOrg.MapDelete("/folders", DeleteFolderAsync).WithSummary("Delete an empty folder: ?path=");
-        byOrg.MapGet("/search", SearchAsync).WithSummary("Full-text search: ?q=");
-        byOrg.MapGet("/lookup", LookupAsync).WithSummary("Docs whose title matches ?q=, for link suggestions");
-        byOrg.MapGet("/tags", TagsAsync).WithSummary("Tags with how many docs have each, and each tag's icon and colour");
-        byOrg.MapPut("/tags/{tag}", SetTagStyleAsync).WithSummary("Set a #tag's icon and colour (Commenter and above); both empty for the defaults");
-        byOrg.MapGet("/graph", GraphAsync).WithSummary("Docs and comments as nodes, links as edges");
+        byOrg.MapGet("/", TreeAsync).Produces<DocTreeResponse>().WithSummary("Folders and docs, with tags");
+        byOrg.MapPost("/", CreateAsync).Produces<DocSummaryResponse>(StatusCodes.Status201Created).WithSummary("Create an empty doc (Commenter and above)");
+        byOrg.MapPost("/folders", CreateFolderAsync).Produces<DocFolderResponse>(StatusCodes.Status201Created).WithSummary("Create an empty folder");
+        byOrg.MapPatch("/folders", MoveFolderAsync).Produces<DocFolderMovedResponse>().WithSummary("Rename or move a folder, with everything in it");
+        byOrg.MapDelete("/folders", DeleteFolderAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Delete an empty folder: ?path=");
+        byOrg.MapGet("/search", SearchAsync).Produces<List<DocSearchResultResponse>>().WithSummary("Full-text search: ?q=");
+        byOrg.MapGet("/lookup", LookupAsync).Produces<List<DocSummaryResponse>>().WithSummary("Docs whose title matches ?q=, for link suggestions");
+        byOrg.MapGet("/tags", TagsAsync).Produces<List<DocTagCountResponse>>().WithSummary("Tags with how many docs have each, and each tag's icon and colour");
+        byOrg.MapPut("/tags/{tag}", SetTagStyleAsync).Produces<DocTagCountResponse>().WithSummary("Set a #tag's icon and colour (Commenter and above); both empty for the defaults");
+        byOrg.MapGet("/graph", GraphAsync).Produces<DocGraphResponse>().WithSummary("Docs and comments as nodes, links as edges");
 
         // Live co-editing; WebSockets only, signed in with a presence ticket like the presence hub.
         app.MapHub<DocsHub>(Presence.PresenceEndpoints.DocsHubPath, o => o.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets);
 
         var docs = app.MapGroup("/api/docs").WithTags("Docs").RequireAuthorization();
-        docs.MapGet("/{docId:guid}", GetAsync).WithSummary("A doc's details, links and backlinks (the text comes from the docs hub)");
-        docs.MapPatch("/{docId:guid}", UpdateAsync).WithSummary("Rename or move a doc");
-        docs.MapPut("/{docId:guid}/appearance", SetAppearanceAsync).WithSummary("Set the doc's icon and colour (Commenter and above)");
-        docs.MapDelete("/{docId:guid}", DeleteAsync).WithSummary("Delete a doc: ?version=");
-        docs.MapGet("/{docId:guid}/history", HistoryAsync);
-        docs.MapGet("/{docId:guid}/history/{revisionId:guid}", RevisionAsync);
+        docs.MapGet("/{docId:guid}", GetAsync).Produces<DocResponse>().WithSummary("A doc's details, links and backlinks (the text comes from the docs hub)");
+        docs.MapPatch("/{docId:guid}", UpdateAsync).Produces<DocChangedResponse>().WithSummary("Rename or move a doc");
+        docs.MapPut("/{docId:guid}/appearance", SetAppearanceAsync).Produces<DocResponse>().WithSummary("Set the doc's icon and colour (Commenter and above)");
+        docs.MapDelete("/{docId:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Delete a doc: ?version=");
+        docs.MapGet("/{docId:guid}/history", HistoryAsync).Produces<List<DocRevisionResponse>>();
+        docs.MapGet("/{docId:guid}/history/{revisionId:guid}", RevisionAsync).Produces<DocRevisionContentResponse>();
         return app;
     }
 
@@ -357,7 +363,7 @@ internal static class DocEndpoints
             await db.SaveChangesAsync(ct);
         }
 
-        return TypedResults.Created($"/api/orgs/{orgId}/docs", new { path });
+        return TypedResults.Created($"/api/orgs/{orgId}/docs", new DocFolderResponse(path));
     }
 
     private static async Task<IResult> MoveFolderAsync(
@@ -442,7 +448,7 @@ internal static class DocEndpoints
         await indexer.RelinkAsync(orgId, keys, ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return TypedResults.Ok(new { relinkDocs = relink });
+        return TypedResults.Ok(new DocFolderMovedResponse(relink));
     }
 
     private static async Task<IResult> DeleteFolderAsync(Guid orgId, string path, AccessService access, InklayerDbContext db, CancellationToken ct)

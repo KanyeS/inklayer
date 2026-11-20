@@ -35,8 +35,8 @@ internal static class ContextEndpoints
     public static IEndpointRouteBuilder MapContextEndpoints(this IEndpointRouteBuilder app)
     {
         var annotations = app.MapGroup("/api/annotations").WithTags("Annotations").RequireAuthorization();
-        annotations.MapPut("/{annotationId:guid}/context", SetContextAsync).WithSummary("Add the page details captured with your comment (once)");
-        annotations.MapPut("/{annotationId:guid}/screenshot", SetScreenshotAsync).WithSummary("Add a screenshot to your comment: a WebP, JPEG or PNG body, at most 600 KB");
+        annotations.MapPut("/{annotationId:guid}/context", SetContextAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Add the page details captured with your comment (once)");
+        annotations.MapPut("/{annotationId:guid}/screenshot", SetScreenshotAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Add a screenshot to your comment: a WebP, JPEG or PNG body, at most 600 KB");
         annotations.MapGet("/{annotationId:guid}/screenshot", GetScreenshotAsync).WithSummary("The screenshot taken with a comment");
         return app;
     }

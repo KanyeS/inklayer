@@ -1,0 +1,15 @@
+{
+  "name": "@inklayer/api",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "The server's API as TypeScript: types generated from its OpenAPI document (openapi.json, kept up to date by a server test) and a typed fetch client. Shared by the viewer and the extension.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0",
+    "openapi-typescript-helpers": "0.1.0"
+  }
+}

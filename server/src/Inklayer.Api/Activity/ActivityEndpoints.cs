@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Inklayer.Api.Access;
 using Inklayer.Api.Hosting;
@@ -31,13 +32,15 @@ public sealed record ActivityActor(Guid Id, string DisplayName, string? Email, s
 /// </list>
 /// </summary>
 public sealed record ActivityItemResponse(
-    string Id, string Kind, string Action, DateTime OccurredAt, ActivityActor? Actor,
+    string Id, [property: AllowedValues(ActivityKinds.Comments, ActivityKinds.Docs, ActivityKinds.SignIns, ActivityKinds.Errors)] string Kind, string Action, DateTime OccurredAt, ActivityActor? Actor,
     Guid? ProjectId, string? ProjectName, string? PageUrl, Guid? AnnotationId, string? Detail,
     Guid? DocId = null, string? DocTitle = null, Guid? OrganizationId = null);
 
 /// <param name="Kinds">The kinds the caller is allowed to see.</param>
 /// <param name="NextBefore">Pass as <c>?before=</c> to get the next, older page; null when there's nothing older.</param>
-public sealed record ActivityResponse(IReadOnlyList<ActivityItemResponse> Items, IReadOnlyList<string> Kinds, DateTime? NextBefore);
+public sealed record ActivityResponse(
+    IReadOnlyList<ActivityItemResponse> Items,
+    [property: AllowedValues(ActivityKinds.Comments, ActivityKinds.Docs, ActivityKinds.SignIns, ActivityKinds.Errors)] IReadOnlyList<string> Kinds, DateTime? NextBefore);
 
 /// <summary>
 /// The activity log. What each person sees depends on their roles:
@@ -53,7 +56,7 @@ internal static class ActivityEndpoints
 
     public static IEndpointRouteBuilder MapActivityEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/activity", ListAsync).WithTags("Activity").RequireAuthorization()
+        app.MapGet("/api/activity", ListAsync).Produces<ActivityResponse>().WithTags("Activity").RequireAuthorization()
             .WithSummary("Activity log, newest first. ?kind=comments|docs|signins|errors (default: all you can see), ?site=<origin> (comments on one site), ?before=<occurredAt>, ?limit=");
         return app;
     }

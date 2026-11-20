@@ -17,10 +17,10 @@ internal static class MeEndpoints
     {
         var me = app.MapGroup("/api/me").WithTags("Me").RequireAuthorization();
 
-        me.MapGet("/", MeAsync).WithName("GetMe").WithSummary("The signed-in user and their organisations");
-        me.MapPatch("/", UpdateAsync).WithSummary("Change the name you're shown as (empty: your real name, from your sign-in provider)");
+        me.MapGet("/", MeAsync).Produces<MeResponse>().WithName("GetMe").WithSummary("The signed-in user and their organisations");
+        me.MapPatch("/", UpdateAsync).Produces<MeResponse>().WithSummary("Change the name you're shown as (empty: your real name, from your sign-in provider)");
 
-        me.MapPost("/sessions/revoke", RevokeAllSessionsAsync)
+        me.MapPost("/sessions/revoke", RevokeAllSessionsAsync).Produces(StatusCodes.Status204NoContent)
             .WithSummary("Sign out everywhere: ends every browser session and extension token for this user");
 
         return app;

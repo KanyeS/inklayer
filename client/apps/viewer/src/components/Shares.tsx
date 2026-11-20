@@ -1,3 +1,4 @@
+import type { ShareResponse } from "@inklayer/api";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
@@ -6,29 +7,11 @@ import { Check, Copy, Globe, Link2 } from "lucide-react";
 import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
-import { del, get, post } from "@/lib/api";
+import { api } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
-export interface Share {
-  id: string;
-  kind: "page" | "project" | "doc";
-  url: string;
-  organizationId: string;
-  projectId: string | null;
-  projectName: string | null;
-  pageUrl: string | null;
-  docId: string | null;
-  docTitle: string | null;
-  includeResolved: boolean;
-  createdBy: string;
-  createdAt: string;
-  expiresAt: string | null;
-  expired: boolean;
-  viewCount: number;
-  lastViewedAt: string | null;
-  canRevoke: boolean;
-}
+export type Share = ShareResponse;
 
 function CopyButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
@@ -105,7 +88,7 @@ function ShareList({
                   confirmLabel="Turn off"
                   onConfirm={async () => {
                     try {
-                      await del(`/api/shares/${s.id}`);
+                      await api.delete("/api/shares/{id}", { params: { path: { id: s.id } } });
                       setError(null);
                     } catch (e) {
                       setError(e as Error);
@@ -126,18 +109,20 @@ function ShareList({
 
 /** A project's read-only links: make one for all its comments here; page links are made from the extension. */
 export function ProjectSharesSection({ projectId }: { projectId: string }) {
-  const shares = useAsync(() => get<Share[]>(`/api/shares?projectId=${projectId}`), [projectId]);
+  const shares = useAsync(() => api.get("/api/shares", { params: { query: { projectId } } }), [projectId]);
   const [includeResolved, setIncludeResolved] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState("30");
   const [error, setError] = useState<Error | null>(null);
 
   const create = async () => {
     try {
-      const created = await post<Share>("/api/shares", {
-        kind: "project",
-        projectId,
-        includeResolved,
-        expiresInDays: expiresInDays ? Number(expiresInDays) : undefined,
+      const created = await api.post("/api/shares", {
+        body: {
+          kind: "project",
+          projectId,
+          includeResolved,
+          expiresInDays: expiresInDays ? Number(expiresInDays) : undefined,
+        },
       });
       await navigator.clipboard.writeText(created.url).catch(() => undefined);
       setError(null);
@@ -178,7 +163,7 @@ export function ProjectSharesSection({ projectId }: { projectId: string }) {
 
 /** "Make public" for a doc: one read-only link, which Commenters and above can turn on and off. */
 export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boolean }) {
-  const shares = useAsync(() => get<Share[]>(`/api/shares?docId=${docId}`), [docId]);
+  const shares = useAsync(() => api.get("/api/shares", { params: { query: { docId } } }), [docId]);
   const [error, setError] = useState<Error | null>(null);
   const [copied, setCopied] = useState(false);
   const live = shares.data?.find((s) => !s.expired);
@@ -203,7 +188,7 @@ export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boo
           title="Anyone with the link can read this doc, without an account"
           onClick={() =>
             void run(async () => {
-              const created = await post<Share>("/api/shares", { kind: "doc", docId });
+              const created = await api.post("/api/shares", { body: { kind: "doc", docId } });
               await navigator.clipboard.writeText(created.url).catch(() => undefined);
             })
           }
@@ -234,7 +219,11 @@ export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boo
         {copied ? "Copied" : "Copy link"}
       </Button>
       {live.canRevoke && (
-        <Button variant="ghost" size="sm" onClick={() => void run(() => del(`/api/shares/${live.id}`))}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void run(() => api.delete("/api/shares/{id}", { params: { path: { id: live.id } } }))}
+        >
           Make private
         </Button>
       )}
@@ -245,7 +234,7 @@ export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boo
 
 /** Every working link on the server, for instance administrators. */
 export function AdminSharesSection() {
-  const shares = useAsync(() => get<Share[]>("/api/admin/shares"), []);
+  const shares = useAsync(() => api.get("/api/admin/shares"), []);
   return (
     <div className="max-w-3xl space-y-4">
       <p className="text-sm text-muted-foreground">

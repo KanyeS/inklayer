@@ -1,3 +1,4 @@
+import type { IntegrationResponse } from "@inklayer/api";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
@@ -8,24 +9,12 @@ import { Hash, Mail, Webhook } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
-import { del, get, type Project, patch, post } from "@/lib/api";
+import { api, type Project } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
 
-type Kind = "email" | "slack" | "webhook";
-
-interface Integration {
-  id: string;
-  kind: Kind;
-  name: string;
-  enabled: boolean;
-  events: string[];
-  projectId: string | null;
-  target: string | null;
-  lastSuccessAt: string | null;
-  lastErrorAt: string | null;
-  lastError: string | null;
-}
+type Integration = IntegrationResponse;
+type Kind = Integration["kind"];
 
 const EVENTS: { id: string; label: string }[] = [
   { id: "comment.created", label: "New comments" },
@@ -58,8 +47,11 @@ const KINDS: Record<Kind, { label: string; icon: typeof Mail; help: string }> = 
  * integrations as you like. Organisation Admins only.
  */
 export function IntegrationsSection({ orgId }: { orgId: string }) {
-  const integrations = useAsync(() => get<Integration[]>(`/api/orgs/${orgId}/integrations`), [orgId]);
-  const projects = useAsync(() => get<Project[]>(`/api/orgs/${orgId}/projects`), [orgId]);
+  const integrations = useAsync(
+    () => api.get("/api/orgs/{orgId}/integrations", { params: { path: { orgId } } }),
+    [orgId],
+  );
+  const projects = useAsync(() => api.get("/api/orgs/{orgId}/projects", { params: { path: { orgId } } }), [orgId]);
   const [error, setError] = useState<Error | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [tested, setTested] = useState<Record<string, string>>({});
@@ -75,7 +67,9 @@ export function IntegrationsSection({ orgId }: { orgId: string }) {
   };
 
   const test = async (i: Integration) => {
-    const result = await post<{ ok: boolean; error: string | null }>(`/api/orgs/${orgId}/integrations/${i.id}/test`);
+    const result = await api.post("/api/orgs/{orgId}/integrations/{id}/test", {
+      params: { path: { orgId, id: i.id } },
+    });
     setTested((t) => ({ ...t, [i.id]: result.ok ? "Sent ✓" : `Failed: ${result.error}` }));
     await integrations.reload();
   };
@@ -136,7 +130,12 @@ export function IntegrationsSection({ orgId }: { orgId: string }) {
                   variant="ghost"
                   size="sm"
                   onClick={() =>
-                    void run(() => patch(`/api/orgs/${orgId}/integrations/${i.id}`, { enabled: !i.enabled }))
+                    void run(() =>
+                      api.patch("/api/orgs/{orgId}/integrations/{id}", {
+                        params: { path: { orgId, id: i.id } },
+                        body: { enabled: !i.enabled },
+                      }),
+                    )
                   }
                 >
                   {i.enabled ? "Pause" : "Resume"}
@@ -144,7 +143,11 @@ export function IntegrationsSection({ orgId }: { orgId: string }) {
                 <ConfirmButton
                   title={`Remove ${i.name}?`}
                   confirmLabel="Remove"
-                  onConfirm={() => void run(() => del(`/api/orgs/${orgId}/integrations/${i.id}`))}
+                  onConfirm={() =>
+                    void run(() =>
+                      api.delete("/api/orgs/{orgId}/integrations/{id}", { params: { path: { orgId, id: i.id } } }),
+                    )
+                  }
                 >
                   Remove
                 </ConfirmButton>
@@ -185,12 +188,15 @@ function AddIntegration({
   const add = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const created = await post<{ secret: string | null }>(`/api/orgs/${orgId}/integrations`, {
-        kind,
-        name: name || undefined,
-        url: kind === "email" ? undefined : url,
-        events,
-        projectId: projectId || undefined,
+      const created = await api.post("/api/orgs/{orgId}/integrations", {
+        params: { path: { orgId } },
+        body: {
+          kind,
+          name: name || undefined,
+          url: kind === "email" ? undefined : url,
+          events,
+          projectId: projectId || undefined,
+        },
       });
       setName("");
       setUrl("");

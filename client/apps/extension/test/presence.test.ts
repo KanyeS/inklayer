@@ -52,8 +52,10 @@ vi.mock("@microsoft/signalr", () => {
   };
 });
 vi.mock("../src/lib/api", () => ({
-  api: vi.fn(() => Promise.resolve({ liveCursors: true })),
-  postJson: vi.fn(() => Promise.resolve({ ticket: "t" })),
+  api: {
+    get: vi.fn(() => Promise.resolve({ liveCursors: true })),
+    post: vi.fn(() => Promise.resolve({ ticket: "t" })),
+  },
 }));
 vi.mock("../src/lib/settings", () => ({
   getSettings: () => Promise.resolve({ serverUrl: "https://inklayer.example.com", tokens: null }),

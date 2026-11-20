@@ -13,7 +13,7 @@ internal static partial class HostingExtensions
     {
         services.AddProblemDetails();
         services.AddExceptionHandler<Activity.ErrorRecorder>();
-        services.AddOpenApi();
+        services.AddOpenApi(o => o.UseInklayerSchemaRules());
 
         services.AddHealthChecks()
             .AddDbContextCheck<InklayerDbContext>("database", tags: [HealthEndpoints.ReadyTag]);

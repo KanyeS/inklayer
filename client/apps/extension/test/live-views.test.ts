@@ -320,7 +320,7 @@ describe("a comment", () => {
     expect(li.dataset.id).toBe("a1");
     expect(li.querySelector(".badge")?.textContent).toBe("2");
     expect(li.querySelector(".meta strong")?.textContent).toBe("Ann");
-    expect(li.querySelector(".meta strong")?.getAttribute("title")).toBe("Ann Lee · Member");
+    expect(li.querySelector(".meta strong")?.getAttribute("title")).toBe("Ann Lee · Commenter");
     expect(li.querySelector(".body")?.textContent).toBe("Fix this");
     expect(texts(li, ".actions button")).toEqual(["Resolve", "Edit", "Copy link", "Delete"]);
   });
@@ -360,7 +360,7 @@ describe("a comment", () => {
     const reply = {
       id: "r1",
       body: "Done",
-      author: { id: "u2", displayName: "Bo" },
+      author: { id: "u2", displayName: "Bo", avatarUrl: null },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       version: 1,
@@ -465,6 +465,7 @@ describe("a comment's parts", () => {
         elementHtml: "",
         console: [{ level: "error", message: "boom", at: "" }],
         network: [],
+        capturedAt: "",
       },
     });
     const details = parts().details(a) as HTMLDetailsElement;

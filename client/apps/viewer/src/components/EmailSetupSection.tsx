@@ -2,15 +2,15 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { useState } from "react";
 import { SectionTitle } from "@/components/Layout";
-import { get, post } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 
 /** Whether the server can send notification emails (INKLAYER_SMTP_*), with a test. Instance administrators. */
 export function EmailSetupSection() {
-  const setup = useAsync(() => get<{ configured: boolean; from: string | null }>("/api/admin/email"), []);
+  const setup = useAsync(() => api.get("/api/admin/email"), []);
   const [result, setResult] = useState<string | null>(null);
   const test = async () => {
-    const r = await post<{ ok: boolean; error: string | null }>("/api/admin/email/test");
+    const r = await api.post("/api/admin/email/test");
     setResult(r.ok ? "Sent to your address ✓" : `Failed: ${r.error}`);
   };
   return (

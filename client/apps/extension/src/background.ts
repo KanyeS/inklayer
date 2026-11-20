@@ -94,7 +94,7 @@ async function state(): Promise<StateResponse> {
   let me: Me | null = null;
   if (settings.serverUrl && settings.tokens) {
     try {
-      me = await api<Me>("/api/me");
+      me = await api.get("/api/me");
     } catch (error) {
       if (!(error instanceof NotSignedInError)) throw error;
     }

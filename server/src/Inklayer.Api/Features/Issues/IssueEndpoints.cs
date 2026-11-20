@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Notifications;
 using Inklayer.Domain.Authorization;
@@ -9,10 +10,10 @@ namespace Inklayer.Api.Features.Issues;
 
 /// <param name="TokenHint">The token's last four characters; the token itself is never returned.</param>
 public sealed record TrackerConnectionResponse(
-    Guid Id, string Kind, string Name, TrackerSettings Settings, bool CloseIssueOnResolve, string TokenHint, DateTime? LastErrorAt, string? LastError);
+    Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear)] string Kind, string Name, TrackerSettings Settings, bool CloseIssueOnResolve, string TokenHint, DateTime? LastErrorAt, string? LastError);
 
 /// <summary>What Commenters need to pick a tracker.</summary>
-public sealed record TrackerChoiceResponse(Guid Id, string Kind, string Name);
+public sealed record TrackerChoiceResponse(Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear)] string Kind, string Name);
 
 public sealed record CreateTrackerRequest(string Kind, string? Name, string Token, TrackerSettings Settings, bool CloseIssueOnResolve = true);
 
@@ -29,14 +30,14 @@ internal static class IssueEndpoints
     public static IEndpointRouteBuilder MapIssueEndpoints(this IEndpointRouteBuilder app)
     {
         var trackers = app.MapGroup("/api/projects/{projectId:guid}/issue-trackers").WithTags("Issues").RequireAuthorization();
-        trackers.MapGet("/", ListAsync).WithSummary("The project's issue tracker connections (project Admins)");
-        trackers.MapGet("/choices", ChoicesAsync).WithSummary("Trackers a Commenter can create issues in");
-        trackers.MapPost("/", CreateAsync).WithSummary("Connect GitHub, Jira Cloud or Linear (checked before saving)");
-        trackers.MapPatch("/{id:guid}", UpdateAsync);
-        trackers.MapDelete("/{id:guid}", DeleteAsync);
-        trackers.MapPost("/{id:guid}/test", TestAsync).WithSummary("Check the connection still works");
+        trackers.MapGet("/", ListAsync).Produces<List<TrackerConnectionResponse>>().WithSummary("The project's issue tracker connections (project Admins)");
+        trackers.MapGet("/choices", ChoicesAsync).Produces<List<TrackerChoiceResponse>>().WithSummary("Trackers a Commenter can create issues in");
+        trackers.MapPost("/", CreateAsync).Produces<TrackerConnectionResponse>(StatusCodes.Status201Created).WithSummary("Connect GitHub, Jira Cloud or Linear (checked before saving)");
+        trackers.MapPatch("/{id:guid}", UpdateAsync).Produces<TrackerConnectionResponse>();
+        trackers.MapDelete("/{id:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent);
+        trackers.MapPost("/{id:guid}/test", TestAsync).Produces<TestResultResponse>().WithSummary("Check the connection still works");
 
-        app.MapPost("/api/annotations/{annotationId:guid}/issues", CreateIssueAsync).WithTags("Issues").RequireAuthorization()
+        app.MapPost("/api/annotations/{annotationId:guid}/issues", CreateIssueAsync).Produces<IssueResponse>(StatusCodes.Status201Created).WithTags("Issues").RequireAuthorization()
             .WithSummary("Create an issue from a comment, with its replies, page and page details");
         return app;
     }

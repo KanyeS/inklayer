@@ -5,7 +5,7 @@ import {
   HubConnectionState,
   LogLevel,
 } from "@microsoft/signalr";
-import { api, type Features, postJson } from "./api";
+import { api } from "./api";
 import { PRESENCE_PORT, type PresenceDown, type PresencePeer, type PresenceUp } from "./presence-protocol";
 import { getSettings } from "./settings";
 
@@ -199,7 +199,7 @@ function connect(): Promise<void> {
     const { serverUrl } = await getSettings();
     if (!serverUrl) throw new Error("Not signed in to Inklayer.");
     // Turned off by an administrator: say so, and don't keep retrying.
-    if (!(await api<Features>("/api/features")).liveCursors) {
+    if (!(await api.get("/api/features")).liveCursors) {
       toAll({ t: "status", status: "offline", error: "Live cursors are turned off on this server." });
       return;
     }
@@ -208,7 +208,7 @@ function connect(): Promise<void> {
       .withUrl(new URL("/api/presence/hub", serverUrl).href, {
         transport: HttpTransportType.WebSockets,
         skipNegotiation: true,
-        accessTokenFactory: async () => (await postJson<{ ticket: string }>("/api/presence/ticket", {})).ticket,
+        accessTokenFactory: async () => (await api.post("/api/presence/ticket")).ticket,
       })
       .configureLogging(LogLevel.Warning)
       .build();

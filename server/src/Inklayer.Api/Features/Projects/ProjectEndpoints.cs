@@ -28,16 +28,16 @@ internal static class ProjectEndpoints
     public static IEndpointRouteBuilder MapProjectEndpoints(this IEndpointRouteBuilder app)
     {
         var byOrg = app.MapGroup("/api/orgs/{orgId:guid}/projects").WithTags("Projects").RequireAuthorization();
-        byOrg.MapGet("/", ListAsync);
-        byOrg.MapPost("/", CreateAsync);
+        byOrg.MapGet("/", ListAsync).Produces<List<ProjectResponse>>();
+        byOrg.MapPost("/", CreateAsync).Produces<ProjectResponse>(StatusCodes.Status201Created);
 
         var projects = app.MapGroup("/api/projects").WithTags("Projects").RequireAuthorization();
-        projects.MapGet("/{projectId:guid}", GetAsync).WithName("GetProject");
-        projects.MapPatch("/{projectId:guid}", UpdateAsync);
-        projects.MapGet("/{projectId:guid}/members", ListMembersAsync).WithSummary("Every organisation member's effective role in this project");
-        projects.MapPut("/{projectId:guid}/members/{userId:guid}", SetRoleAsync)
+        projects.MapGet("/{projectId:guid}", GetAsync).Produces<ProjectResponse>().WithName("GetProject");
+        projects.MapPatch("/{projectId:guid}", UpdateAsync).Produces<ProjectResponse>();
+        projects.MapGet("/{projectId:guid}/members", ListMembersAsync).Produces<List<ProjectMemberResponse>>().WithSummary("Every organisation member's effective role in this project");
+        projects.MapPut("/{projectId:guid}/members/{userId:guid}", SetRoleAsync).Produces(StatusCodes.Status204NoContent)
             .WithSummary("Override a member's role in this project (Viewer, Commenter or Editor). Doesn't apply to organisation Admins and Owners.");
-        projects.MapDelete("/{projectId:guid}/members/{userId:guid}", RemoveRoleAsync).WithSummary("Remove the override; the organisation role applies again");
+        projects.MapDelete("/{projectId:guid}/members/{userId:guid}", RemoveRoleAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Remove the override; the organisation role applies again");
 
         return app;
     }

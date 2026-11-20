@@ -1,12 +1,12 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
 import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { PagesTable } from "@/components/PagesTable";
-import { get, type LivePageSummary } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 
 /** Every page with comments, across every project you can see. */
 export function PagesPage() {
-  const pages = useAsync(() => get<LivePageSummary[]>("/api/live/pages"), []);
+  const pages = useAsync(() => api.get("/api/live/pages"), []);
 
   return (
     <Page>

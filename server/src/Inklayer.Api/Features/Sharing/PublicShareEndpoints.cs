@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Features.Notifications;
 using Inklayer.Api.Hosting;
@@ -10,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Inklayer.Api.Features.Sharing;
 
-public sealed record PublicShareResponse(string Kind, string Title, DateTime? ExpiresAt, IReadOnlyList<PublicPageResponse>? Pages, PublicDocResponse? Doc);
+public sealed record PublicShareResponse([property: AllowedValues(ShareKinds.Page, ShareKinds.Project, ShareKinds.Doc)] string Kind, string Title, DateTime? ExpiresAt, IReadOnlyList<PublicPageResponse>? Pages, PublicDocResponse? Doc);
 
 public sealed record PublicPageResponse(string PageUrl, IReadOnlyList<PublicCommentResponse> Comments);
 
@@ -36,7 +37,7 @@ internal static class PublicShareEndpoints
     public static IEndpointRouteBuilder MapPublicShareEndpoints(this IEndpointRouteBuilder app)
     {
         var shares = app.MapGroup("/api/public/shares").WithTags("Sharing").AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
-        shares.MapGet("/{token}", GetAsync).WithSummary("A shared page, project or doc, read-only");
+        shares.MapGet("/{token}", GetAsync).Produces<PublicShareResponse>().WithSummary("A shared page, project or doc, read-only");
         shares.MapGet("/{token}/screenshots/{commentId:guid}", ScreenshotAsync).WithSummary("A shared comment's screenshot");
         return app;
     }

@@ -7,7 +7,7 @@ import {
 } from "@microsoft/signalr";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
 import * as Y from "yjs";
-import { post } from "@/lib/api";
+import { api } from "@/lib/api";
 
 /**
  * Live co-editing over the docs hub. The server stores and relays Yjs bytes; everything Yjs-specific happens here.
@@ -92,7 +92,7 @@ class DocsHubConnection {
         transport: HttpTransportType.WebSockets,
         skipNegotiation: true,
         // A fresh single-use ticket for every attempt, bought with the session cookie.
-        accessTokenFactory: async () => (await post<{ ticket: string }>("/api/presence/ticket", {})).ticket,
+        accessTokenFactory: async () => (await api.post("/api/presence/ticket")).ticket,
       })
       .withAutomaticReconnect([0, 1000, 3000, 5000, 10000, 20000])
       .configureLogging(LogLevel.Warning)

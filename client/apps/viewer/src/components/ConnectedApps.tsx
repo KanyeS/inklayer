@@ -4,15 +4,9 @@ import { useState } from "react";
 import { useMe } from "@/App";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText, SectionTitle } from "@/components/Layout";
-import { del, get } from "@/lib/api";
+import { api } from "@/lib/api";
 import { dateTime, timeAgo } from "@/lib/format";
 import { useAsync } from "@/lib/useAsync";
-
-interface ConnectedApp {
-  clientId: string;
-  name: string;
-  authorizedAt: string | null;
-}
 
 /**
  * Apps such as Claude that the person allowed to use Inklayer as them (through the MCP endpoint), with a way to
@@ -20,14 +14,14 @@ interface ConnectedApp {
  */
 export function ConnectedApps() {
   const { me } = useMe();
-  const apps = useAsync(() => get<ConnectedApp[]>("/api/me/apps"), []);
+  const apps = useAsync(() => api.get("/api/me/apps"), []);
   const [error, setError] = useState<Error | null>(null);
   const [copied, setCopied] = useState(false);
   const mcpUrl = `${location.origin}/api/mcp`;
 
   const disconnect = async (clientId: string) => {
     try {
-      await del(`/api/me/apps/${encodeURIComponent(clientId)}`);
+      await api.delete("/api/me/apps/{clientId}", { params: { path: { clientId } } });
       setError(null);
       await apps.reload();
     } catch (e) {
