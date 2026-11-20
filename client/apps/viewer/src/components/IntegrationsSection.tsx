@@ -5,13 +5,15 @@ import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
+import { useQuery } from "@tanstack/react-query";
 import { Hash, Mail, Webhook } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
 import { api, type Project } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 
 type Integration = IntegrationResponse;
 type Kind = Integration["kind"];
@@ -47,31 +49,20 @@ const KINDS: Record<Kind, { label: string; icon: typeof Mail; help: string }> = 
  * integrations as you like. Organisation Admins only.
  */
 export function IntegrationsSection({ orgId }: { orgId: string }) {
-  const integrations = useAsync(
-    () => api.get("/api/orgs/{orgId}/integrations", { params: { path: { orgId } } }),
-    [orgId],
-  );
-  const projects = useAsync(() => api.get("/api/orgs/{orgId}/projects", { params: { path: { orgId } } }), [orgId]);
-  const [error, setError] = useState<Error | null>(null);
+  const integrations = useQuery(queries.orgIntegrations(orgId));
+  const projects = useQuery(queries.orgProjects(orgId));
+  const { run, error } = useAction();
   const [secret, setSecret] = useState<string | null>(null);
   const [tested, setTested] = useState<Record<string, string>>({});
 
-  const run = async (action: () => Promise<unknown>) => {
-    try {
-      await action();
-      setError(null);
-    } catch (e) {
-      setError(e as Error);
-    }
-    await integrations.reload();
-  };
-
   const test = async (i: Integration) => {
-    const result = await api.post("/api/orgs/{orgId}/integrations/{id}/test", {
-      params: { path: { orgId, id: i.id } },
-    });
-    setTested((t) => ({ ...t, [i.id]: result.ok ? "Sent ✓" : `Failed: ${result.error}` }));
-    await integrations.reload();
+    const result = await run(() =>
+      api.post("/api/orgs/{orgId}/integrations/{id}/test", { params: { path: { orgId, id: i.id } } }),
+    );
+    if (result.ok) {
+      const { ok, error } = result.value;
+      setTested((t) => ({ ...t, [i.id]: ok ? "Sent ✓" : `Failed: ${error}` }));
+    }
   };
 
   return (
@@ -157,14 +148,7 @@ export function IntegrationsSection({ orgId }: { orgId: string }) {
         })}
       </ul>
 
-      <AddIntegration
-        orgId={orgId}
-        projects={projects.data ?? []}
-        onAdded={async (s) => {
-          setSecret(s);
-          await integrations.reload();
-        }}
-      />
+      <AddIntegration orgId={orgId} projects={projects.data ?? []} onAdded={setSecret} />
     </div>
   );
 }
@@ -176,19 +160,19 @@ function AddIntegration({
 }: {
   orgId: string;
   projects: Project[];
-  onAdded: (secret: string | null) => Promise<void>;
+  onAdded: (secret: string | null) => void;
 }) {
   const [kind, setKind] = useState<Kind>("slack");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState<string[]>(EVENTS.map((e) => e.id));
   const [projectId, setProjectId] = useState("");
-  const [error, setError] = useState<Error | null>(null);
+  const { run, error } = useAction();
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    try {
-      const created = await api.post("/api/orgs/{orgId}/integrations", {
+    const created = await run(() =>
+      api.post("/api/orgs/{orgId}/integrations", {
         params: { path: { orgId } },
         body: {
           kind,
@@ -197,13 +181,12 @@ function AddIntegration({
           events,
           projectId: projectId || undefined,
         },
-      });
+      }),
+    );
+    if (created.ok) {
       setName("");
       setUrl("");
-      setError(null);
-      await onAdded(created.secret);
-    } catch (err) {
-      setError(err as Error);
+      onAdded(created.value.secret);
     }
   };
 

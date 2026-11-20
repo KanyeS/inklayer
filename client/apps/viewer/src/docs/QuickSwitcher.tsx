@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogTitle } from "@inklayer/ui/components/dial
 import { cn } from "@inklayer/ui/lib/utils";
 import { FilePlus2, FileText, TextSearch } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { refreshAll } from "@/lib/query";
 import { navigate } from "@/lib/router";
 import { type DocSearchResult, type DocTree, docPath, docsApi } from "./docsApi";
 import { fuzzyScore } from "./fuzzy";
@@ -20,14 +21,12 @@ export function QuickSwitcher({
   tree,
   open,
   onOpenChange,
-  onCreated,
   onTag,
 }: {
   orgId: string;
   tree: DocTree;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: () => Promise<void>;
   /** Shows the docs with a tag (in the sidebar). */
   onTag: (tag: string) => void;
 }) {
@@ -90,7 +89,7 @@ export function QuickSwitcher({
     else if (item.kind === "tag") onTag(item.tag);
     else {
       const doc = await createFromLink(orgId, item.title);
-      await onCreated();
+      await refreshAll();
       navigate(docPath(orgId, doc.id));
     }
   };

@@ -2,6 +2,7 @@ import type { AnnotationContextResponse } from "@inklayer/api";
 import { commentParts, openOnPageUrl } from "@inklayer/overlay";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, ExternalLink, FileText, MessageSquare } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
 import { useMe } from "@/App";
@@ -11,8 +12,9 @@ import { MentionTextarea, type MentionTextareaHandle } from "@/components/Mentio
 import { ApiError, api } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
 import { personTitle } from "@/lib/people";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 import { Link } from "@/lib/router";
-import { useAsync } from "@/lib/useAsync";
 
 type PageContext = AnnotationContextResponse;
 
@@ -22,10 +24,8 @@ type PageContext = AnnotationContextResponse;
  */
 export function CommentPage({ commentId }: { commentId: string }) {
   const { me } = useMe();
-  const comment = useAsync(
-    () => api.get("/api/annotations/{annotationId}", { params: { path: { annotationId: commentId } } }),
-    [commentId],
-  );
+  const comment = useQuery(queries.comment(commentId));
+  const deleteReply = useAction();
   const [copied, setCopied] = useState(false);
 
   if (comment.error) {
@@ -131,9 +131,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
             {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
             {copied ? "Copied" : "Copy link"}
           </Button>
-          {me.features.issueTrackers && c.canReply && (
-            <CreateIssueButton commentId={c.id} projectId={c.projectId} onCreated={comment.reload} />
-          )}
+          {me.features.issueTrackers && c.canReply && <CreateIssueButton commentId={c.id} projectId={c.projectId} />}
         </div>
         {me.features.docs && (
           <p className="mt-3 text-xs text-muted-foreground">Paste the link into a doc to link this comment there.</p>
@@ -155,12 +153,13 @@ export function CommentPage({ commentId }: { commentId: string }) {
                   variant="link"
                   size="sm"
                   className="ml-auto h-auto px-0 text-destructive"
-                  onClick={async () => {
-                    await api.delete("/api/replies/{replyId}", {
-                      params: { path: { replyId: r.id }, query: { version: r.version } },
-                    });
-                    await comment.reload();
-                  }}
+                  onClick={() =>
+                    void deleteReply.run(() =>
+                      api.delete("/api/replies/{replyId}", {
+                        params: { path: { replyId: r.id }, query: { version: r.version } },
+                      }),
+                    )
+                  }
                 >
                   Delete
                 </Button>
@@ -170,7 +169,8 @@ export function CommentPage({ commentId }: { commentId: string }) {
           </li>
         ))}
       </ol>
-      {c.canReply && <ReplyForm commentId={c.id} orgId={c.organizationId} onSent={comment.reload} />}
+      <ErrorText error={deleteReply.error} />
+      {c.canReply && <ReplyForm commentId={c.id} orgId={c.organizationId} />}
 
       {me.features.docs && <h2 className="mt-8 mb-3 font-heading text-base font-semibold">Mentioned in</h2>}
       {!me.features.docs ? null : c.mentionedIn.length === 0 ? (
@@ -199,28 +199,20 @@ function safePath(url: string): string {
   }
 }
 
-function ReplyForm({ commentId, orgId, onSent }: { commentId: string; orgId: string; onSent: () => Promise<void> }) {
+function ReplyForm({ commentId, orgId }: { commentId: string; orgId: string }) {
   const [body, setBody] = useState("");
   const box = useRef<MentionTextareaHandle>(null);
-  const [error, setError] = useState<Error | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { run, error, pending } = useAction();
   const send = async (e?: FormEvent) => {
     e?.preventDefault();
     if (!body.trim()) return;
-    setBusy(true);
-    try {
-      await api.post("/api/annotations/{annotationId}/replies", {
+    const sent = await run(() =>
+      api.post("/api/annotations/{annotationId}/replies", {
         params: { path: { annotationId: commentId } },
         body: { body: box.current?.encoded() ?? body },
-      });
-      setBody("");
-      setError(null);
-      await onSent();
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setBusy(false);
-    }
+      }),
+    );
+    if (sent.ok) setBody("");
   };
   return (
     <form className="mt-4 flex flex-col gap-2" onSubmit={send}>
@@ -237,7 +229,7 @@ function ReplyForm({ commentId, orgId, onSent }: { commentId: string; orgId: str
         }}
       />
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={busy || !body.trim()}>
+        <Button type="submit" disabled={pending || !body.trim()}>
           Reply
         </Button>
         <ErrorText error={error} />

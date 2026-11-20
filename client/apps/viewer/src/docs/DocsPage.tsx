@@ -1,14 +1,14 @@
 import { Button } from "@inklayer/ui/components/button";
 import { cn } from "@inklayer/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ErrorText, Loading } from "@/components/Layout";
-import { api } from "@/lib/api";
+import { queries } from "@/lib/queries";
 import { Link } from "@/lib/router";
-import { useAsync } from "@/lib/useAsync";
 import { DocView } from "./DocView";
 import { DocIcon } from "./docIcons";
-import { type DocTree, docPath, docsApi } from "./docsApi";
+import { type DocTree, docPath } from "./docsApi";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { Sidebar } from "./sidebar/Sidebar";
 
@@ -20,19 +20,11 @@ const TREE_REFRESH_MS = 30_000;
  * links and history on the right. Ctrl/Cmd+K opens the quick switcher.
  */
 export function DocsPage({ orgId, docId }: { orgId: string; docId?: string }) {
-  const org = useAsync(() => api.get("/api/orgs/{orgId}", { params: { path: { orgId } } }), [orgId]);
-  const tree = useAsync(() => docsApi.tree(orgId), [orgId]);
+  const org = useQuery(queries.org(orgId));
+  // Others add and rename docs too: refresh the tree now and then (only while the tab is visible).
+  const tree = useQuery({ ...queries.docTree(orgId), refetchInterval: TREE_REFRESH_MS });
   const [tag, setTag] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-
-  // Others add and rename docs too: refresh the tree now and then.
-  useEffect(() => {
-    const timer = window.setInterval(
-      () => document.visibilityState === "visible" && void tree.reload(),
-      TREE_REFRESH_MS,
-    );
-    return () => window.clearInterval(timer);
-  }, [tree.reload]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -67,22 +59,14 @@ export function DocsPage({ orgId, docId }: { orgId: string; docId?: string }) {
         activeId={docId}
         tag={tag}
         onTag={setTag}
-        onChanged={tree.reload}
         onSearch={() => setSwitcherOpen(true)}
       />
       {docId ? (
-        <DocView key={docId} orgId={orgId} docId={docId} tree={tree.data} onTreeChanged={tree.reload} onTag={setTag} />
+        <DocView key={docId} orgId={orgId} docId={docId} tree={tree.data} onTag={setTag} />
       ) : (
         <Welcome orgId={orgId} tree={tree.data} onSearch={() => setSwitcherOpen(true)} />
       )}
-      <QuickSwitcher
-        orgId={orgId}
-        tree={tree.data}
-        open={switcherOpen}
-        onOpenChange={setSwitcherOpen}
-        onCreated={tree.reload}
-        onTag={setTag}
-      />
+      <QuickSwitcher orgId={orgId} tree={tree.data} open={switcherOpen} onOpenChange={setSwitcherOpen} onTag={setTag} />
     </div>
   );
 }

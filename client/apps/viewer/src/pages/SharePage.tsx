@@ -2,11 +2,12 @@ import type { PublicShareResponse } from "@inklayer/api";
 import { enhance } from "@inklayer/docs/enhance";
 import { renderMarkdown } from "@inklayer/docs/reading";
 import { Badge } from "@inklayer/ui/components/badge";
+import { useQuery } from "@tanstack/react-query";
 import { Eye, FileText, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
-import { ApiError, api } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
 
 type PublicShare = PublicShareResponse;
 
@@ -15,7 +16,7 @@ type PublicShare = PublicShareResponse;
  * page never asks the server who you are.
  */
 export function SharePage({ token }: { token: string }) {
-  const share = useAsync(() => api.get("/api/public/shares/{token}", { params: { path: { token } } }), [token]);
+  const share = useQuery(queries.publicShare(token));
 
   return (
     <div className="min-h-svh bg-background">

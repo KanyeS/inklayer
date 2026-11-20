@@ -1,6 +1,7 @@
 import { FilePlus2, FolderPlus, Network, Search } from "lucide-react";
 import { type DragEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorText } from "@/components/Layout";
+import { useAction } from "@/lib/query";
 import { Link, navigate } from "@/lib/router";
 import { type DocTagInfo, type DocTree, docPath, docsApi } from "../docsApi";
 import { rewriteLinks } from "../links";
@@ -27,7 +28,6 @@ export interface SidebarProps {
   activeId?: string;
   tag: string | null;
   onTag: (tag: string | null) => void;
-  onChanged: () => Promise<void>;
   onSearch: () => void;
 }
 
@@ -66,24 +66,13 @@ function useOpenFolders(orgId: string, tree: DocTree, activeId: string | undefin
  * The docs sidebar: the organisation, search and new-doc buttons, the folder tree (or the docs with one tag), and the
  * tags. Docs and folders can be dragged between folders; moving them rewrites links to them.
  */
-export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onChanged, onSearch }: SidebarProps) {
+export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch }: SidebarProps) {
   const root = useMemo(() => buildTree(tree), [tree]);
   const { open, toggle, openFolder } = useOpenFolders(orgId, tree, activeId);
   const [draft, setDraft] = useState<Draft>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const { run, error } = useAction();
   // The server lists tags with counts and their icons and colours; count them here if it didn't.
   const tags = useMemo<DocTagInfo[]>(() => tree.tags ?? countTags(tree.docs), [tree]);
-
-  /** Runs a change, shows any error, and reloads the tree. */
-  const run = async (action: () => Promise<unknown>) => {
-    try {
-      await action();
-      setError(null);
-    } catch (e) {
-      setError(e as Error);
-    }
-    await onChanged();
-  };
 
   /** Moves a folder (with everything in it) and rewrites links to the docs that moved. */
   const moveFolder = async (from: string, to: string) => {

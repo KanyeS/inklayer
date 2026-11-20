@@ -1,4 +1,5 @@
 import { Button } from "@inklayer/ui/components/button";
+import { useQuery } from "@tanstack/react-query";
 import { Bot, Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { useMe } from "@/App";
@@ -6,7 +7,8 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText, SectionTitle } from "@/components/Layout";
 import { api } from "@/lib/api";
 import { dateTime, timeAgo } from "@/lib/format";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 
 /**
  * Apps such as Claude that the person allowed to use Inklayer as them (through the MCP endpoint), with a way to
@@ -14,20 +16,13 @@ import { useAsync } from "@/lib/useAsync";
  */
 export function ConnectedApps() {
   const { me } = useMe();
-  const apps = useAsync(() => api.get("/api/me/apps"), []);
-  const [error, setError] = useState<Error | null>(null);
+  const apps = useQuery(queries.connectedApps());
+  const action = useAction();
   const [copied, setCopied] = useState(false);
   const mcpUrl = `${location.origin}/api/mcp`;
 
-  const disconnect = async (clientId: string) => {
-    try {
-      await api.delete("/api/me/apps/{clientId}", { params: { path: { clientId } } });
-      setError(null);
-      await apps.reload();
-    } catch (e) {
-      setError(e as Error);
-    }
-  };
+  const disconnect = (clientId: string) =>
+    action.run(() => api.delete("/api/me/apps/{clientId}", { params: { path: { clientId } } }));
 
   const copy = async () => {
     await navigator.clipboard.writeText(mcpUrl);
@@ -58,7 +53,7 @@ export function ConnectedApps() {
           can still disconnect them here.
         </p>
       )}
-      <ErrorText error={error ?? apps.error} />
+      <ErrorText error={action.error ?? apps.error} />
       {apps.data?.length === 0 && <p className="text-sm text-muted-foreground">No apps connected.</p>}
       <ul className="max-w-2xl divide-y rounded-xl border empty:hidden">
         {apps.data?.map((app) => (

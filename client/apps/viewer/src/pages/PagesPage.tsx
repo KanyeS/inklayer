@@ -1,12 +1,12 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/components/empty";
+import { useQuery } from "@tanstack/react-query";
 import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { PagesTable } from "@/components/PagesTable";
-import { api } from "@/lib/api";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
 
 /** Every page with comments, across every project you can see. */
 export function PagesPage() {
-  const pages = useAsync(() => api.get("/api/live/pages"), []);
+  const pages = useQuery(queries.livePages());
 
   return (
     <Page>

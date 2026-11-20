@@ -1,3 +1,4 @@
+import { refreshAll } from "@/lib/query";
 /**
  * Tags as pills: a doc's #tags at the top of the doc. Tags live in the doc's text (so they're searchable and work wherever
  * tags do); each tag's icon and colour are optional and set once for the whole organisation.
@@ -120,7 +121,6 @@ export function TagBar({
   fallback,
   canEdit,
   onTag,
-  onTreeChanged,
 }: {
   orgId: string;
   tree: DocTree;
@@ -129,7 +129,6 @@ export function TagBar({
   fallback: string[];
   canEdit: boolean;
   onTag: (tag: string) => void;
-  onTreeChanged: () => Promise<void>;
 }) {
   const text = useLiveText(session);
   const tags = session.loaded ? extractTags(text) : fallback;
@@ -164,7 +163,6 @@ export function TagBar({
         onOpenChange={setOpen}
         onAdd={(tag) => editText(session, (t) => addTag(t, tag))}
         onRemove={(tag) => editText(session, (t) => removeTag(t, tag))}
-        onTreeChanged={onTreeChanged}
       />
     </div>
   );
@@ -179,7 +177,6 @@ function TagDialog({
   onOpenChange,
   onAdd,
   onRemove,
-  onTreeChanged,
 }: {
   orgId: string;
   tree: DocTree;
@@ -188,7 +185,6 @@ function TagDialog({
   onOpenChange: (open: boolean) => void;
   onAdd: (tag: string) => void;
   onRemove: (tag: string) => void;
-  onTreeChanged: () => Promise<void>;
 }) {
   const [input, setInput] = useState("");
   const [styling, setStyling] = useState<DocTagInfo | null>(null);
@@ -211,7 +207,7 @@ function TagDialog({
     setStyling({ ...info, ...next });
     try {
       await docsApi.setTagStyle(orgId, info.tag, next);
-      await onTreeChanged();
+      await refreshAll();
     } catch (e) {
       setError((e as Error).message);
     }

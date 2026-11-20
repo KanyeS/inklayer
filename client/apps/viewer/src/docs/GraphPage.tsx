@@ -2,12 +2,12 @@ import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { Input } from "@inklayer/ui/components/input";
 import { Label } from "@inklayer/ui/components/label";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { ErrorText, Loading } from "@/components/Layout";
+import { queries } from "@/lib/queries";
 import { Link } from "@/lib/router";
-import { useAsync } from "@/lib/useAsync";
-import { docsApi } from "./docsApi";
 import { GraphCanvas } from "./graph/GraphCanvas";
 import { TagPill } from "./tags";
 
@@ -18,8 +18,8 @@ import { TagPill } from "./tags";
  * with chosen tags. Drag to pan, scroll to zoom, drag a node to move it, hover to see its neighbours, click to open.
  */
 export function GraphPage({ orgId }: { orgId: string }) {
-  const graph = useAsync(() => docsApi.graph(orgId), [orgId]);
-  const tree = useAsync(() => docsApi.tree(orgId), [orgId]);
+  const graph = useQuery(queries.docGraph(orgId));
+  const tree = useQuery(queries.docTree(orgId));
   const [showComments, setShowComments] = useState(true);
   const [showTags, setShowTags] = useState(false);
   const [filter, setFilter] = useState("");

@@ -1,6 +1,8 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { queryClient } from "./lib/query";
 import "./styles.css";
 
 // Follow the system light/dark setting; the theme's dark palette applies under the .dark class.
@@ -11,6 +13,8 @@ darkScheme.addEventListener("change", applyScheme);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
   </StrictMode>,
 );

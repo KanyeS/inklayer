@@ -12,6 +12,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@inklayer/ui/c
 import { Field, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@inklayer/ui/components/tabs";
+import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { useMe } from "@/App";
 import { IssueTrackersSection } from "@/components/Issues";
@@ -19,15 +20,13 @@ import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { PagesTable } from "@/components/PagesTable";
 import { ProjectSharesSection } from "@/components/Shares";
 import { api, atLeast, type Project } from "@/lib/api";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 import { Link } from "@/lib/router";
-import { useAsync } from "@/lib/useAsync";
 
 export function ProjectPage({ projectId }: { projectId: string }) {
   const { me } = useMe();
-  const project = useAsync(
-    () => api.get("/api/projects/{projectId}", { params: { path: { projectId } } }),
-    [projectId],
-  );
+  const project = useQuery(queries.project(projectId));
 
   if (project.error)
     return (
@@ -79,7 +78,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
         )}
         {isAdmin && (
           <TabsContent value="settings">
-            <Settings project={project.data} onSaved={project.reload} />
+            <Settings project={project.data} />
             {me.features.issueTrackers && <IssueTrackersSection projectId={project.data.id} />}
           </TabsContent>
         )}
@@ -90,10 +89,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
 
 /** Pages with comments in this project. Opening one shows the comments on the page itself, through the extension. */
 function Pages({ project }: { project: Project }) {
-  const pages = useAsync(
-    () => api.get("/api/projects/{projectId}/live/pages", { params: { path: { projectId: project.id } } }),
-    [project.id],
-  );
+  const pages = useQuery(queries.projectPages(project.id));
 
   return (
     <div className="space-y-4">
@@ -117,22 +113,18 @@ function Pages({ project }: { project: Project }) {
   );
 }
 
-function Settings({ project, onSaved }: { project: Project; onSaved: () => Promise<void> }) {
+function Settings({ project }: { project: Project }) {
   const [name, setName] = useState(project.name);
-  const [error, setError] = useState<Error | null>(null);
   const [saved, setSaved] = useState(false);
+  const { run, error } = useAction();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
     setSaved(false);
-    try {
-      await api.patch("/api/projects/{projectId}", { params: { path: { projectId: project.id } }, body: { name } });
-      await onSaved();
-      setSaved(true);
-    } catch (err) {
-      setError(err as Error);
-    }
+    const done = await run(() =>
+      api.patch("/api/projects/{projectId}", { params: { path: { projectId: project.id } }, body: { name } }),
+    );
+    setSaved(done.ok);
   };
 
   return (

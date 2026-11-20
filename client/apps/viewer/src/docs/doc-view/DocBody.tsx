@@ -1,6 +1,7 @@
 import { createEditor, type DocEditor } from "@inklayer/docs/editor";
 import { type RefObject, useCallback, useEffect, useRef } from "react";
 import { lookupPeople } from "@/lib/api";
+import { refreshAll } from "@/lib/query";
 import { navigate } from "@/lib/router";
 import type { DocSession } from "../collab";
 import { type DocTree, docPath } from "../docsApi";
@@ -24,7 +25,6 @@ export interface DocBodyProps {
   /** Comments the doc links to, for their chips' labels. */
   commentLinks: string[];
   onTag: (tag: string) => void;
-  onTreeChanged: () => Promise<void>;
   liveCursors: boolean;
   /** People @mentioned in the doc. */
   people: PersonLookup[];
@@ -35,7 +35,7 @@ export interface DocBodyProps {
 
 /** The doc's text: the live editor (with the formatting toolbar) while editing, or the reading view. */
 export function DocBody(props: DocBodyProps) {
-  const { orgId, session, tree, mode, canEdit, commentLinks, onTreeChanged, editorRef } = props;
+  const { orgId, session, tree, mode, canEdit, commentLinks, editorRef } = props;
   const host = useRef<HTMLDivElement>(null);
   // Names for <@id> mentions: those in the doc, plus anyone picked from @ suggestions here.
   const names = useRef(new Map<string, PersonName>());
@@ -50,13 +50,13 @@ export function DocBody(props: DocBodyProps) {
       let id = resolvedId;
       if (!id && target && canEdit) {
         id = (await createFromLink(orgId, target)).id;
-        await onTreeChanged();
+        await refreshAll();
       }
       if (!id) return;
       if (newTab) window.open(docPath(orgId, id), "_blank", "noopener");
       else navigate(docPath(orgId, id));
     },
-    [orgId, canEdit, onTreeChanged],
+    [orgId, canEdit],
   );
 
   // Labels for comment chips.

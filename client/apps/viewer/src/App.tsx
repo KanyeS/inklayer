@@ -1,8 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { createContext, lazy, type ReactNode, Suspense, useContext } from "react";
 import { Layout, Loading, Page, PageTitle } from "./components/Layout";
-import { ApiError, api, type Me } from "./lib/api";
+import { ApiError, type Me } from "./lib/api";
+import { queries } from "./lib/queries";
 import { findRoute, match, type Route, usePath } from "./lib/router";
-import { useAsync } from "./lib/useAsync";
 import { AdminPage } from "./pages/AdminPage";
 import { CommentPage } from "./pages/CommentPage";
 import { HomePage } from "./pages/HomePage";
@@ -18,7 +19,7 @@ const GraphPage = lazy(() => import("./docs/GraphPage").then((m) => ({ default: 
 // Share links: for guests, with nothing of the signed-in app.
 const SharePage = lazy(() => import("./pages/SharePage").then((m) => ({ default: m.SharePage })));
 
-const MeContext = createContext<{ me: Me; reloadMe: () => Promise<void> } | null>(null);
+const MeContext = createContext<{ me: Me } | null>(null);
 
 export function useMe() {
   const value = useContext(MeContext);
@@ -39,9 +40,9 @@ export function App() {
 }
 
 function SignedInApp({ path }: { path: string }) {
-  const { data: me, error, loading, reload } = useAsync(() => api.get("/api/me"), []);
+  const { data: me, error, isPending } = useQuery(queries.me());
 
-  if (loading && !me)
+  if (isPending)
     return (
       <div className="grid min-h-svh place-items-center">
         <Loading />
@@ -56,7 +57,7 @@ function SignedInApp({ path }: { path: string }) {
     );
 
   return (
-    <MeContext.Provider value={{ me, reloadMe: reload }}>
+    <MeContext.Provider value={{ me }}>
       <Layout wide={isWide(path)}>
         <Suspense fallback={<Loading />}>{pageFor(path, me)}</Suspense>
       </Layout>

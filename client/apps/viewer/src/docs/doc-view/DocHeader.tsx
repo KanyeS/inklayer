@@ -8,6 +8,7 @@ import { ErrorText } from "@/components/Layout";
 import { DocShareButton } from "@/components/Shares";
 import { timeAgo } from "@/lib/format";
 import { personTitle } from "@/lib/people";
+import { refreshAll } from "@/lib/query";
 import { navigate } from "@/lib/router";
 import type { DocSession, SessionStatus } from "../collab";
 import { DocIcon } from "../docIcons";
@@ -28,9 +29,7 @@ export interface DocHeaderProps {
   mode: Mode;
   setMode: (mode: Mode) => void;
   canEdit: boolean;
-  onChanged: () => Promise<void>;
   onTag: (tag: string) => void;
-  onTreeChanged: () => Promise<void>;
   onHistory: () => void;
   onGuide: () => void;
 }
@@ -50,16 +49,8 @@ export function DocHeader(props: DocHeaderProps) {
           <DocTools {...props} onError={setError} />
         </div>
       </div>
-      <TitleRow info={info} canEdit={canEdit} onChanged={props.onChanged} onError={setError} />
-      <TagBar
-        orgId={orgId}
-        tree={tree}
-        session={session}
-        fallback={info.tags}
-        canEdit={canEdit}
-        onTag={props.onTag}
-        onTreeChanged={props.onTreeChanged}
-      />
+      <TitleRow info={info} canEdit={canEdit} onError={setError} />
+      <TagBar orgId={orgId} tree={tree} session={session} fallback={info.tags} canEdit={canEdit} onTag={props.onTag} />
       <p className="mt-1 text-xs text-muted-foreground">
         {info.updatedBy ? (
           <>
@@ -156,17 +147,7 @@ function appearanceOf(info: DocInfo): Appearance {
 }
 
 /** The doc's icon (click to change it) and its title (edit in place; Enter saves, Escape puts it back). */
-function TitleRow({
-  info,
-  canEdit,
-  onChanged,
-  onError,
-}: {
-  info: DocInfo;
-  canEdit: boolean;
-  onChanged: () => Promise<void>;
-  onError: (e: Error | null) => void;
-}) {
+function TitleRow({ info, canEdit, onError }: { info: DocInfo; canEdit: boolean; onError: (e: Error | null) => void }) {
   const [title, setTitle] = useState(info.title);
   useEffect(() => setTitle(info.title), [info.title]);
 
@@ -181,7 +162,7 @@ function TitleRow({
     try {
       await docsApi.setAppearance(info.id, next);
       onError(null);
-      await onChanged();
+      await refreshAll();
     } catch (e) {
       onError(e as Error);
       setAppearance(appearanceOf(info));
@@ -198,7 +179,7 @@ function TitleRow({
       const result = await docsApi.update(info.id, { version: info.version, title: next });
       await rewriteLinks(result.relinkDocs, [{ from: info, to: { folder: info.folder, title: result.doc.title } }]);
       onError(null);
-      await onChanged();
+      await refreshAll();
     } catch (e) {
       onError(e as Error);
       setTitle(info.title);

@@ -5,13 +5,15 @@ import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
+import { useQuery } from "@tanstack/react-query";
 import { CircleCheck, CircleDot, ExternalLink, Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
 import { api } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 
 export type Issue = IssueResponse;
 export type TrackerKind = TrackerConnectionResponse["kind"];
@@ -47,24 +49,12 @@ export function IssueChips({ issues }: { issues: Issue[] }) {
 }
 
 /** "Create issue" for a comment, in one of the project's connected trackers. Hidden when none are connected. */
-export function CreateIssueButton({
-  commentId,
-  projectId,
-  onCreated,
-}: {
-  commentId: string;
-  projectId: string;
-  onCreated: () => Promise<void>;
-}) {
-  const choices = useAsync(
-    () => api.get("/api/projects/{projectId}/issue-trackers/choices", { params: { path: { projectId } } }),
-    [projectId],
-  );
+export function CreateIssueButton({ commentId, projectId }: { commentId: string; projectId: string }) {
+  const choices = useQuery(queries.issueTrackerChoices(projectId));
   const [open, setOpen] = useState(false);
   const [connectionId, setConnectionId] = useState("");
   const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const { run, error, pending: busy } = useAction();
 
   const first = choices.data?.[0];
   if (!choices.data || !first) return null;
@@ -81,20 +71,15 @@ export function CreateIssueButton({
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
-    setBusy(true);
-    try {
-      await api.post("/api/annotations/{annotationId}/issues", {
+    const created = await run(() =>
+      api.post("/api/annotations/{annotationId}/issues", {
         params: { path: { annotationId: commentId } },
         body: { connectionId: chosen, title: title.trim() || undefined },
-      });
+      }),
+    );
+    if (created.ok) {
       setOpen(false);
       setTitle("");
-      setError(null);
-      await onCreated();
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -144,22 +129,9 @@ const HELP: Record<TrackerKind, string> = {
 
 /** A project's connected issue trackers, for project Admins: any number of GitHub repositories, Jira projects and Linear teams. */
 export function IssueTrackersSection({ projectId }: { projectId: string }) {
-  const trackers = useAsync(
-    () => api.get("/api/projects/{projectId}/issue-trackers", { params: { path: { projectId } } }),
-    [projectId],
-  );
-  const [error, setError] = useState<Error | null>(null);
+  const trackers = useQuery(queries.issueTrackers(projectId));
+  const { run, error } = useAction();
   const [tested, setTested] = useState<Record<string, string>>({});
-
-  const run = async (action: () => Promise<unknown>) => {
-    try {
-      await action();
-      setError(null);
-    } catch (e) {
-      setError(e as Error);
-    }
-    await trackers.reload();
-  };
 
   const test = async (t: Tracker) => {
     const result = await api.post("/api/projects/{projectId}/issue-trackers/{id}/test", {
@@ -234,39 +206,33 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
           </li>
         ))}
       </ul>
-      <AddTracker projectId={projectId} onAdded={trackers.reload} />
+      <AddTracker projectId={projectId} />
     </section>
   );
 }
 
-function AddTracker({ projectId, onAdded }: { projectId: string; onAdded: () => Promise<void> }) {
+function AddTracker({ projectId }: { projectId: string }) {
   const [kind, setKind] = useState<TrackerKind>("github");
   const [settings, setSettings] = useState<TrackerSettings>({});
   const [token, setToken] = useState("");
   const [name, setName] = useState("");
   const [closeIssueOnResolve, setClose] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const { run, error, pending: busy } = useAction();
   const set = (key: keyof TrackerSettings) => (e: { target: { value: string } }) =>
     setSettings((s) => ({ ...s, [key]: e.target.value }));
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    setBusy(true);
-    try {
-      await api.post("/api/projects/{projectId}/issue-trackers", {
+    const added = await run(() =>
+      api.post("/api/projects/{projectId}/issue-trackers", {
         params: { path: { projectId } },
         body: { kind, name: name || undefined, token, settings, closeIssueOnResolve },
-      });
+      }),
+    );
+    if (added.ok) {
       setSettings({});
       setToken("");
       setName("");
-      setError(null);
-      await onAdded();
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setBusy(false);
     }
   };
 

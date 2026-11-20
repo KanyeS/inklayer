@@ -14,6 +14,7 @@ import { Input } from "@inklayer/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@inklayer/ui/components/tabs";
+import { useQuery } from "@tanstack/react-query";
 import { BookText } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useMe } from "@/App";
@@ -21,16 +22,17 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { IntegrationsSection } from "@/components/IntegrationsSection";
 import { ErrorText, Loading, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { LinkCards } from "@/components/LinkCards";
-import { api, atLeast, type Invitation, type Member, type Organization, ROLES, type Role } from "@/lib/api";
+import { api, atLeast, type Member, type Organization, ROLES, type Role } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { personTitle } from "@/lib/people";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 import { Link, navigate } from "@/lib/router";
-import { useAsync } from "@/lib/useAsync";
 
 export function OrganizationPage({ orgId }: { orgId: string }) {
   const { me } = useMe();
-  const org = useAsync(() => api.get("/api/orgs/{orgId}", { params: { path: { orgId } } }), [orgId]);
-  const projects = useAsync(() => api.get("/api/orgs/{orgId}/projects", { params: { path: { orgId } } }), [orgId]);
+  const org = useQuery(queries.org(orgId));
+  const projects = useQuery(queries.orgProjects(orgId));
 
   if (org.error)
     return (
@@ -101,7 +103,7 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
         )}
         {isAdmin && (
           <TabsContent value="settings">
-            <Settings org={org.data} onSaved={org.reload} />
+            <Settings org={org.data} />
           </TabsContent>
         )}
       </Tabs>
@@ -111,15 +113,13 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
 
 function CreateProject({ orgId }: { orgId: string }) {
   const [name, setName] = useState("");
-  const [error, setError] = useState<Error | null>(null);
+  const { run, error } = useAction();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    try {
-      const project = await api.post("/api/orgs/{orgId}/projects", { params: { path: { orgId } }, body: { name } });
-      navigate(`/projects/${project.id}`);
-    } catch (err) {
-      setError(err as Error);
-    }
+    const project = await run(() =>
+      api.post("/api/orgs/{orgId}/projects", { params: { path: { orgId } }, body: { name } }),
+    );
+    if (project.ok) navigate(`/projects/${project.value.id}`);
   };
   return (
     <form className="flex flex-wrap items-center gap-2" onSubmit={submit}>
@@ -142,32 +142,14 @@ function Members({ org }: { org: Organization }) {
   const { me } = useMe();
   const isAdmin = atLeast(org.myRole, "Admin");
   const isOwner = org.myRole === "Owner";
-  const members = useAsync(
-    () => api.get("/api/orgs/{orgId}/members", { params: { path: { orgId: org.id } } }),
-    [org.id],
-  );
-  const invitations = useAsync(
-    () =>
-      isAdmin
-        ? api.get("/api/orgs/{orgId}/invitations", { params: { path: { orgId: org.id } } })
-        : Promise.resolve<Invitation[]>([]),
-    [org.id, isAdmin],
-  );
-  const [error, setError] = useState<Error | null>(null);
+  const members = useQuery(queries.orgMembers(org.id));
+  // Only admins may list invitations.
+  const invitations = useQuery({ ...queries.orgInvitations(org.id), enabled: isAdmin });
+  const { run, error } = useAction();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("Commenter");
 
-  const act = async (fn: () => Promise<unknown>) => {
-    setError(null);
-    try {
-      await fn();
-      await Promise.all([members.reload(), invitations.reload()]);
-      return true;
-    } catch (e) {
-      setError(e as Error);
-      return false;
-    }
-  };
+  const act = async (fn: () => Promise<unknown>) => (await run(fn)).ok;
   const assignable = ROLES.filter((r) => isOwner || r !== "Owner");
   const remove = async (m: Member) => {
     const ok = await act(() =>
@@ -307,26 +289,22 @@ function Members({ org }: { org: Organization }) {
   );
 }
 
-function Settings({ org, onSaved }: { org: Organization; onSaved: () => Promise<void> }) {
+function Settings({ org }: { org: Organization }) {
   const [name, setName] = useState(org.name);
   const [domains, setDomains] = useState(org.allowedDomains.join(", "));
   const [defaultRole, setDefaultRole] = useState<Role>(org.defaultRole);
-  const [error, setError] = useState<Error | null>(null);
   const [saved, setSaved] = useState(false);
+  const { run, error } = useAction();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
     setSaved(false);
-    try {
-      await api.patch("/api/orgs/{orgId}", {
+    const done = await run(() =>
+      api.patch("/api/orgs/{orgId}", {
         params: { path: { orgId: org.id } },
         body: { name, defaultRole, allowedDomains: domains.split(/[\s,]+/).filter(Boolean) },
-      });
-      await onSaved();
-      setSaved(true);
-    } catch (err) {
-      setError(err as Error);
-    }
+      }),
+    );
+    setSaved(done.ok);
   };
   return (
     <form className="max-w-md" onSubmit={submit}>

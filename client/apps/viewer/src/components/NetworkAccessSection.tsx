@@ -3,11 +3,13 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Textarea } from "@inklayer/ui/components/textarea";
+import { useQuery } from "@tanstack/react-query";
 import { ShieldCheckIcon, ShieldOffIcon, TriangleAlertIcon } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { ErrorText, Loading, SectionTitle } from "@/components/Layout";
 import { api, type NetworkAccess } from "@/lib/api";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 
 const SOURCE_TEXT: Record<NetworkAccess["source"], string> = {
   None: "Not restricted: Inklayer answers from any network.",
@@ -18,11 +20,10 @@ const SOURCE_TEXT: Record<NetworkAccess["source"], string> = {
 
 /** Instance admins limit the whole server to the company VPN (or any other networks). */
 export function NetworkAccessSection() {
-  const network = useAsync(() => api.get("/api/admin/network"), []);
+  const network = useQuery(queries.admin.network());
   const [text, setText] = useState("");
-  const [error, setError] = useState<Error | null>(null);
   const [saved, setSaved] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const action = useAction();
 
   useEffect(() => {
     if (network.data) setText(network.data.allowedNetworks.join("\n"));
@@ -31,18 +32,9 @@ export function NetworkAccessSection() {
   const entries = text.split(/[\s,;]+/).filter(Boolean);
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
     setSaved(false);
-    try {
-      await api.put("/api/admin/network", { body: { allowedNetworks: entries } });
-      await network.reload();
-      setSaved(true);
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setBusy(false);
-    }
+    const saved = await action.run(() => api.put("/api/admin/network", { body: { allowedNetworks: entries } }));
+    setSaved(saved.ok);
   };
   const addMine = () => {
     const mine = network.data?.yourAddress;
@@ -114,12 +106,12 @@ export function NetworkAccessSection() {
               )}
             </div>
             <div className="flex items-center gap-3">
-              <Button type="submit" disabled={busy}>
+              <Button type="submit" disabled={action.pending}>
                 Save
               </Button>
               {saved && <span className="text-sm text-muted-foreground">Saved.</span>}
             </div>
-            <ErrorText error={error} />
+            <ErrorText error={action.error} />
           </FieldGroup>
         </form>
       )}

@@ -3,13 +3,15 @@ import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
+import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Globe, Link2 } from "lucide-react";
 import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
 import { api } from "@/lib/api";
 import { dateTime, hostOf, timeAgo } from "@/lib/format";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 
 export type Share = ShareResponse;
 
@@ -45,19 +47,11 @@ function safePath(url: string): string {
   }
 }
 
-function ShareList({
-  shares,
-  onRevoked,
-  showOwner,
-}: {
-  shares: Share[];
-  onRevoked: () => Promise<void>;
-  showOwner?: boolean;
-}) {
-  const [error, setError] = useState<Error | null>(null);
+function ShareList({ shares, showOwner }: { shares: Share[]; showOwner?: boolean }) {
+  const revoke = useAction();
   return (
     <>
-      <ErrorText error={error} />
+      <ErrorText error={revoke.error} />
       <ul className="divide-y rounded-xl border empty:hidden">
         {shares.map((s) => (
           <li key={s.id} className="flex flex-wrap items-start gap-3 px-4 py-3">
@@ -86,15 +80,9 @@ function ShareList({
                   title="Turn off this link?"
                   description="It stops working straight away, for everyone who has it."
                   confirmLabel="Turn off"
-                  onConfirm={async () => {
-                    try {
-                      await api.delete("/api/shares/{id}", { params: { path: { id: s.id } } });
-                      setError(null);
-                    } catch (e) {
-                      setError(e as Error);
-                    }
-                    await onRevoked();
-                  }}
+                  onConfirm={() =>
+                    void revoke.run(() => api.delete("/api/shares/{id}", { params: { path: { id: s.id } } }))
+                  }
                 >
                   Turn off
                 </ConfirmButton>
@@ -109,13 +97,13 @@ function ShareList({
 
 /** A project's read-only links: make one for all its comments here; page links are made from the extension. */
 export function ProjectSharesSection({ projectId }: { projectId: string }) {
-  const shares = useAsync(() => api.get("/api/shares", { params: { query: { projectId } } }), [projectId]);
+  const shares = useQuery(queries.projectShares(projectId));
   const [includeResolved, setIncludeResolved] = useState(false);
   const [expiresInDays, setExpiresInDays] = useState("30");
-  const [error, setError] = useState<Error | null>(null);
+  const action = useAction();
 
-  const create = async () => {
-    try {
+  const create = () =>
+    action.run(async () => {
       const created = await api.post("/api/shares", {
         body: {
           kind: "project",
@@ -125,12 +113,7 @@ export function ProjectSharesSection({ projectId }: { projectId: string }) {
         },
       });
       await navigator.clipboard.writeText(created.url).catch(() => undefined);
-      setError(null);
-    } catch (e) {
-      setError(e as Error);
-    }
-    await shares.reload();
-  };
+    });
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -153,30 +136,20 @@ export function ProjectSharesSection({ projectId }: { projectId: string }) {
           <NativeSelectOption value="90">Expires in 90 days</NativeSelectOption>
           <NativeSelectOption value="">Never expires</NativeSelectOption>
         </NativeSelect>
-        <ErrorText error={error ?? shares.error} />
+        <ErrorText error={action.error ?? shares.error} />
       </div>
       {shares.data?.length === 0 && <p className="text-sm text-muted-foreground">No links yet.</p>}
-      <ShareList shares={shares.data ?? []} onRevoked={shares.reload} />
+      <ShareList shares={shares.data ?? []} />
     </div>
   );
 }
 
 /** "Make public" for a doc: one read-only link, which Commenters and above can turn on and off. */
 export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boolean }) {
-  const shares = useAsync(() => api.get("/api/shares", { params: { query: { docId } } }), [docId]);
-  const [error, setError] = useState<Error | null>(null);
+  const shares = useQuery(queries.docShares(docId));
+  const { run, error } = useAction();
   const [copied, setCopied] = useState(false);
   const live = shares.data?.find((s) => !s.expired);
-
-  const run = async (action: () => Promise<unknown>) => {
-    try {
-      await action();
-      setError(null);
-    } catch (e) {
-      setError(e as Error);
-    }
-    await shares.reload();
-  };
 
   if (!live) {
     if (!canEdit) return null;
@@ -234,7 +207,7 @@ export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boo
 
 /** Every working link on the server, for instance administrators. */
 export function AdminSharesSection() {
-  const shares = useAsync(() => api.get("/api/admin/shares"), []);
+  const shares = useQuery(queries.admin.shares());
   return (
     <div className="max-w-3xl space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -243,7 +216,7 @@ export function AdminSharesSection() {
       </p>
       <ErrorText error={shares.error} />
       {shares.data?.length === 0 && <p className="text-sm text-muted-foreground">No links.</p>}
-      <ShareList shares={shares.data ?? []} onRevoked={shares.reload} showOwner />
+      <ShareList shares={shares.data ?? []} showOwner />
     </div>
   );
 }

@@ -1,16 +1,17 @@
 import type { DocEditor } from "@inklayer/docs/editor";
 import { applyFormat } from "@inklayer/docs/formatting";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useMe } from "@/App";
 import { ErrorText, Loading } from "@/components/Layout";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
 import { DocSession } from "./collab";
 import { DocBody } from "./doc-view/DocBody";
 import { DocHeader, type Mode } from "./doc-view/DocHeader";
 import { DocInfoPanel } from "./doc-view/DocInfoPanel";
 import { HistoryDialog } from "./doc-view/HistoryDialog";
 import { useSessionState } from "./doc-view/useSessionState";
-import { type DocTree, docsApi } from "./docsApi";
+import type { DocTree } from "./docsApi";
 import { MarkdownGuide } from "./MarkdownGuide";
 
 export { loadComment } from "./doc-view/comments";
@@ -22,7 +23,6 @@ export interface DocViewProps {
   orgId: string;
   docId: string;
   tree: DocTree;
-  onTreeChanged: () => Promise<void>;
   onTag: (tag: string) => void;
 }
 
@@ -45,8 +45,8 @@ function useDocSession(docId: string, shareAwareness: boolean): DocSession | nul
  * A doc: its header (title, status, tools), its text (live editor or reading view), the panel of links beside it,
  * and the history and cheat-sheet dialogs. The pieces live in doc-view/.
  */
-export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: DocViewProps) {
-  const info = useAsync(() => docsApi.doc(docId), [docId]);
+export function DocView({ orgId, docId, tree, onTag }: DocViewProps) {
+  const info = useQuery({ ...queries.doc(docId), refetchInterval: INFO_REFRESH_MS });
   const [mode, setMode] = useState<Mode>(tree.canEdit ? "edit" : "read");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -56,14 +56,6 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: DocViewPro
   const { me } = useMe();
   const liveCursors = me.features.liveCursors;
   const session = useDocSession(docId, liveCursors);
-
-  useEffect(() => {
-    const timer = window.setInterval(
-      () => document.visibilityState === "visible" && void info.reload(),
-      INFO_REFRESH_MS,
-    );
-    return () => window.clearInterval(timer);
-  }, [info.reload]);
 
   const snapshot = useSessionState(session);
   const canEdit = snapshot?.canEdit ?? false;
@@ -110,14 +102,9 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: DocViewPro
             mode={mode}
             setMode={setMode}
             canEdit={canEdit}
-            onChanged={async () => {
-              await info.reload();
-              await onTreeChanged();
-            }}
             onHistory={() => setHistoryOpen(true)}
             onGuide={() => setGuideOpen(true)}
             onTag={onTag}
-            onTreeChanged={onTreeChanged}
           />
           {snapshot?.loaded ? (
             <DocBody
@@ -128,7 +115,6 @@ export function DocView({ orgId, docId, tree, onTreeChanged, onTag }: DocViewPro
               canEdit={canEdit}
               commentLinks={info.data.commentLinks}
               onTag={onTag}
-              onTreeChanged={onTreeChanged}
               liveCursors={liveCursors}
               people={info.data.people ?? []}
               editorRef={editorRef}

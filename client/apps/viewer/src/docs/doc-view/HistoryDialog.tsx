@@ -1,11 +1,12 @@
 import { Button } from "@inklayer/ui/components/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@inklayer/ui/components/dialog";
 import { cn } from "@inklayer/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ErrorText } from "@/components/Layout";
 import { dateTime, timeAgo } from "@/lib/format";
 import { personTitle } from "@/lib/people";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
 import type { DocSession } from "../collab";
 import { type DocRevision, docsApi } from "../docsApi";
 
@@ -21,7 +22,8 @@ export interface HistoryDialogProps {
 
 /** Saved versions of the doc: pick one to see it, and restore it if you can edit. */
 export function HistoryDialog({ docId, session, canEdit, open, onOpenChange }: HistoryDialogProps) {
-  const history = useAsync(() => (open ? docsApi.history(docId) : Promise.resolve([] as DocRevision[])), [docId, open]);
+  // Fetched when the dialog opens, and again each time it does: the doc keeps changing.
+  const history = useQuery({ ...queries.docHistory(docId), enabled: open, staleTime: 0 });
   const [shown, setShown] = useState<ShownRevision | null>(null);
   const [error, setError] = useState<Error | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: forget the shown version whenever the dialog opens or closes

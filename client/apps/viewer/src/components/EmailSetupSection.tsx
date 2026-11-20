@@ -1,13 +1,14 @@
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { SectionTitle } from "@/components/Layout";
 import { api } from "@/lib/api";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
 
 /** Whether the server can send notification emails (INKLAYER_SMTP_*), with a test. Instance administrators. */
 export function EmailSetupSection() {
-  const setup = useAsync(() => api.get("/api/admin/email"), []);
+  const setup = useQuery(queries.admin.email());
   const [result, setResult] = useState<string | null>(null);
   const test = async () => {
     const r = await api.post("/api/admin/email/test");

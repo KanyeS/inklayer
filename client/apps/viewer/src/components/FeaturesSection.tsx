@@ -1,11 +1,11 @@
 import type { FeatureSettingResponse } from "@inklayer/api";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
-import { useState } from "react";
-import { useMe } from "@/App";
+import { useQuery } from "@tanstack/react-query";
 import { ErrorText, Loading, SectionTitle } from "@/components/Layout";
 import { api, type Features } from "@/lib/api";
-import { useAsync } from "@/lib/useAsync";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 
 type FeatureSetting = FeatureSettingResponse & { feature: keyof Features };
 
@@ -21,24 +21,11 @@ const ENV_NAMES: Record<FeatureSetting["feature"], string> = {
 
 /** Instance admins turn major features on or off for everyone. Changes apply straight away. */
 export function FeaturesSection() {
-  const { reloadMe } = useMe();
-  const features = useAsync(() => api.get("/api/admin/features") as Promise<FeatureSetting[]>, []);
-  const [error, setError] = useState<Error | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const features = useQuery({ ...queries.admin.features(), select: (all) => all as FeatureSetting[] });
+  const action = useAction();
 
-  const toggle = async (feature: FeatureSetting, enabled: boolean) => {
-    setBusy(feature.feature);
-    setError(null);
-    try {
-      await api.put("/api/admin/features", { body: { [feature.feature]: enabled } });
-      await features.reload();
-      await reloadMe();
-    } catch (e) {
-      setError(e as Error);
-    } finally {
-      setBusy(null);
-    }
-  };
+  const toggle = (feature: FeatureSetting, enabled: boolean) =>
+    action.run(() => api.put("/api/admin/features", { body: { [feature.feature]: enabled } }));
 
   return (
     <section>
@@ -48,7 +35,7 @@ export function FeaturesSection() {
         in the web app and the extension and closes its live connections; nothing is deleted, and turning it back on
         brings everything back.
       </p>
-      <ErrorText error={error ?? features.error} />
+      <ErrorText error={action.error ?? features.error} />
       {!features.data ? (
         <Loading />
       ) : (
@@ -59,7 +46,7 @@ export function FeaturesSection() {
                 id={`feature-${f.feature}`}
                 className="mt-1"
                 checked={f.enabled}
-                disabled={busy !== null}
+                disabled={action.pending}
                 onCheckedChange={(checked) => void toggle(f, checked === true)}
               />
               <label htmlFor={`feature-${f.feature}`} className="min-w-0 flex-1 cursor-pointer">

@@ -3,6 +3,7 @@ import { Button } from "@inklayer/ui/components/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@inklayer/ui/components/table";
+import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { useMe } from "@/App";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -13,15 +14,16 @@ import { NetworkAccessSection } from "@/components/NetworkAccessSection";
 import { AdminSharesSection } from "@/components/Shares";
 import { type AdminUser, api } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import { queries } from "@/lib/queries";
+import { useAction } from "@/lib/query";
 import { navigate } from "@/lib/router";
-import { useAsync } from "@/lib/useAsync";
 
 export function AdminPage() {
-  const { me, reloadMe } = useMe();
-  const users = useAsync(() => api.get("/api/admin/users"), []);
+  const { me } = useMe();
+  const users = useQuery(queries.admin.users());
   const [name, setName] = useState("");
   const [domains, setDomains] = useState("");
-  const [error, setError] = useState<Error | null>(null);
+  const { run, error } = useAction();
 
   if (!me.isSystemAdmin)
     return (
@@ -32,26 +34,18 @@ export function AdminPage() {
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
-    try {
-      const org = await api.post("/api/orgs", {
-        body: { name, allowedDomains: domains.split(/[\s,]+/).filter(Boolean) },
-      });
-      await reloadMe();
-      navigate(`/orgs/${org.id}`);
-    } catch (err) {
-      setError(err as Error);
-    }
+    const org = await run(() =>
+      api.post("/api/orgs", { body: { name, allowedDomains: domains.split(/[\s,]+/).filter(Boolean) } }),
+    );
+    if (org.ok) navigate(`/orgs/${org.value.id}`);
   };
-  const setDisabled = async (user: AdminUser, disabled: boolean) => {
-    try {
-      const path = { params: { path: { userId: user.id } } };
-      await (disabled
+  const setDisabled = (user: AdminUser, disabled: boolean) => {
+    const path = { params: { path: { userId: user.id } } };
+    return run(() =>
+      disabled
         ? api.post("/api/admin/users/{userId}/disable", path)
-        : api.post("/api/admin/users/{userId}/enable", path));
-      await users.reload();
-    } catch (err) {
-      setError(err as Error);
-    }
+        : api.post("/api/admin/users/{userId}/enable", path),
+    );
   };
 
   return (

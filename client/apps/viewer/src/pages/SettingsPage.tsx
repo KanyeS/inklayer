@@ -6,25 +6,20 @@ import { type FormEvent, useState } from "react";
 import { useMe } from "@/App";
 import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { api } from "@/lib/api";
+import { useAction } from "@/lib/query";
 
 /** Your own settings: the name others see. */
 export function SettingsPage() {
-  const { me, reloadMe } = useMe();
+  const { me } = useMe();
   const [name, setName] = useState(me.preferredName ?? "");
-  const [error, setError] = useState<Error | null>(null);
   const [saved, setSaved] = useState(false);
+  const { run, error } = useAction();
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setSaved(false);
-    try {
-      await api.patch("/api/me", { body: { preferredName: name } });
-      setError(null);
-      setSaved(true);
-      await reloadMe();
-    } catch (err) {
-      setError(err as Error);
-    }
+    const done = await run(() => api.patch("/api/me", { body: { preferredName: name } }));
+    setSaved(done.ok);
   };
 
   return (
@@ -58,10 +53,9 @@ export function SettingsPage() {
         <Checkbox
           className="mt-0.5"
           checked={me.emailNotifications}
-          onCheckedChange={async (checked) => {
-            await api.patch("/api/me", { body: { emailNotifications: checked === true } });
-            await reloadMe();
-          }}
+          onCheckedChange={(checked) =>
+            void run(() => api.patch("/api/me", { body: { emailNotifications: checked === true } }))
+          }
         />
         <span>
           Email me when I'm mentioned, when someone replies in a thread I'm in, and when my comment is resolved.
