@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bytesToBase64 } from "../src/lib/base64";
 import { HANDLED_REQUEST_TYPES, handleLive, isLiveRequest, matchPullRequest, safeOrigin } from "../src/lib/live";
+import { recordingType } from "../src/lib/recordings";
 import { cropFor } from "../src/lib/screenshots";
 import { clampZoom } from "../src/lib/window-sizing";
 
@@ -40,6 +41,15 @@ describe("zoom", () => {
     expect(clampZoom(0.1)).toBe(0.25);
     expect(clampZoom(1.5)).toBe(1.5);
     expect(clampZoom(9)).toBe(5);
+  });
+});
+
+describe("recordings", () => {
+  it("records WebM where the browser can, VP9 first, and MP4 otherwise", () => {
+    expect(recordingType(() => true)).toBe("video/webm;codecs=vp9");
+    expect(recordingType((t) => t === "video/webm;codecs=vp8" || t === "video/mp4")).toBe("video/webm;codecs=vp8");
+    expect(recordingType((t) => t === "video/mp4")).toBe("video/mp4");
+    expect(recordingType(() => false)).toBeNull();
   });
 });
 

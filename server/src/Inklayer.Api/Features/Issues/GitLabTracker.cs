@@ -12,7 +12,7 @@ namespace Inklayer.Api.Features.Issues;
 /// <see cref="TrackerSettings.ProjectKey"/> is the project's path, such as <c>group/subgroup/project</c>. Token: a personal,
 /// project or group access token with the <c>api</c> scope, from someone with at least the Reporter role.
 /// </summary>
-internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker, IPullRequests
+internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker, IPullRequests, IIssueFiles
 {
     private static string Project(TrackerSettings s) =>
         $"{(s.Site is { Length: > 0 } site ? site : "https://gitlab.com").TrimEnd('/')}/api/v4/projects/{Uri.EscapeDataString(s.ProjectKey!.Trim().Trim('/'))}";
@@ -146,5 +146,18 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker, IP
         using var request = Request(HttpMethod.Put, $"{Project(s)}/merge_requests/{Uri.EscapeDataString(number)}/notes/{Uri.EscapeDataString(commentId)}", token,
             new { body = markdown });
         await Trackers.SendAsync(http, request, ct);
+    }
+
+    public bool Upfront => true;
+
+    /// <summary>A project upload: GitLab answers with the Markdown that shows it (an address inside the project).</summary>
+    public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Post, $"{Project(s)}/uploads", token);
+        request.Content = Trackers.FileForm("file", file);
+        var upload = await Trackers.SendAsync(http, request, ct);
+        var url = upload?["url"]?.GetValue<string>() ?? throw new InvalidOperationException("GitLab didn't say where the upload is.");
+        // GitLab plays videos given as images.
+        return $"![{file.Label}]({url})";
     }
 }

@@ -186,7 +186,7 @@ internal static class FeatureSwitchExtensions
                 path.StartsWithSegments("/api/docs", StringComparison.OrdinalIgnoreCase) || IsOrgDocs(path) ? [Feature.Docs]
                 : path.StartsWithSegments(Features.Presence.PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors]
                 : path.StartsWithSegments("/api/presence/ticket", StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors, Feature.Docs]
-                : IsCommentPart(path, "context") || IsCommentPart(path, "screenshot") ? [Feature.BugContext]
+                : IsCommentPart(path, "context") || IsCommentPart(path, "screenshot") || IsCommentPart(path, "media") ? [Feature.BugContext]
                 : IsCommentPart(path, "issues") || IsProjectPart(path, "issue-trackers") ? [Feature.IssueTrackers]
                 : path.StartsWithSegments("/api/shares", StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/api/public", StringComparison.OrdinalIgnoreCase)

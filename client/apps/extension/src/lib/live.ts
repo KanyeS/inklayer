@@ -4,7 +4,16 @@ import { NotSignedInError } from "./auth";
 import { bytesToBase64 } from "./base64";
 import type { LiveInit, LiveRequest, PullRequestPage } from "./live-types";
 import { inbox, markRead } from "./notifications";
-import { captureScreenshot, screenshotForPage, uploadResult } from "./screenshots";
+import { discardRecording, uploadRecording } from "./recordings";
+import {
+  cancelFullPage,
+  captureFullPageFrame,
+  captureScreenshot,
+  finishFullPage,
+  screenshotForPage,
+  startFullPage,
+  uploadResult,
+} from "./screenshots";
 import { getSettings } from "./settings";
 import { resizeWindow, restoreWindow, windowResized, zoomTab } from "./window-sizing";
 
@@ -259,6 +268,38 @@ const HANDLERS: Handlers = {
     return null;
   },
   "live.screenshot": (r) => screenshotForPage(r.annotationId),
+  // A full-page screenshot: the page scrolls through itself, and each screen is taken here.
+  "live.fullPageStart": async (r) => startFullPage(r.annotationId, r.width, r.height),
+  "live.fullPageFrame": async (r, sender) => {
+    await captureFullPageFrame(windowOf(sender), r.annotationId, r.y);
+    return null;
+  },
+  "live.fullPageEnd": async (r) => {
+    await finishFullPage(r.annotationId);
+    return null;
+  },
+  "live.fullPageCancel": async (r) => {
+    cancelFullPage(r.annotationId);
+    return null;
+  },
+  // A recording of the tab: made in its own window, kept until the comment is saved, then uploaded with it.
+  "live.recordStart": async (_, sender) => {
+    await chrome.windows.create({
+      url: chrome.runtime.getURL(`recorder.html?tab=${tabOf(sender)}`),
+      type: "popup",
+      width: 400,
+      height: 280,
+    });
+    return null;
+  },
+  "live.recordingUpload": async (r) => {
+    await uploadRecording(r.annotationId, r.recordingId);
+    return null;
+  },
+  "live.recordingDiscard": async (r) => {
+    await discardRecording(r.recordingId);
+    return null;
+  },
 
   /* ---------------- issues and sharing */
   // Only the user's own projects, so a page can't make the extension probe others.

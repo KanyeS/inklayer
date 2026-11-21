@@ -1566,6 +1566,84 @@
         }
       }
     },
+    "/api/annotations/{annotationId}/media/{kind}": {
+      "put": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB) or video (WebM or MP4, at most 40 MB)",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "width",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Annotations"
+        ],
+        "summary": "A comment\u0027s full-page screenshot (fullpage) or recording (video)",
+        "parameters": [
+          {
+            "name": "annotationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/notifications": {
       "get": {
         "tags": [
@@ -3695,6 +3773,15 @@
             "items": {
               "$ref": "#/components/schemas/IssueCommentResponse"
             }
+          },
+          "media": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MediaResponse"
+            }
           }
         }
       },
@@ -3912,6 +3999,15 @@
             ],
             "items": {
               "$ref": "#/components/schemas/IssueCommentResponse"
+            }
+          },
+          "media": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MediaResponse"
             }
           }
         }
@@ -5628,6 +5724,36 @@
           },
           "emailNotifications": {
             "type": "boolean"
+          }
+        }
+      },
+      "MediaResponse": {
+        "required": [
+          "kind",
+          "contentType",
+          "size",
+          "width",
+          "height"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

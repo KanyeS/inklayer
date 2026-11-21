@@ -21,7 +21,18 @@ Inklayer checks the credentials before it saves them. Tokens are stored encrypte
 
 Once a tracker is connected, Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The comment's first line becomes the issue's title (you can change it when creating the issue in the web app). The issue includes the comment, its replies, the page address, a link back, the page details (browser, window size, console errors, failed requests), and the screenshot.
 
-**Screenshots in issues.** The screenshot shows in the issue itself (in Jira, as a link). Trackers can't sign in to Inklayer, so it's served from a public address with a long random token, made when the screenshot first goes into an issue: anyone with the address can open it, the same as anyone who can read the issue. The address stops working when the comment is deleted, and isn't reachable from outside if the server is limited to certain networks. Inklayer checks linked issues every 5 minutes, and within about a minute while someone has the comment open (on its page in the extension, or its page in the web app). Issues closed more than 14 days ago are checked once a day. Closing an issue in the tracker resolves its comment, and reopening it reopens the comment.
+**Screenshots in issues.** The screenshot, and the full-page screenshot if one was taken, go into the issue:
+- **GitLab, Azure DevOps and Linear:** uploaded to the tracker and shown in the issue. The tracker keeps them.
+- **Jira and Codeberg/Forgejo/Gitea:** attached to the issue, and listed in it.
+- **GitHub**, which can't take files from apps: shown from Inklayer's own copy, at a public address with a long random token, made when the file first goes into an issue. Anyone with the address can open it, the same as anyone who can read the issue. The address stops working when the comment is deleted, and isn't reachable from outside if the server is limited to certain networks.
+
+If an upload fails, the issue is still made, the file is shown from the public address instead, and the tracker shows the error.
+
+**Full-page screenshots.** In the extension, tick **Also a full-page screenshot** under a new comment. Inklayer scrolls through the page and takes it all, top to bottom, with fixed headers shown only once; very long pages are cut off at about 12,000 pixels. It opens from the comment, in the extension and in the web app.
+
+**Recordings.** Under a new comment in the extension, choose **Record the tab…**. A small Inklayer window opens: choose **Start recording**, pick the tab in the browser's share prompt, show what's wrong, then **Stop** (it stops by itself after a minute, and the browser's own "Stop sharing" stops it too). The comment box then says **Recording attached**, and it's sent when you save the comment. Recordings are WebM (MP4 where the browser can't record WebM), at most 40 MB. They play on the comment's page in the web app. In issues, they're uploaded like screenshots (GitLab plays them in the issue; Azure DevOps, Linear, Jira and Forgejo keep them as files), and GitHub issues link to Inklayer's copy, which plays in the browser.
+
+**Where files are kept.** Screenshots of the commented area are small and kept in the database. Full-page screenshots (and recordings) are kept in an S3 bucket when the server has one (`MEDIA_S3_BUCKET`), otherwise in `/data/media` on the server, which isn't backed up. People always download them through the Inklayer server, never from S3 directly.
 
 ### Linking an issue that already exists
 

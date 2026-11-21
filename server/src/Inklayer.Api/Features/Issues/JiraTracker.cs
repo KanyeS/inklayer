@@ -8,7 +8,7 @@ using Inklayer.Domain.Issues;
 namespace Inklayer.Api.Features.Issues;
 
 /// <summary>Jira Cloud (REST v3). Token: an Atlassian API token for <see cref="TrackerSettings.Email"/>.</summary>
-internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues
+internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues, IIssueFiles
 {
     private static HttpRequestMessage Request(HttpMethod method, TrackerSettings s, string path, TrackerAuth token, object? body = null)
     {
@@ -221,5 +221,17 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIss
     {
         using var request = Request(HttpMethod.Post, s, $"/rest/api/3/issue/{Uri.EscapeDataString(externalId)}/comment", token, new { body = Adf(markdown) });
         return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);
+    }
+
+    public bool Upfront => false;
+
+    /// <summary>An attachment on the issue.</summary>
+    public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Post, s, $"/rest/api/3/issue/{Uri.EscapeDataString(issueExternalId!)}/attachments", token);
+        request.Content = Trackers.FileForm("file", file);
+        request.Headers.Add("X-Atlassian-Token", "no-check");
+        await Trackers.SendAsync(http, request, ct);
+        return null;
     }
 }

@@ -62,6 +62,21 @@ internal sealed class AnnotationScreenshotConfiguration : IEntityTypeConfigurati
     }
 }
 
+internal sealed class AnnotationMediaConfiguration : IEntityTypeConfiguration<AnnotationMedia>
+{
+    public void Configure(EntityTypeBuilder<AnnotationMedia> builder)
+    {
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Kind).HasMaxLength(16);
+        builder.Property(m => m.ContentType).HasMaxLength(64);
+        builder.Property(m => m.StorageKey).HasMaxLength(300);
+        builder.Property(m => m.PublicToken).HasMaxLength(64);
+        builder.HasIndex(m => new { m.AnnotationId, m.Kind }).IsUnique();
+        builder.HasIndex(m => m.PublicToken).IsUnique();
+        builder.HasOne<Annotation>().WithMany().HasForeignKey(m => m.AnnotationId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class AnnotationRevisionConfiguration : IEntityTypeConfiguration<AnnotationRevision>
 {
     public void Configure(EntityTypeBuilder<AnnotationRevision> builder)

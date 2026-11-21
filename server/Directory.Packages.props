@@ -24,6 +24,8 @@
     <PackageVersion Include="YDotNet.Native.Linux" Version="0.7.0" />
     <!-- Email notifications over SMTP (MIT) -->
     <PackageVersion Include="MailKit" Version="5.0.0" />
+    <!-- Media (full-page screenshots, videos) in S3. -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.1.1" />
   </ItemGroup>
   <ItemGroup Label="Observability (Apache-2.0)">
     <PackageVersion Include="Serilog.AspNetCore" Version="11.0.0" />

@@ -13,7 +13,7 @@ namespace Inklayer.Api.Features.Issues;
 /// <see cref="TrackerSettings.IssueType"/> the work item type (Bug by default). Token: a personal access token with
 /// Work Items: read and write. Open or closed follows the state's category: Completed and Removed count as closed.
 /// </summary>
-internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues, IPullRequests
+internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues, IPullRequests, IIssueFiles
 {
     private const string Version = "api-version=7.1";
 
@@ -84,6 +84,12 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
             new { op = "add", path = "/fields/System.Title", value = title },
             new { op = "add", path = $"/fields/{field}", value = html },
         };
+        // Attachments shown in it are listed on the work item too.
+        foreach (Match attached in Regex.Matches(markdown, @"\((https?://[^)\s]+/_apis/wit/attachments/[^)\s]+)\)"))
+        {
+            operations.Add(new { op = "add", path = "/relations/-", value = new { rel = "AttachedFile", url = attached.Groups[1].Value } });
+        }
+
         if (parentId is not null)
         {
             operations.Add(new
@@ -289,5 +295,20 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
             $"{Project(s)}/_apis/git/repositories/{Uri.EscapeDataString(parts[0])}/pullRequests/{Uri.EscapeDataString(number)}/threads/{Uri.EscapeDataString(parts[1])}/comments/1?{Version}",
             token, Trackers.Json(new { content = markdown }));
         await Trackers.SendAsync(http, request, ct);
+    }
+
+    public bool Upfront => true;
+
+    /// <summary>
+    /// An attachment in the organisation, shown in the work item from its address; the work item lists it too (it's attached
+    /// when the work item is created with that address in it).
+    /// </summary>
+    public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
+    {
+        var content = new ByteArrayContent(file.Bytes);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        using var request = Request(HttpMethod.Post, $"{Project(s)}/_apis/wit/attachments?fileName={Uri.EscapeDataString(file.FileName)}&{Version}", token, content);
+        var attachment = await Trackers.SendAsync(http, request, ct);
+        return file.Markdown(attachment?["url"]?.GetValue<string>() ?? throw new InvalidOperationException("Azure DevOps didn't say where the attachment is."));
     }
 }

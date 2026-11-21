@@ -167,7 +167,7 @@ internal static class ContextEndpoints
         JsonSerializer.Deserialize<List<ConsoleEntry>>(c.Console, Json) ?? [], JsonSerializer.Deserialize<List<NetworkEntry>>(c.Network, Json) ?? [], c.CapturedAt, c.Zoom);
 
     /// <summary>Null if the caller wrote this comment (and may still comment in its project); otherwise the error to return.</summary>
-    private static async Task<IResult?> AuthorsCommentAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult?> AuthorsCommentAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
         var annotation = await db.Annotations.AsNoTracking().Where(a => a.Id == annotationId && a.DeletedAt == null)
             .Select(a => new { a.ProjectId, a.AuthorUserId }).SingleOrDefaultAsync(ct);
@@ -187,7 +187,7 @@ internal static class ContextEndpoints
             : TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only the comment's author can add its screenshot and page details.");
     }
 
-    private static bool LooksLike(string type, byte[] b) => type switch
+    internal static bool LooksLike(string type, byte[] b) => type switch
     {
         "image/png" => b.Length > 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47,
         "image/jpeg" => b.Length > 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF,

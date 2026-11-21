@@ -11,7 +11,7 @@ namespace Inklayer.Api.Features.Issues;
 /// Forgejo and Gitea issues (REST v1): Codeberg by default, or a self-hosted instance (<see cref="TrackerSettings.Site"/>).
 /// Token: an access token with the <c>issue</c> scope (read and write) and <c>repository</c> (read).
 /// </summary>
-internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker, IPullRequests
+internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker, IPullRequests, IIssueFiles
 {
     private static string Repo(TrackerSettings s) =>
         $"{(s.Site is { Length: > 0 } site ? site : "https://codeberg.org").TrimEnd('/')}/api/v1/repos/{Uri.EscapeDataString(s.Owner!.Trim())}/{Uri.EscapeDataString(s.Repo!.Trim())}";
@@ -132,5 +132,16 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker, I
     {
         using var request = Request(HttpMethod.Patch, $"{Repo(s)}/issues/comments/{Uri.EscapeDataString(commentId)}", token, new { body = markdown });
         await Trackers.SendAsync(http, request, ct);
+    }
+
+    public bool Upfront => false;
+
+    /// <summary>An attachment on the issue.</summary>
+    public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Post, $"{Repo(s)}/issues/{Uri.EscapeDataString(issueExternalId!)}/assets?name={Uri.EscapeDataString(file.FileName)}", token);
+        request.Content = Trackers.FileForm("attachment", file);
+        await Trackers.SendAsync(http, request, ct);
+        return null;
     }
 }

@@ -41,6 +41,12 @@ services:
       Inklayer__Trackers__AzureDevOps__TenantId: ${AZURE_DEVOPS_TENANT_ID:-organizations}
       Inklayer__Trackers__AzureDevOps__CertificatePath: ${AZURE_DEVOPS_CERTIFICATE_PATH:-}
       Inklayer__Trackers__AzureDevOps__CertificatePassword: ${AZURE_DEVOPS_CERTIFICATE_PASSWORD:-}
+      # Full-page screenshots and videos: an S3 bucket (it can be the backups' bucket; they're kept under media/), or
+      # without one, /data/media on the server. The server passes them on, so people download from the server, not S3.
+      Inklayer__Media__S3Bucket: ${MEDIA_S3_BUCKET:-}
+      Inklayer__Media__S3Region: ${MEDIA_S3_REGION:-${AWS_REGION:-}}
+      AWS_ACCESS_KEY_ID: ${MEDIA_AWS_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}
+      AWS_SECRET_ACCESS_KEY: ${MEDIA_AWS_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}
       Inklayer__Auth__Oidc__0__Id: ${OIDC_ID:-}
       Inklayer__Auth__Oidc__0__DisplayName: ${OIDC_DISPLAY_NAME:-}
       Inklayer__Auth__Oidc__0__Authority: ${OIDC_AUTHORITY:-}

@@ -10,6 +10,7 @@ using Inklayer.Api.Features.Live;
 using Inklayer.Api.Features.Mcp;
 using Inklayer.Api.Features.Notifications;
 using Inklayer.Api.Features.Me;
+using Inklayer.Api.Features.Media;
 using Inklayer.Api.Features.Organizations;
 using Inklayer.Api.Features.Presence;
 using Inklayer.Api.Features.Projects;
@@ -32,6 +33,7 @@ try
     builder.Services.AddInklayerHosting(builder.Configuration);
     builder.Services.AddInklayerNetworkAccess(builder.Configuration);
     builder.Services.AddInklayerFeatureSwitches(builder.Configuration);
+    builder.Services.AddInklayerMedia(builder.Configuration);
     builder.Services.AddInklayerAuth(builder.Configuration, builder.Environment);
     builder.Services.AddInklayerPresence(builder.Configuration);
     builder.Services.AddInklayerMcp();
@@ -60,6 +62,7 @@ try
     app.MapAnnotationEndpoints();
     app.MapContextEndpoints();
     app.MapPublicMediaEndpoints();
+    app.MapMediaEndpoints();
     app.MapNotificationEndpoints();
     app.MapIssueEndpoints();
     app.MapTrackerAccountEndpoints();

@@ -29,7 +29,7 @@ internal sealed class IssueParentException(string message) : InvalidOperationExc
 /// <summary>Issues made from comments: creating them with everything a developer needs, and closing them when comments are resolved.</summary>
 internal sealed partial class IssueService(
     InklayerDbContext db, Trackers trackers, TrackerAccounts accounts, NotificationService notifications, IHttpContextAccessor http, IConfiguration configuration,
-    FeatureSwitches features, TimeProvider clock)
+    FeatureSwitches features, TimeProvider clock, Media.IMediaStore mediaStore)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -42,11 +42,6 @@ internal sealed partial class IssueService(
     public async Task<AnnotationIssue> CreateAsync(
         Annotation comment, IssueTrackerConnection connection, string? title, Guid actorUserId, CancellationToken ct, string? parent = null, string? type = null)
     {
-        var markdown = await IssueBodyAsync(comment, ct);
-        var plainBody = markdown.Split('\n')[0];
-        var issueTitle = (title?.Trim() is { Length: > 0 } t ? t : plainBody.Length > 0 ? plainBody : $"Comment on {Shorten(comment.PageUrl)}");
-        issueTitle = issueTitle.Length > 120 ? issueTitle[..119] + "…" : issueTitle;
-
         var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
         var tracker = trackers.For(connection.Kind);
         var settings = SettingsOf(connection);
@@ -72,9 +67,18 @@ internal sealed partial class IssueService(
             throw new InvalidOperationException($"{TrackerKinds.Name(connection.Kind)} issues can't be created under another issue here.");
         }
 
-        var created = await accounts.WithAsync(token, async t => parentReference is null
+        // Checked before the files go anywhere, so a bad parent uploads nothing.
+        var parentId = parentReference is null ? null : await accounts.WithAsync(token, t => ParentAsync(tracker, settings, t, parentReference, ct), ct);
+        var (fileLines, later) = await PlaceFilesAsync(connection, tracker, settings, token, comment, ct);
+        var markdown = await IssueBodyAsync(comment, ct, fileLines);
+        var plainBody = markdown.Split('\n')[0];
+        var issueTitle = (title?.Trim() is { Length: > 0 } t ? t : plainBody.Length > 0 ? plainBody : $"Comment on {Shorten(comment.PageUrl)}");
+        issueTitle = issueTitle.Length > 120 ? issueTitle[..119] + "…" : issueTitle;
+
+        var created = await accounts.WithAsync(token, async t => parentId is null
             ? await tracker.CreateAsync(settings, t, issueTitle, markdown, ct)
-            : await ((IChildIssues)tracker).CreateUnderAsync(settings, t, issueTitle, markdown, await ParentAsync(tracker, settings, t, parentReference, ct), ct), ct);
+            : await ((IChildIssues)tracker).CreateUnderAsync(settings, t, issueTitle, markdown, parentId, ct), ct);
+        await AttachLaterAsync(connection, tracker, settings, token, created.ExternalId, created.Key, later, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var issue = new AnnotationIssue
         {
@@ -162,8 +166,10 @@ internal sealed partial class IssueService(
         var now = clock.GetUtcNow().UtcDateTime;
         if (addComment)
         {
-            var note = $"**Linked from Inklayer**\n\n{await IssueBodyAsync(comment, ct)}";
+            var (fileLines, later) = await PlaceFilesAsync(connection, tracker, settings, token, comment, ct);
+            var note = $"**Linked from Inklayer**\n\n{await IssueBodyAsync(comment, ct, fileLines)}";
             var noteId = await accounts.WithAsync(token, t => tracker.AddCommentAsync(settings, t, found.ExternalId, note, ct), ct);
+            await AttachLaterAsync(connection, tracker, settings, token, found.ExternalId, found.Key, later, ct);
             await AddPostedAsync(connection.Id, found.ExternalId, noteId, actorUserId, note, null, now, ct);
         }
 
@@ -395,7 +401,7 @@ internal sealed partial class IssueService(
     }
 
     /// <summary>The comment, its replies, where it is, and the page details: what a developer needs to pick it up.</summary>
-    private async Task<string> IssueBodyAsync(Annotation comment, CancellationToken ct)
+    private async Task<string> IssueBodyAsync(Annotation comment, CancellationToken ct, IReadOnlyList<string>? files = null)
     {
         var replies = await db.AnnotationReplies.AsNoTracking().Where(r => r.AnnotationId == comment.Id && r.DeletedAt == null).OrderBy(r => r.CreatedAt).ToListAsync(ct);
         var people = replies.Select(r => r.AuthorUserId).Append(comment.AuthorUserId).Concat(Mentions.Extract(comment.Body))
@@ -440,19 +446,13 @@ internal sealed partial class IssueService(
             }
         }
 
-        // Shown in the issue from its public address; the comment's page has it too.
-        if (await db.AnnotationScreenshots.SingleOrDefaultAsync(s => s.AnnotationId == comment.Id, ct) is { } screenshot)
+        // The screenshot and other files: shown or attached as the tracker allows (see PlaceFilesAsync).
+        if (files is { Count: > 0 })
         {
-            if (origin.Length > 0)
+            body.AppendLine();
+            foreach (var line in files)
             {
-                screenshot.PublicToken ??= PublicMediaEndpoints.NewToken();
-                await db.SaveChangesAsync(ct);
-                body.AppendLine("**Screenshot:**");
-                body.AppendLine($"![Screenshot]({origin}{PublicMediaEndpoints.PathPrefix}/{screenshot.PublicToken}.{PublicMediaEndpoints.Extension(screenshot.ContentType)})");
-            }
-            else
-            {
-                body.AppendLine($"**Screenshot:** {origin}/comments/{comment.Id}");
+                body.AppendLine(line);
             }
         }
 

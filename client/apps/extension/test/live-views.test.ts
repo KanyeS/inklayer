@@ -268,6 +268,7 @@ describe("making a comment", () => {
   it("builds the draft box with Save, Cancel and the attach option", () => {
     const onSave = vi.fn();
     const onAttachContext = vi.fn();
+    const onRemoveRecording = vi.fn();
     const box = mountOne(
       draftBox({
         input: h("textarea", null),
@@ -275,12 +276,21 @@ describe("making a comment", () => {
         busy: false,
         attachContext: true,
         onAttachContext,
+        fullPage: false,
+        onFullPage: vi.fn(),
+        recording: { seconds: 83 },
+        onRecord: vi.fn(),
+        onRemoveRecording,
         issueTitleHint: true,
         onSave,
         onCancel: vi.fn(),
       }),
     );
     expect(box.textContent).toContain("The first line becomes the title of any issue made from it.");
+    expect(box.textContent).toContain("Also a full-page screenshot");
+    expect(box.textContent).toContain("Recording attached (1:23)");
+    clickButton(box, "Remove");
+    expect(onRemoveRecording).toHaveBeenCalledOnce();
     clickButton(box, "Save");
     expect(onSave).toHaveBeenCalledOnce();
     const attach = box.querySelector<HTMLInputElement>(".attach input") as HTMLInputElement;
@@ -297,6 +307,11 @@ describe("making a comment", () => {
         busy: true,
         attachContext: null,
         onAttachContext: vi.fn(),
+        fullPage: null,
+        onFullPage: vi.fn(),
+        recording: null,
+        onRecord: vi.fn(),
+        onRemoveRecording: vi.fn(),
         issueTitleHint: false,
         onSave: vi.fn(),
         onCancel: vi.fn(),
@@ -304,6 +319,8 @@ describe("making a comment", () => {
     );
     expect(box.querySelector(".attach")).toBeNull();
     expect(box.textContent).not.toContain("becomes the title");
+    expect(box.textContent).not.toContain("full-page");
+    expect(box.textContent).not.toContain("Record");
     expect(box.querySelector<HTMLButtonElement>(".primary")?.textContent).toBe("Saving…");
     expect(box.querySelector<HTMLButtonElement>(".primary")?.disabled).toBe(true);
   });

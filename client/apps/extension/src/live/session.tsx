@@ -17,8 +17,8 @@ import {
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { type ComponentChild, render } from "preact";
 import type { LiveAnnotation, LiveInit, LivePage, LiveProject, PullRequestPage } from "../lib/live";
-import { attachPageDetails } from "./bug-context";
 import { call, messageOf, remember } from "./call";
+import { Captures } from "./captures";
 import type { PageAnnotation, PanelContext, View } from "./context";
 import type { Scope } from "./format";
 import { HoverBubbles } from "./hover-bubbles";
@@ -47,7 +47,7 @@ const NOTE_SHOWN_MS = 8000;
 const RESIZE_REDRAW_MS = 200;
 
 /** Settings remembered in the extension's storage, the same on every site. */
-const STORED_KEYS = ["bubblesOpen", "attachContext", "panelPosition", "panelPinned", "unreadCount"];
+const STORED_KEYS = ["bubblesOpen", "attachContext", "panelPosition", "panelPinned", "unreadCount", "fullPage"];
 
 type ChosenScope = { includeQuery: boolean; includeHash: boolean };
 
@@ -92,7 +92,12 @@ export class LiveSession {
   #color: string = COLORS[0];
   #scope: Scope = { query: false, hash: false };
   /** Attach a screenshot and page details to new comments (remembered; on unless turned off). */
-  #attachContext = true;
+  /** The screenshot, page details, full page and recording sent with a new comment. */
+  readonly #captures = new Captures(
+    () => this.#init.features.bugContext,
+    () => this.#render(),
+    (note) => this.#flashNote(note),
+  );
 
   // What's shown
   #open = false;
@@ -208,6 +213,13 @@ export class LiveSession {
   /* ------------------------------------------------------------------ public */
 
   /** Opens the panel on one comment, e.g. from "Open on the page" in the web viewer. */
+  /** A recording made from the recording window is ready: attach it to the comment being written (or drop it). */
+  recordingReady(id: string, seconds: number): void {
+    if (!this.#captures.recordingReady(id, seconds, this.#draft !== null)) return;
+    this.#open = true;
+    this.#render();
+  }
+
   focusComment(id: string): void {
     this.#open = true;
     this.#view = "comments";
@@ -262,7 +274,7 @@ export class LiveSession {
       .then((stored) => {
         this.#inbox.unread = typeof stored.unreadCount === "number" ? stored.unreadCount : 0;
         this.#bubblesOpen = stored.bubblesOpen === true;
-        this.#attachContext = stored.attachContext !== false;
+        this.#captures.restore(stored);
         this.#mover.restore(stored);
         this.#render();
       })
@@ -473,6 +485,7 @@ export class LiveSession {
   }
 
   #cancelDraft(): void {
+    this.#captures.discardRecording();
     this.#draft = null;
     this.#draftText = EMPTY_DRAFT;
     this.#overlay.handle({ type: "clearDraft" });
@@ -497,11 +510,9 @@ export class LiveSession {
         geometry: draft.geometry,
         viewportWidth: draft.viewportWidth,
       });
-      if (this.#init.features.bugContext && this.#attachContext) {
-        const note = await attachPageDetails(created.id, draft, [this.#host, this.#bubbles.host]);
-        if (note) this.#flashNote(note);
-        else await this.#load(); // the screenshot is there: show it
-      }
+      const note = await this.#captures.attach(created.id, draft, [this.#host, this.#bubbles.host]);
+      if (note) this.#flashNote(note);
+      else await this.#load(); // the screenshot and recording are there: show them
       this.#draft = null;
       this.#draftText = EMPTY_DRAFT;
       this.#selected = created.id;
@@ -710,13 +721,8 @@ export class LiveSession {
         this.#render();
       }),
       busy: this.#busy,
-      attachContext: this.#init.features.bugContext ? this.#attachContext : null,
       issueTitleHint: this.#init.features.issueTrackers,
-      onAttachContext: (attach) => {
-        this.#attachContext = attach;
-        remember({ attachContext: attach });
-        this.#render();
-      },
+      ...this.#captures.options(),
       onSave: () => void this.#saveDraft(),
       onCancel: () => this.#cancelDraft(),
     });

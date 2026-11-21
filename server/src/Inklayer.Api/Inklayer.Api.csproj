@@ -17,6 +17,7 @@
     <PackageReference Include="YDotNet" />
     <PackageReference Include="YDotNet.Native.Linux" />
     <PackageReference Include="MailKit" />
+    <PackageReference Include="AWSSDK.S3" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" />

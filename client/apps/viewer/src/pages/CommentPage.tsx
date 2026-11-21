@@ -126,6 +126,25 @@ export function CommentPage({ commentId }: { commentId: string }) {
             />
           </a>
         )}
+        {me.features.bugContext && c.media?.some((m) => m.kind === "video") && (
+          // biome-ignore lint/a11y/useMediaCaption: a screen recording of a web page, with no speech to caption
+          <video
+            src={`/api/annotations/${c.id}/media/video`}
+            controls
+            preload="metadata"
+            className="mt-4 block max-h-96 w-full rounded-xl border bg-black"
+          />
+        )}
+        {me.features.bugContext && c.media?.some((m) => m.kind === "fullpage") && (
+          <a
+            href={`/api/annotations/${c.id}/media/fullpage`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-block text-sm underline"
+          >
+            Full-page screenshot
+          </a>
+        )}
         {me.features.bugContext && c.context && <PageDetails context={c.context} />}
         {me.features.issueTrackers && <IssueChips issues={c.issues ?? []} />}
         <p className="mt-4 truncate text-sm text-muted-foreground" title={c.pageUrl}>

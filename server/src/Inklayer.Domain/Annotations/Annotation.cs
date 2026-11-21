@@ -193,3 +193,48 @@ public sealed class AnnotationScreenshot
     /// </summary>
     public string? PublicToken { get; set; }
 }
+
+/// <summary>What kind of file an <see cref="AnnotationMedia"/> is.</summary>
+public static class MediaKinds
+{
+    /// <summary>A screenshot of the whole page, top to bottom.</summary>
+    public const string FullPage = "fullpage";
+
+    /// <summary>A recording of the tab.</summary>
+    public const string Video = "video";
+}
+
+/// <summary>
+/// A large file captured with a comment (a full-page screenshot, a video), kept in the media store (S3, or a folder) rather
+/// than the database. One of each kind per comment.
+/// </summary>
+public sealed class AnnotationMedia
+{
+    public const long MaxImageBytes = 15 * 1024 * 1024;
+
+    /// <summary>A minute's recording, with room to spare.</summary>
+    public const long MaxVideoBytes = 40 * 1024 * 1024;
+
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+
+    public required Guid AnnotationId { get; init; }
+
+    /// <summary><see cref="MediaKinds"/>.</summary>
+    public required string Kind { get; init; }
+
+    public required string ContentType { get; set; }
+
+    public long Size { get; set; }
+
+    /// <summary>Where it is in the media store.</summary>
+    public required string StorageKey { get; set; }
+
+    public int Width { get; set; }
+
+    public int Height { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    /// <summary>A long random token for its public address (<c>/media/&lt;token&gt;.&lt;ext&gt;</c>), made when it first goes into an issue.</summary>
+    public string? PublicToken { get; set; }
+}

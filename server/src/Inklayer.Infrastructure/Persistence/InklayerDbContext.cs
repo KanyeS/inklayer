@@ -50,6 +50,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<AnnotationScreenshot> AnnotationScreenshots => Set<AnnotationScreenshot>();
 
+    public DbSet<AnnotationMedia> AnnotationMedia => Set<AnnotationMedia>();
+
     public DbSet<Notification> Notifications => Set<Notification>();
 
     public DbSet<Integration> Integrations => Set<Integration>();

@@ -4,6 +4,7 @@ import { handleLive, isLiveRequest, type LiveRequest, openLiveInTab, stopLive, s
 import type { Request, Response, StateResponse } from "./lib/messages";
 import { inbox, markRead, startNotifications } from "./lib/notifications";
 import { acceptPort, forgetTab, isPresenceOn, PRESENCE_PORT, setPresence, stopPresence } from "./lib/presence";
+import type { RecordingDone } from "./lib/recordings";
 import { getSettings } from "./lib/settings";
 
 // The unread count on the toolbar icon.
@@ -25,6 +26,26 @@ chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId));
 chrome.runtime.onMessage.addListener(
   (request: Request | LiveRequest | { type: "presence.status" }, sender, sendResponse) => {
     if (sender.id !== chrome.runtime.id) return false;
+
+    // From the recording window (an extension page in its own window): a recording is ready, for the page it's from.
+    if (
+      sender.url?.startsWith(chrome.runtime.getURL("recorder.html")) &&
+      (request as { type?: string }).type === "recording.done"
+    ) {
+      const done = request as unknown as RecordingDone;
+      respond(
+        chrome.tabs
+          .sendMessage(done.tabId, {
+            type: "inklayer.recording",
+            recordingId: done.recordingId,
+            seconds: done.seconds,
+            size: done.size,
+          })
+          .then(() => null),
+        sendResponse,
+      );
+      return true;
+    }
 
     // From the live content script on a web page: only live requests, checked against the page's real origin.
     if (sender.tab) {

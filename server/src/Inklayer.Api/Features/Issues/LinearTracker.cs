@@ -8,7 +8,7 @@ using Inklayer.Domain.Issues;
 namespace Inklayer.Api.Features.Issues;
 
 /// <summary>Linear (GraphQL). Token: a personal API key with write access to the team.</summary>
-internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
+internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker, IIssueFiles
 {
     private const string Api = "https://api.linear.app/graphql";
 
@@ -115,5 +115,26 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
         var data = await QueryAsync(token, "mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { id } } }",
             new { input = new { issueId = externalId, body = markdown } }, ct);
         return data["commentCreate"]?["comment"]?["id"]?.GetValue<string>() ?? throw new InvalidOperationException("Linear didn't add the comment.");
+    }
+
+    public bool Upfront => true;
+
+    /// <summary>Linear's file upload: it gives an address to put the file to (with headers to send), and the asset's address.</summary>
+    public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
+    {
+        var data = await QueryAsync(token,
+            "mutation($contentType: String!, $filename: String!, $size: Int!) { fileUpload(contentType: $contentType, filename: $filename, size: $size) { success uploadFile { uploadUrl assetUrl headers { key value } } } }",
+            new { contentType = file.ContentType, filename = file.FileName, size = file.Bytes.Length }, ct);
+        var upload = data["fileUpload"]?["uploadFile"] ?? throw new InvalidOperationException("Linear didn't take the file.");
+        using var put = new HttpRequestMessage(HttpMethod.Put, upload["uploadUrl"]!.GetValue<string>()) { Content = new ByteArrayContent(file.Bytes) };
+        put.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+        put.Headers.TryAddWithoutValidation("Cache-Control", "public, max-age=31536000");
+        foreach (var header in upload["headers"]?.AsArray() ?? [])
+        {
+            put.Headers.TryAddWithoutValidation(header!["key"]!.GetValue<string>(), header["value"]!.GetValue<string>());
+        }
+
+        await Trackers.SendAsync(http, put, ct);
+        return file.Markdown(upload["assetUrl"]!.GetValue<string>());
     }
 }

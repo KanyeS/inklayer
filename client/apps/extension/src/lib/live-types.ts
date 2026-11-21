@@ -73,6 +73,13 @@ export type LiveRequest =
   | { type: "live.context"; annotationId: string; context: PageContext }
   | { type: "live.capture"; annotationId: string; area: Rect; viewportWidth: number }
   | { type: "live.captureResult"; annotationId: string }
+  | { type: "live.fullPageStart"; annotationId: string; width: number; height: number }
+  | { type: "live.fullPageFrame"; annotationId: string; y: number }
+  | { type: "live.fullPageEnd"; annotationId: string }
+  | { type: "live.fullPageCancel"; annotationId: string }
+  | { type: "live.recordStart" }
+  | { type: "live.recordingUpload"; annotationId: string; recordingId: string }
+  | { type: "live.recordingDiscard"; recordingId: string }
   | { type: "live.screenshot"; annotationId: string }
   | { type: "live.reply"; annotationId: string; body: string }
   | { type: "live.replyDelete"; id: string; version: number }

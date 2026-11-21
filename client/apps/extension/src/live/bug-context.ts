@@ -81,3 +81,61 @@ export async function attachPageDetails(
     return `The screenshot didn't upload: ${messageOf(e)}`;
   }
 }
+
+/** Most elements looked at for fixed and sticky ones, on very large pages. */
+const MAX_ELEMENTS_CHECKED = 20_000;
+
+/** Hides the page's fixed and sticky elements (headers, chat buttons), so they don't repeat down a full-page screenshot. */
+function hideFixed(except: HTMLElement[]): () => void {
+  const hidden: { el: HTMLElement; visibility: string }[] = [];
+  const walker = document.createTreeWalker(document.body ?? document.documentElement, NodeFilter.SHOW_ELEMENT);
+  for (let n = 0, node = walker.nextNode(); node && n < MAX_ELEMENTS_CHECKED; n++, node = walker.nextNode()) {
+    const el = node as HTMLElement;
+    if (except.includes(el) || !el.style) continue;
+    const position = getComputedStyle(el).position;
+    if (position === "fixed" || position === "sticky") {
+      hidden.push({ el, visibility: el.style.visibility });
+      el.style.visibility = "hidden";
+    }
+  }
+  return () => {
+    for (const { el, visibility } of hidden) el.style.visibility = visibility;
+  };
+}
+
+/**
+ * Takes a screenshot of the whole page, top to bottom, for a just-saved comment: scrolls through it a screen at a time
+ * (Inklayer's own panel hidden, and the page's fixed headers after the first screen), then puts the page back as it was.
+ * Returns null once it's uploaded, or a note saying why there isn't one.
+ */
+export async function attachFullPage(annotationId: string, hide: HTMLElement[]): Promise<string | null> {
+  const page = document.scrollingElement ?? document.documentElement;
+  const total = Math.max(page.scrollHeight, document.body?.scrollHeight ?? 0, innerHeight);
+  const start = { left: scrollX, top: scrollY };
+  let showFixed: (() => void) | null = null;
+  for (const el of hide) el.style.visibility = "hidden";
+  try {
+    const { height } = await call<{ height: number }>({
+      type: "live.fullPageStart",
+      annotationId,
+      width: innerWidth,
+      height: total,
+    });
+    for (let y = 0; ; y += innerHeight) {
+      window.scrollTo({ left: 0, top: Math.min(y, Math.max(0, height - innerHeight)), behavior: "instant" });
+      await nextPaint();
+      await call({ type: "live.fullPageFrame", annotationId, y: scrollY });
+      showFixed ??= hideFixed(hide);
+      if (scrollY + innerHeight >= height || y + innerHeight >= height) break;
+    }
+    await call({ type: "live.fullPageEnd", annotationId });
+    return null;
+  } catch (e) {
+    await call({ type: "live.fullPageCancel", annotationId }).catch(() => undefined);
+    return `No full-page screenshot: ${messageOf(e)}`;
+  } finally {
+    showFixed?.();
+    for (const el of hide) el.style.visibility = "";
+    window.scrollTo({ ...start, behavior: "instant" });
+  }
+}

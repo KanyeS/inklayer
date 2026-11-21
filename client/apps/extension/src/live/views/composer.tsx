@@ -120,6 +120,13 @@ export interface DraftBoxOptions {
   /** Null when bug context is turned off for this server. */
   attachContext: boolean | null;
   onAttachContext(attach: boolean): void;
+  /** Also take a screenshot of the whole page; null when bug context is off. */
+  fullPage: boolean | null;
+  onFullPage(on: boolean): void;
+  /** The recording attached to the comment (its length), undefined if none; null when bug context is off. */
+  recording: { seconds: number } | undefined | null;
+  onRecord(): void;
+  onRemoveRecording(): void;
   /** Issue trackers are on: say that the first line becomes an issue's title. */
   issueTitleHint: boolean;
   onSave(): void;
@@ -147,6 +154,38 @@ export function draftBox(o: DraftBoxOptions): ComponentChild {
           Attach screenshot and page details
         </label>
       )}
+      {o.attachContext && o.fullPage !== null && (
+        <label
+          className="attach"
+          title="Scrolls through the page and takes it all, top to bottom (very long pages are cut off)"
+        >
+          <input
+            type="checkbox"
+            checked={o.fullPage}
+            onChange={(e) => o.onFullPage((e.currentTarget as HTMLInputElement).checked)}
+          />
+          Also a full-page screenshot
+        </label>
+      )}
+      {o.recording !== null &&
+        (o.recording ? (
+          <p className="attach">
+            Recording attached ({Math.floor(o.recording.seconds / 60)}:
+            {String(o.recording.seconds % 60).padStart(2, "0")}){" "}
+            <button type="button" className="link" onClick={o.onRemoveRecording}>
+              Remove
+            </button>
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="link"
+            title="Opens a small window to record a tab, up to a minute; it's sent with the comment"
+            onClick={o.onRecord}
+          >
+            Record the tab…
+          </button>
+        ))}
       <div className="row">
         <button type="button" className="primary" disabled={o.busy} onClick={o.onSave}>
           {o.busy ? "Saving…" : "Save"}

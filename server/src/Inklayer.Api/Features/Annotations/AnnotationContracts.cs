@@ -48,7 +48,8 @@ public sealed record AnnotationResponse(
     AnnotationContextResponse? Context = null, bool HasScreenshot = false,
     IReadOnlyList<Notifications.PersonResponse>? People = null,
     IReadOnlyList<Issues.IssueResponse>? Issues = null,
-    IReadOnlyList<Issues.IssueCommentResponse>? IssueComments = null);
+    IReadOnlyList<Issues.IssueCommentResponse>? IssueComments = null,
+    IReadOnlyList<Media.MediaResponse>? Media = null);
 
 /// <summary>A reply in a comment's thread, oldest first.</summary>
 public sealed record ReplyResponse(Guid Id, string Body, AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, int Version, bool CanEdit, bool CanDelete);
@@ -70,6 +71,7 @@ public sealed record AnnotationDetailResponse(
     AnnotationContextResponse? Context = null, bool HasScreenshot = false,
     IReadOnlyList<Notifications.PersonResponse>? People = null,
     IReadOnlyList<Issues.IssueResponse>? Issues = null,
-    IReadOnlyList<Issues.IssueCommentResponse>? IssueComments = null);
+    IReadOnlyList<Issues.IssueCommentResponse>? IssueComments = null,
+    IReadOnlyList<Media.MediaResponse>? Media = null);
 
 public sealed record AnnotationRevisionResponse(int Version, string Action, AuthorSummary Actor, DateTime OccurredAt, JsonElement State);

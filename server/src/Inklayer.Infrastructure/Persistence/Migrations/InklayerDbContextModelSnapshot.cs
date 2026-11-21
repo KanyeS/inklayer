@@ -154,6 +154,57 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("AnnotationContexts");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AnnotationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicToken")
+                        .IsUnique();
+
+                    b.HasIndex("AnnotationId", "Kind")
+                        .IsUnique();
+
+                    b.ToTable("AnnotationMedia");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationReply", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1604,6 +1655,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
                         .WithOne()
                         .HasForeignKey("Inklayer.Domain.Annotations.AnnotationContext", "AnnotationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Annotations.AnnotationMedia", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
+                        .WithMany()
+                        .HasForeignKey("AnnotationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

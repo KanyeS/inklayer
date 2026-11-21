@@ -69,6 +69,14 @@ function commentFromAddress(): string | null {
   return wanted;
 }
 
+/** A recording made from this page's new comment, ready in the extension to be sent with it (from the recording window). */
+function listenForRecordings(): void {
+  chrome.runtime.onMessage.addListener((message: { type?: string; recordingId?: string; seconds?: number }, sender) => {
+    if (!fromUs(sender) || message?.type !== "inklayer.recording" || !message.recordingId) return;
+    session?.recordingReady(message.recordingId, message.seconds ?? 0);
+  });
+}
+
 /** Live cursors: only in tabs where the user turned them on in the toolbar popup. The flag lasts until the tab closes. */
 function startPresence(): void {
   const presence = new PresenceClient(() => Array.from(document.querySelectorAll("inklayer-live, inklayer-bubbles")));
@@ -88,6 +96,7 @@ function startPresence(): void {
 if (!globalThis.__inklayerLive && window.top === window) {
   globalThis.__inklayerLive = true;
   listenForOpen();
+  listenForRecordings();
 
   const wanted = commentFromAddress();
   if (wanted) {

@@ -91,6 +91,78 @@ export async function captureScreenshot(
   void upload.catch(() => undefined).finally(() => setTimeout(() => uploads.delete(annotationId), KEEP_RESULT_MS));
 }
 
+/* -------------------------------------------------------------- full-page screenshots */
+
+/** The full-page image's size: at most this wide (shrunk to fit) and this tall (longer pages are cut off). */
+const MAX_FULL_WIDTH = 1280;
+const MAX_FULL_HEIGHT = 12_000;
+const MAX_FULL_BYTES = 15 * 1024 * 1024;
+/** Chrome takes at most two screenshots a second. */
+const CAPTURE_GAP_MS = 550;
+
+/** A full-page screenshot being put together: the page's screens, drawn one below the other as they're taken. */
+interface Stitch {
+  canvas: OffscreenCanvas;
+  /** Image pixels per CSS pixel. */
+  scale: number;
+  lastCapture: number;
+}
+
+const stitches = new Map<string, Stitch>();
+
+/**
+ * Starts a full-page screenshot of a page `cssWidth` × `cssHeight` CSS pixels. Returns how much of the page it will hold
+ * (in CSS pixels), for the page to scroll through.
+ */
+export function startFullPage(annotationId: string, cssWidth: number, cssHeight: number): { height: number } {
+  const scale = Math.min(1, MAX_FULL_WIDTH / Math.max(1, cssWidth));
+  const height = Math.min(cssHeight, Math.floor(MAX_FULL_HEIGHT / scale));
+  const canvas = new OffscreenCanvas(
+    Math.max(1, Math.round(cssWidth * scale)),
+    Math.max(1, Math.round(height * scale)),
+  );
+  stitches.set(annotationId, { canvas, scale, lastCapture: 0 });
+  return { height };
+}
+
+/** Takes the screen the page is showing, scrolled to `y`, and draws it into the full-page image. */
+export async function captureFullPageFrame(windowId: number, annotationId: string, y: number): Promise<void> {
+  const stitch = stitches.get(annotationId);
+  if (!stitch) throw new Error("No full-page screenshot is being taken.");
+  const wait = stitch.lastCapture + CAPTURE_GAP_MS - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  let shot: string;
+  try {
+    shot = await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+  } catch (error) {
+    throw captureError(error);
+  }
+  stitch.lastCapture = Date.now();
+  const frame = await createImageBitmap(await (await fetch(shot)).blob());
+  // The screen spans the image's width; its height follows in proportion.
+  const width = stitch.canvas.width;
+  const height = Math.round(frame.height * (width / frame.width));
+  stitch.canvas.getContext("2d")?.drawImage(frame, 0, Math.round(y * stitch.scale), width, height);
+  frame.close();
+}
+
+/** Finishes the full-page image and uploads it. */
+export async function finishFullPage(annotationId: string): Promise<void> {
+  const stitch = stitches.get(annotationId);
+  stitches.delete(annotationId);
+  if (!stitch) throw new Error("No full-page screenshot is being taken.");
+  let blob = await stitch.canvas.convertToBlob({ type: "image/jpeg", quality: 0.82 });
+  if (blob.size > MAX_FULL_BYTES) blob = await stitch.canvas.convertToBlob({ type: "image/jpeg", quality: 0.6 });
+  if (blob.size > MAX_FULL_BYTES) throw new Error("the full-page screenshot was too large to upload.");
+  const query = `width=${stitch.canvas.width}&height=${stitch.canvas.height}`;
+  await putBytes(`/api/annotations/${encodeURIComponent(annotationId)}/media/fullpage?${query}`, blob);
+}
+
+/** Drops a full-page screenshot that won't be finished. */
+export function cancelFullPage(annotationId: string): void {
+  stitches.delete(annotationId);
+}
+
 /** Waits for a comment's screenshot upload; throws if it failed. */
 export async function uploadResult(annotationId: string): Promise<void> {
   await uploads.get(annotationId);

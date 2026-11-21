@@ -1635,6 +1635,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/annotations/{annotationId}/media/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A comment's full-page screenshot (fullpage) or recording (video) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    annotationId: string;
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB) or video (WebM or MP4, at most 40 MB) */
+        put: {
+            parameters: {
+                query?: {
+                    width?: number;
+                    height?: number;
+                };
+                header?: never;
+                path: {
+                    annotationId: string;
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications": {
         parameters: {
             query?: never;
@@ -3460,6 +3521,7 @@ export interface components {
             people?: null | components["schemas"]["PersonResponse"][];
             issues?: null | components["schemas"]["IssueResponse"][];
             issueComments?: null | components["schemas"]["IssueCommentResponse"][];
+            media?: null | components["schemas"]["MediaResponse"][];
         };
         AnnotationDocLink: {
             text: string;
@@ -3512,6 +3574,7 @@ export interface components {
             people?: null | components["schemas"]["PersonResponse"][];
             issues?: null | components["schemas"]["IssueResponse"][];
             issueComments?: null | components["schemas"]["IssueCommentResponse"][];
+            media?: null | components["schemas"]["MediaResponse"][];
         };
         AnnotationRevisionResponse: {
             /** Format: int32 */
@@ -3938,6 +4001,16 @@ export interface components {
             preferredName: null | string;
             emailNotifications: boolean;
         };
+        MediaResponse: {
+            kind: string;
+            contentType: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: int32 */
+            width: number;
+            /** Format: int32 */
+            height: number;
+        };
         MemberResponse: {
             /** Format: uuid */
             userId: string;
@@ -4350,6 +4423,7 @@ export type LivePageSummaryResponse = components['schemas']['LivePageSummaryResp
 export type LiveProjectResponse = components['schemas']['LiveProjectResponse'];
 export type MarkReadRequest = components['schemas']['MarkReadRequest'];
 export type MeResponse = components['schemas']['MeResponse'];
+export type MediaResponse = components['schemas']['MediaResponse'];
 export type MemberResponse = components['schemas']['MemberResponse'];
 export type MoveFolderRequest = components['schemas']['MoveFolderRequest'];
 export type MyOrganization = components['schemas']['MyOrganization'];

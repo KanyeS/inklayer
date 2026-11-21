@@ -100,6 +100,31 @@ internal interface IPullRequests
     Task EditPullRequestCommentAsync(TrackerSettings settings, TrackerAuth token, string number, string commentId, string markdown, CancellationToken ct);
 }
 
+/// <summary>A file to put in an issue: the screenshot, the full-page screenshot, a video. <see cref="Label"/> heads it in the text.</summary>
+internal sealed record IssueFile(string Label, string FileName, string ContentType, byte[] Bytes)
+{
+    public bool IsImage => ContentType.StartsWith("image/", StringComparison.Ordinal);
+
+    /// <summary>Markdown showing the file at <paramref name="url"/>: an image inline, anything else as a link.</summary>
+    public string Markdown(string url) => IsImage ? $"![{Label}]({url})" : $"[{Label}]({url})";
+}
+
+/// <summary>
+/// A tracker that takes files, so they're kept and served by the tracker. <see cref="Upfront"/>: uploaded before the issue
+/// (or note) is written, and shown in it (GitLab, Azure DevOps, Linear). Otherwise attached to the issue once it exists
+/// (Jira, Forgejo). GitHub takes none: its issues link to Inklayer's copy.
+/// </summary>
+internal interface IIssueFiles
+{
+    bool Upfront { get; }
+
+    /// <summary>
+    /// Upfront: uploads the file and returns the Markdown that shows it. Otherwise attaches it to
+    /// <paramref name="issueExternalId"/> and returns null.
+    /// </summary>
+    Task<string?> UploadAsync(TrackerSettings settings, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct);
+}
+
 internal sealed class Trackers(IHttpClientFactory httpClients)
 {
     public IIssueTracker For(string kind) => kind switch
@@ -112,6 +137,14 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
         TrackerKinds.Forgejo => new ForgejoTracker(httpClients),
         _ => throw new InvalidOperationException($"Unknown tracker {kind}."),
     };
+
+    /// <summary>A multipart form with one file, under <paramref name="field"/>.</summary>
+    internal static MultipartFormDataContent FileForm(string field, IssueFile file)
+    {
+        var part = new ByteArrayContent(file.Bytes);
+        part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+        return new MultipartFormDataContent { { part, field, file.FileName } };
+    }
 
     internal static async Task<JsonNode?> SendAsync(IHttpClientFactory factory, HttpRequestMessage request, CancellationToken ct)
     {
