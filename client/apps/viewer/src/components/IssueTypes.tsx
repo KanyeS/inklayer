@@ -180,27 +180,40 @@ export function SavedIssueType({ projectId, tracker }: { projectId: string; trac
   );
 }
 
+/** What a parent typed in by hand looks like: an address, #12 or !12, or a key like WEB-12. */
+const REFERENCE = /^(https?:\/\/\S+|[#!]?\d{1,12}|[A-Za-z][A-Za-z0-9_]*-\d{1,12})$/i;
+
 /**
- * The issue to create the new one under (Jira: a sub-task, or an issue in an epic; Azure DevOps: a child work item):
- * its key, number or address, with the tracker's open issues matching what's typed offered as suggestions.
+ * The issue to create the new one under (Jira: a sub-task, or an issue in an epic; Azure DevOps: a child work item).
+ * Typing searches the tracker's open issues, to pick one from; a key, number or address can be typed in too. Reports
+ * the reference to send, and whether it's usable (not words that haven't been picked from).
  */
 export function ParentField({
   projectId,
   connectionId,
   label,
-  value,
   onChange,
 }: {
   projectId: string;
   connectionId: string;
   label: string;
-  value: string;
-  onChange: (parent: string) => void;
+  onChange: (parent: { reference: string; ok: boolean }) => void;
 }) {
+  const [query, setQuery] = useState("");
   const [found, setFound] = useState<FoundIssue[]>([]);
+  const [picked, setPicked] = useState<FoundIssue | null>(null);
+  const report = useRef(onChange);
+  report.current = onChange;
+
   useEffect(() => {
-    const q = value.trim();
-    if (!q) {
+    const typed = query.trim();
+    const reference = picked?.url ?? (REFERENCE.test(typed) ? typed : "");
+    report.current({ reference, ok: typed.length === 0 || reference.length > 0 });
+  }, [query, picked]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q || picked) {
       setFound([]);
       return;
     }
@@ -221,26 +234,57 @@ export function ParentField({
       live = false;
       window.clearTimeout(timer);
     };
-  }, [projectId, connectionId, value]);
+  }, [projectId, connectionId, query, picked]);
 
-  const listId = `parents-${connectionId}`;
+  if (picked) {
+    return (
+      <p className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">{label.replace(" (optional)", "")}</span>
+        <span className="font-medium">{picked.key}</span>
+        <span className="min-w-0 truncate">{picked.title}</span>
+        <button
+          type="button"
+          className="text-xs underline"
+          onClick={() => {
+            setPicked(null);
+            setQuery("");
+          }}
+        >
+          Change
+        </button>
+      </p>
+    );
+  }
+
+  const unclear = query.trim().length > 0 && !REFERENCE.test(query.trim());
   return (
-    <>
+    <div className="flex flex-col gap-1">
       <Input
         aria-label={label}
         placeholder={`${label}: search titles, or a key, #number or address`}
-        list={listId}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
       />
-      <datalist id={listId}>
-        {found.map((issue) => (
-          <option key={issue.externalId} value={issue.key}>
-            {issue.title}
-          </option>
-        ))}
-      </datalist>
-    </>
+      {found.length > 0 && (
+        <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border" aria-label="Parents found">
+          {found.map((issue) => (
+            <li key={issue.externalId}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted"
+                onClick={() => setPicked(issue)}
+              >
+                <span className="shrink-0 font-medium">{issue.key}</span>
+                <span className="min-w-0 truncate">{issue.title}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {unclear && (
+        <p className="text-xs text-muted-foreground">Pick the parent from the list, or give its number or address.</p>
+      )}
+    </div>
   );
 }
 

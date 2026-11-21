@@ -350,6 +350,10 @@ internal static class IssueEndpoints
         {
             return AccountNeeded(ex);
         }
+        catch (IssueParentException ex)
+        {
+            return Invalid("parent", ex.Message);
+        }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             return TypedResults.Problem(statusCode: StatusCodes.Status502BadGateway, title: $"{TrackerKinds.Name(connection.Kind)} didn't create the issue.", detail: ex.Message);

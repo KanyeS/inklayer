@@ -64,7 +64,7 @@ public sealed partial class IssueTrackerTests
             Assert.Contains("sub-task itself", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
         }
 
-        await ana.PostJsonAsync($"/api/annotations/{third}/issues", new { connectionId = tracker.Id, parent = "OPS-4" }).ExpectAsync(HttpStatusCode.BadGateway);
+        await ana.PostJsonAsync($"/api/annotations/{third}/issues", new { connectionId = tracker.Id, parent = "OPS-4" }).ExpectAsync(HttpStatusCode.BadRequest);
         await ana.PostJsonAsync($"/api/annotations/{third}/issues", new { connectionId = tracker.Id, parent = " " }).ExpectAsync(HttpStatusCode.Created);
         Assert.False(LastFields().TryGetProperty("parent", out _));
     }
@@ -106,6 +106,15 @@ public sealed partial class IssueTrackerTests
             Assert.Equal("System.LinkTypes.Hierarchy-Reverse", relation.GetProperty("rel").GetString());
             Assert.Equal($"{Org}/_apis/wit/workItems/7", relation.GetProperty("url").GetString());
         }
+
+        // Words typed to search for the parent, sent as if they were one: refused as the parent's problem, before creating anything.
+        using (var words = await ana.PostJsonAsync($"/api/annotations/{comment}/issues", new { connectionId = tracker.Id, parent = "Checkout epic" }))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, words.StatusCode);
+            Assert.Contains("Couldn't find the parent", await words.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+
+        Assert.Single(factory.Outbound.To($"{Project}/_apis/wit/workitems/$Issue"));
 
         // GitHub has no sub-issues here: asking for a parent is refused, and nothing is created.
         const string Repo = "https://api.github.com/repos/acme/children";

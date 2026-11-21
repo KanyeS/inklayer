@@ -479,6 +479,9 @@ function showLightbox(parent: ParentNode, bitmap: ImageBitmap): void {
  * Finds an issue that already exists, by title or a pasted address or number, and links it to the comment. Searches
  * as you type; an empty box lists the open issues.
  */
+/** What a parent typed in by hand looks like: an address, #12 or !12, or a key like WEB-12. */
+const REFERENCE = /^(https?:\/\/\S+|[#!]?\d{1,12}|[A-Za-z][A-Za-z0-9_]*-\d{1,12})$/i;
+
 /** Trackers that can create an issue under another. */
 const NESTING_KINDS: ReadonlySet<TrackerChoice["kind"]> = new Set<TrackerChoice["kind"]>(["jira", "azuredevops"]);
 
@@ -646,6 +649,7 @@ function CreateTypedIssue({
   const [typesError, setTypesError] = useState("");
   const [parent, setParent] = useState("");
   const [parents, setParents] = useState<FoundIssue[]>([]);
+  const [picked, setPicked] = useState<FoundIssue | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -689,10 +693,13 @@ function CreateTypedIssue({
   }, [projectId, tracker.id, parent]);
 
   const under = tracker.kind === "jira" ? "Sub-task of" : "Child of";
-  const listId = `parents-${tracker.id}`;
+  // The parent: one picked from the list, or a number, key or address typed in. Other words are only a search.
+  const typed = parent.trim();
+  const reference = picked?.url ?? (REFERENCE.test(typed) ? typed : null);
+  const unclear = typed.length > 0 && !reference;
   const submit = (e: Event) => {
     e.preventDefault();
-    onCreate(issueType || undefined, parent.trim() || undefined);
+    if (!unclear) onCreate(issueType || undefined, reference ?? undefined);
   };
 
   return (
@@ -716,23 +723,44 @@ function CreateTypedIssue({
         )}
       </div>
       {typesError && <p className="error">{typesError}</p>}
-      <input
-        type="text"
-        aria-label={`${under} (optional)`}
-        placeholder={`${under} (optional): search, or a key, #number or address`}
-        list={listId}
-        value={parent}
-        onInput={(e) => setParent((e.currentTarget as HTMLInputElement).value)}
-      />
-      <datalist id={listId}>
-        {parents.map((p) => (
-          <option key={p.externalId} value={p.key}>
-            {p.title}
-          </option>
-        ))}
-      </datalist>
+      {picked ? (
+        <div className="row">
+          <span className="muted">{under}</span>
+          <strong>{picked.key}</strong> {picked.title}
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              setPicked(null);
+              setParent("");
+            }}
+          >
+            Change
+          </button>
+        </div>
+      ) : (
+        <input
+          type="text"
+          aria-label={`${under} (optional)`}
+          placeholder={`${under} (optional): search, or a key, #number or address`}
+          value={parent}
+          onInput={(e) => setParent((e.currentTarget as HTMLInputElement).value)}
+        />
+      )}
+      {!picked && parents.length > 0 && (
+        <ul className="found" aria-label="Parents found">
+          {parents.map((p) => (
+            <li key={p.externalId}>
+              <button type="button" onClick={() => setPicked(p)}>
+                <strong>{p.key}</strong> {p.title}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {unclear && <p className="muted">Pick the parent from the list, or give its number or address.</p>}
       <div className="row">
-        <button type="submit" disabled={busy || !types}>
+        <button type="submit" disabled={busy || !types || unclear}>
           Create in {TRACKER_NAMES[tracker.kind]}
         </button>
         <button type="button" className="link" onClick={onCancel}>

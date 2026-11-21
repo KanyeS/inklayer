@@ -67,7 +67,8 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
   const [mode, setMode] = useState<IssueMode | null>(null);
   const [connectionId, setConnectionId] = useState("");
   const [title, setTitle] = useState("");
-  const [parent, setParent] = useState("");
+  // The parent to create the issue under: picked, or typed as a number or address. Other words are only a search.
+  const [parent, setParent] = useState({ reference: "", ok: true });
   const [issueType, setIssueType] = useState("");
   const { run, error, pending: busy } = useAction();
 
@@ -114,7 +115,7 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
         body: {
           connectionId: chosen,
           title: title.trim() || undefined,
-          parent: TYPED_KINDS.has(choice.kind) ? parent.trim() || undefined : undefined,
+          parent: TYPED_KINDS.has(choice.kind) ? parent.reference || undefined : undefined,
           type: TYPED_KINDS.has(choice.kind) ? issueType || undefined : undefined,
         },
       }),
@@ -122,7 +123,7 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
     if (created.ok) {
       setMode(null);
       setTitle("");
-      setParent("");
+      setParent({ reference: "", ok: true });
     }
   };
 
@@ -209,7 +210,6 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
               projectId={projectId}
               connectionId={chosen}
               label={choice.kind === "jira" ? "Sub-task of (optional)" : "Child of (optional)"}
-              value={parent}
               onChange={setParent}
             />
           )}
@@ -218,7 +218,7 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
             <PostsAs choice={choice} />
           </p>
           <div className="flex items-center gap-2">
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy || (TYPED_KINDS.has(choice.kind) && !parent.ok)}>
               Create in {trackerName}
             </Button>
             <Button type="button" variant="ghost" onClick={() => setMode(null)}>

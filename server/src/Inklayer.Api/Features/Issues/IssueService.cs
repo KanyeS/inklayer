@@ -23,6 +23,9 @@ public sealed record IssueCommentResponse(
     Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind,
     string IssueKey, string IssueUrl, string AuthorName, string? AuthorUrl, string Body, DateTime CreatedAt, DateTime UpdatedAt);
 
+/// <summary>The issue to create a new one under couldn't be found: the request's fault, not the tracker's.</summary>
+internal sealed class IssueParentException(string message) : InvalidOperationException(message);
+
 /// <summary>Issues made from comments: creating them with everything a developer needs, and closing them when comments are resolved.</summary>
 internal sealed partial class IssueService(
     InklayerDbContext db, Trackers trackers, TrackerAccounts accounts, NotificationService notifications, IHttpContextAccessor http, IConfiguration configuration,
@@ -71,7 +74,7 @@ internal sealed partial class IssueService(
 
         var created = await accounts.WithAsync(token, async t => parentReference is null
             ? await tracker.CreateAsync(settings, t, issueTitle, markdown, ct)
-            : await ((IChildIssues)tracker).CreateUnderAsync(settings, t, issueTitle, markdown, (await tracker.GetAsync(settings, t, parentReference, ct)).ExternalId, ct), ct);
+            : await ((IChildIssues)tracker).CreateUnderAsync(settings, t, issueTitle, markdown, await ParentAsync(tracker, settings, t, parentReference, ct), ct), ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var issue = new AnnotationIssue
         {
@@ -82,6 +85,23 @@ internal sealed partial class IssueService(
         await db.SaveChangesAsync(ct);
         await notifications.IssueCreatedAsync(comment, actorUserId, $"{TrackerKinds.Name(connection.Kind)} {issue.Key}", issue.Url, ct);
         return issue;
+    }
+
+    /// <summary>The parent an issue is to be created under; <see cref="IssueParentException"/> when it can't be found.</summary>
+    private static async Task<string> ParentAsync(IIssueTracker tracker, TrackerSettings settings, TrackerAuth token, string reference, CancellationToken ct)
+    {
+        try
+        {
+            return (await tracker.GetAsync(settings, token, reference, ct)).ExternalId;
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new IssueParentException($"Couldn't find the parent: {ex.Message}");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            throw new IssueParentException($"Couldn't find the parent {reference}: it doesn't exist, or you can't see it.");
+        }
     }
 
     /// <summary>Looks up the issue a pasted address or number points to, as the person asking.</summary>
