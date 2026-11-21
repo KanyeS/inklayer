@@ -297,7 +297,7 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIss
     public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, s, $"/rest/api/3/issue/{Uri.EscapeDataString(issueExternalId!)}/attachments", token);
-        request.Content = Trackers.FileForm("file", file);
+        request.Content = await Trackers.FileFormAsync("file", file, ct);
         request.Headers.Add("X-Atlassian-Token", "no-check");
         await Trackers.SendAsync(http, request, ct);
         return null;

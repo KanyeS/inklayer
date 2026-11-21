@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Inklayer.Tests.Infrastructure;
@@ -215,6 +216,12 @@ public sealed partial class IssueTrackerTests
                 Assert.Equal(2, puts.Count);
                 Assert.All(puts, p => Assert.Null(p.Request.Headers.Authorization));
                 Assert.All(puts, p => Assert.Equal("1", p.Request.Headers.GetValues("x-goog-meta-test").Single()));
+
+                // The files themselves, read from where they're kept as they're sent, with their sizes.
+                Assert.Equal(Encoding.UTF8.GetString(Png), puts[0].Body);
+                Assert.Equal(Encoding.UTF8.GetString(FullPagePng), puts[1].Body);
+                Assert.Equal(FullPagePng.Length, puts[1].Request.Content!.Headers.ContentLength);
+                Assert.Contains($"\"size\":{FullPagePng.Length}", sent.Where(x => x.Body.Contains("fileUpload", StringComparison.Ordinal)).Last().Body, StringComparison.Ordinal);
                 var create = sent.Single(x => x.Body.Contains("issueCreate", StringComparison.Ordinal)).Body;
                 Assert.Contains("![Screenshot](https://uploads.linear-test.example/asset/1)", JsonDocument.Parse(create).RootElement.GetProperty("variables").GetProperty("input").GetProperty("description").GetString()!, StringComparison.Ordinal);
                 break;

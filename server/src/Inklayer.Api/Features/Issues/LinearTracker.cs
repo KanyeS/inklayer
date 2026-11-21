@@ -124,10 +124,9 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker, II
     {
         var data = await QueryAsync(token,
             "mutation($contentType: String!, $filename: String!, $size: Int!) { fileUpload(contentType: $contentType, filename: $filename, size: $size) { success uploadFile { uploadUrl assetUrl headers { key value } } } }",
-            new { contentType = file.ContentType, filename = file.FileName, size = file.Bytes.Length }, ct);
+            new { contentType = file.ContentType, filename = file.FileName, size = file.Size }, ct);
         var upload = data["fileUpload"]?["uploadFile"] ?? throw new InvalidOperationException("Linear didn't take the file.");
-        using var put = new HttpRequestMessage(HttpMethod.Put, upload["uploadUrl"]!.GetValue<string>()) { Content = new ByteArrayContent(file.Bytes) };
-        put.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+        using var put = new HttpRequestMessage(HttpMethod.Put, upload["uploadUrl"]!.GetValue<string>()) { Content = await file.ContentAsync(file.ContentType, ct) };
         put.Headers.TryAddWithoutValidation("Cache-Control", "public, max-age=31536000");
         foreach (var header in upload["headers"]?.AsArray() ?? [])
         {

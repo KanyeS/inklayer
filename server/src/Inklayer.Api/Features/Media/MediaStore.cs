@@ -122,23 +122,11 @@ internal sealed class DiskMediaStore(IOptions<MediaOptions> options, DataPaths p
             return new MediaFile(stream, length, type);
         }
 
+        // Read from the file as it's sent, never copied into memory: a video player's first request ("bytes=0-") is the
+        // whole file, up to 40 MB, and two at once used to run the server out of memory.
         stream.Seek(start, SeekOrigin.Begin);
         var count = (to ?? (length - 1)) - start + 1;
-        var part = new MemoryStream();
-        await CopyAsync(stream, part, count, ct);
-        await stream.DisposeAsync();
-        part.Position = 0;
-        return new MediaFile(part, length, type);
-    }
-
-    private static async Task CopyAsync(Stream from, Stream to, long count, CancellationToken ct)
-    {
-        var buffer = new byte[81920];
-        while (count > 0 && await from.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, count)), ct) is var read and > 0)
-        {
-            await to.WriteAsync(buffer.AsMemory(0, read), ct);
-            count -= read;
-        }
+        return new MediaFile(new PartStream(stream, count), length, type);
     }
 
     public Task DeleteAsync(string key, CancellationToken ct)
@@ -147,6 +135,82 @@ internal sealed class DiskMediaStore(IOptions<MediaOptions> options, DataPaths p
         File.Delete(file);
         File.Delete(file + ".type");
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>Reads at most <c>count</c> bytes of a stream from where it is now, then ends. Disposes the stream with it.</summary>
+internal sealed class PartStream(Stream inner, long count) : Stream
+{
+    private readonly long _length = count;
+    private long _left = count;
+
+    public override bool CanRead => true;
+
+    public override bool CanSeek => false;
+
+    public override bool CanWrite => false;
+
+    public override long Length => _length;
+
+    public override long Position
+    {
+        get => _length - _left;
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+    public override int Read(Span<byte> buffer)
+    {
+        if (_left <= 0)
+        {
+            return 0;
+        }
+
+        var read = inner.Read(buffer[..(int)Math.Min(buffer.Length, _left)]);
+        _left -= read;
+        return read;
+    }
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (_left <= 0)
+        {
+            return 0;
+        }
+
+        var read = await inner.ReadAsync(buffer[..(int)Math.Min(buffer.Length, _left)], cancellationToken);
+        _left -= read;
+        return read;
+    }
+
+    public override void Flush()
+    {
+    }
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            inner.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await inner.DisposeAsync();
+        await base.DisposeAsync();
     }
 }
 

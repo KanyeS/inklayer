@@ -223,23 +223,6 @@ internal static class MediaEndpoints
             .GroupBy(m => m.AnnotationId)
             .ToDictionary(g => g.Key, g => g.Select(m => new MediaResponse(m.Kind, m.ContentType, m.Size, m.Width, m.Height)).ToList());
 
-    /// <summary>A stored file's bytes, to upload to a tracker.</summary>
-    internal static async Task<byte[]?> ReadAllAsync(IMediaStore store, AnnotationMedia media, CancellationToken ct)
-    {
-        var file = await store.GetAsync(media.StorageKey, null, null, ct);
-        if (file is null)
-        {
-            return null;
-        }
-
-        await using (file)
-        {
-            using var copy = new MemoryStream();
-            await file.Content.CopyToAsync(copy, ct);
-            return copy.ToArray();
-        }
-    }
-
     private static IResult TooLarge(long max) =>
         TypedResults.Problem(statusCode: StatusCodes.Status413PayloadTooLarge, title: $"That can be at most {max / (1024 * 1024)} MB.");
 }

@@ -140,7 +140,7 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker, I
     public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, $"{Repo(s)}/issues/{Uri.EscapeDataString(issueExternalId!)}/assets?name={Uri.EscapeDataString(file.FileName)}", token);
-        request.Content = Trackers.FileForm("attachment", file);
+        request.Content = await Trackers.FileFormAsync("attachment", file, ct);
         await Trackers.SendAsync(http, request, ct);
         return null;
     }

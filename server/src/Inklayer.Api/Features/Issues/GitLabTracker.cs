@@ -154,7 +154,7 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker, IP
     public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, $"{Project(s)}/uploads", token);
-        request.Content = Trackers.FileForm("file", file);
+        request.Content = await Trackers.FileFormAsync("file", file, ct);
         var upload = await Trackers.SendAsync(http, request, ct);
         var url = upload?["url"]?.GetValue<string>() ?? throw new InvalidOperationException("GitLab didn't say where the upload is.");
         // GitLab plays videos given as images.

@@ -23,32 +23,35 @@ internal sealed partial class IssueService
         var files = new List<CommentFile>();
         if (await db.AnnotationScreenshots.SingleOrDefaultAsync(s => s.AnnotationId == comment.Id, ct) is { } screenshot)
         {
+            var bytes = screenshot.Bytes;
             files.Add(new CommentFile(
-                new IssueFile("Screenshot", $"screenshot.{PublicMediaEndpoints.Extension(screenshot.ContentType)}", screenshot.ContentType, screenshot.Bytes), screenshot, null));
+                new IssueFile("Screenshot", $"screenshot.{PublicMediaEndpoints.Extension(screenshot.ContentType)}", screenshot.ContentType, bytes.Length,
+                    _ => Task.FromResult<Stream>(new MemoryStream(bytes, writable: false))),
+                screenshot, null));
         }
 
         var stored = await db.AnnotationMedia.Where(m => m.AnnotationId == comment.Id).OrderBy(m => m.Kind).ToListAsync(ct);
         CommentFile? poster = null;
-        if (stored.Find(m => m.Kind == MediaKinds.Thumbnail) is { } still && await MediaEndpoints.ReadAllAsync(mediaStore, still, ct) is { } stillBytes)
+        if (stored.Find(m => m.Kind == MediaKinds.Thumbnail) is { } still)
         {
-            poster = new CommentFile(new IssueFile("Recording", $"recording.{PublicMediaEndpoints.Extension(still.ContentType)}", still.ContentType, stillBytes), null, still);
+            poster = new CommentFile(new IssueFile("Recording", $"recording.{PublicMediaEndpoints.Extension(still.ContentType)}", still.ContentType, still.Size, Opener(still)), null, still);
         }
 
         foreach (var media in stored.Where(m => m.Kind != MediaKinds.Thumbnail))
         {
-            if (await MediaEndpoints.ReadAllAsync(mediaStore, media, ct) is not { } bytes)
-            {
-                continue;
-            }
-
             var (label, name) = media.Kind == MediaKinds.Video ? ("Recording", "recording") : ("Full page", "full-page");
             files.Add(new CommentFile(
-                new IssueFile(label, $"{name}.{PublicMediaEndpoints.Extension(media.ContentType)}", media.ContentType, bytes), null, media,
+                new IssueFile(label, $"{name}.{PublicMediaEndpoints.Extension(media.ContentType)}", media.ContentType, media.Size, Opener(media)), null, media,
                 media.Kind == MediaKinds.Video ? poster : null));
         }
 
         return files;
     }
+
+    /// <summary>Opens a stored file when it's sent. Missing from the store (deleted meanwhile): the upload fails, and the file is shown from Inklayer instead.</summary>
+    private Func<CancellationToken, Task<Stream>> Opener(AnnotationMedia media) => async ct =>
+        (await mediaStore.GetAsync(media.StorageKey, null, null, ct))?.Content
+            ?? throw new InvalidOperationException($"The {media.Kind} file is missing from storage.");
 
     /// <summary>The file at Inklayer's public address (made the first time it's needed); null without an address to give.</summary>
     private async Task<string?> PublicUrlAsync(CommentFile file, CancellationToken ct)

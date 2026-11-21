@@ -305,8 +305,7 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
     /// </summary>
     public async Task<string?> UploadAsync(TrackerSettings s, TrackerAuth token, string? issueExternalId, IssueFile file, CancellationToken ct)
     {
-        var content = new ByteArrayContent(file.Bytes);
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        var content = await file.ContentAsync("application/octet-stream", ct);
         using var request = Request(HttpMethod.Post, $"{Project(s)}/_apis/wit/attachments?fileName={Uri.EscapeDataString(file.FileName)}&{Version}", token, content);
         var attachment = await Trackers.SendAsync(http, request, ct);
         return file.Markdown(attachment?["url"]?.GetValue<string>() ?? throw new InvalidOperationException("Azure DevOps didn't say where the attachment is."));

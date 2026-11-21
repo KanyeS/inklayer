@@ -100,10 +100,23 @@ internal interface IPullRequests
     Task EditPullRequestCommentAsync(TrackerSettings settings, TrackerAuth token, string number, string commentId, string markdown, CancellationToken ct);
 }
 
-/// <summary>A file to put in an issue: the screenshot, the full-page screenshot, a video. <see cref="Label"/> heads it in the text.</summary>
-internal sealed record IssueFile(string Label, string FileName, string ContentType, byte[] Bytes)
+/// <summary>
+/// A file to put in an issue: the screenshot, the full-page screenshot, a video. <see cref="Label"/> heads it in the text.
+/// Its bytes are read only when it's sent (<see cref="ContentAsync"/>), and streamed: a comment's files can come to 58 MB,
+/// and loading them all for each issue ran the server out of memory with a few issues being made at once.
+/// </summary>
+internal sealed record IssueFile(string Label, string FileName, string ContentType, long Size, Func<CancellationToken, Task<Stream>> Open)
 {
     public bool IsImage => ContentType.StartsWith("image/", StringComparison.Ordinal);
+
+    /// <summary>The file as a request body, read from where it's kept as it's sent. Each call opens it afresh, so a retry can send it again.</summary>
+    public async Task<HttpContent> ContentAsync(string contentType, CancellationToken ct)
+    {
+        var content = new StreamContent(await Open(ct), 81920);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        content.Headers.ContentLength = Size;
+        return content;
+    }
 
     /// <summary>Markdown showing the file at <paramref name="url"/>: an image inline, anything else as a link.</summary>
     public string Markdown(string url) => IsImage ? $"![{Label}]({url})" : $"[{Label}]({url})";
@@ -139,12 +152,8 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
     };
 
     /// <summary>A multipart form with one file, under <paramref name="field"/>.</summary>
-    internal static MultipartFormDataContent FileForm(string field, IssueFile file)
-    {
-        var part = new ByteArrayContent(file.Bytes);
-        part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
-        return new MultipartFormDataContent { { part, field, file.FileName } };
-    }
+    internal static async Task<MultipartFormDataContent> FileFormAsync(string field, IssueFile file, CancellationToken ct) =>
+        new() { { await file.ContentAsync(file.ContentType, ct), field, file.FileName } };
 
     internal static async Task<JsonNode?> SendAsync(IHttpClientFactory factory, HttpRequestMessage request, CancellationToken ct)
     {
