@@ -13,7 +13,7 @@ namespace Inklayer.Api.Features.Issues;
 /// <see cref="TrackerSettings.IssueType"/> the work item type (Bug by default). Token: a personal access token with
 /// Work Items: read and write. Open or closed follows the state's category: Completed and Removed count as closed.
 /// </summary>
-internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues
+internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues, IPullRequests
 {
     private const string Version = "api-version=7.1";
 
@@ -206,5 +206,88 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
         using var request = Request(HttpMethod.Post, $"{Project(s)}/_apis/wit/workItems/{Uri.EscapeDataString(externalId)}/comments?{CommentsVersion}", token,
             Trackers.Json(new { text = Trackers.HtmlFromText(markdown) }, "application/json"));
         return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);
+    }
+
+    /* Pull requests, in any of the project's Azure Repos. Needs the Code (read and write) scope with a personal access token. */
+
+    /// <summary>A pull request: active is open, completed is merged, abandoned is closed.</summary>
+    private static FoundIssue FoundPull(TrackerSettings s, JsonNode pr)
+    {
+        var id = Trackers.Id(pr["pullRequestId"]);
+        var repo = pr["repository"]?["name"]?.GetValue<string>() ?? "";
+        var state = pr["status"]?.GetValue<string>() switch
+        {
+            "completed" => IssueStates.Merged,
+            "abandoned" => IssueStates.Closed,
+            _ => IssueStates.Open,
+        };
+        return new FoundIssue(id, $"!{id}", pr["title"]?.GetValue<string>() ?? "", $"{Project(s)}/_git/{Uri.EscapeDataString(repo)}/pullrequest/{id}", state);
+    }
+
+    private async Task<JsonNode> PullAsync(TrackerSettings s, TrackerAuth token, string id, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Get, $"{Project(s)}/_apis/git/pullrequests/{Uri.EscapeDataString(id)}?{Version}", token);
+        var pr = (await Trackers.SendAsync(http, request, ct))!;
+        var project = pr["repository"]?["project"]?["name"]?.GetValue<string>();
+        return project is null || string.Equals(project, s.ProjectKey!.Trim(), StringComparison.OrdinalIgnoreCase)
+            ? pr
+            : throw new InvalidOperationException($"Pull request !{id} isn't in the {s.ProjectKey!.Trim()} project.");
+    }
+
+    public async Task<FoundIssue> GetPullRequestAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
+    {
+        var text = reference.Trim();
+        var match = Regex.Match(text, @"^[#!]?(\d{1,12})$");
+        if (!match.Success && Uri.TryCreate(text, UriKind.Absolute, out var uri))
+        {
+            // https://dev.azure.com/acme/Web%20Shop/_git/shop/pullrequest/12
+            match = Regex.Match(uri.AbsolutePath, @"/pullrequest/(\d{1,12})(?:/|$)", RegexOptions.IgnoreCase);
+        }
+
+        if (!match.Success)
+        {
+            throw new InvalidOperationException("Give the pull request's number, such as !12, or its address.");
+        }
+
+        return FoundPull(s, await PullAsync(s, token, match.Groups[1].Value, ct));
+    }
+
+    public async Task<IReadOnlyList<FoundIssue>> SearchPullRequestsAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
+    {
+        // Azure DevOps can't search pull request titles: the active ones, filtered here.
+        using var request = Request(HttpMethod.Get, $"{Project(s)}/_apis/git/pullrequests?searchCriteria.status=active&$top=100&{Version}", token);
+        var all = (await Trackers.SendAsync(http, request, ct))?["value"]?.AsArray() ?? [];
+        var q = query.Trim();
+        return [.. all.Select(p => FoundPull(s, p!)).Where(p => q.Length == 0 || p.Title.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(10)];
+    }
+
+    public async Task<string> PullRequestStateAsync(TrackerSettings s, TrackerAuth token, string number, CancellationToken ct) =>
+        FoundPull(s, await PullAsync(s, token, number, ct)).State;
+
+    /// <summary>
+    /// A comment thread on the pull request, closed so it doesn't hold up policies that want comments resolved. Its id is
+    /// the repository's and the thread's: <c>repo/thread</c>.
+    /// </summary>
+    public async Task<string> AddPullRequestCommentAsync(TrackerSettings s, TrackerAuth token, string number, string markdown, CancellationToken ct)
+    {
+        var repoId = (await PullAsync(s, token, number, ct))["repository"]?["id"]?.GetValue<string>()
+            ?? throw new InvalidOperationException($"Azure DevOps didn't say which repository !{number} is in.");
+        using var request = Request(HttpMethod.Post, $"{Project(s)}/_apis/git/repositories/{repoId}/pullRequests/{Uri.EscapeDataString(number)}/threads?{Version}", token,
+            Trackers.Json(new { comments = new[] { new { parentCommentId = 0, content = markdown, commentType = "text" } }, status = "closed" }));
+        return $"{repoId}/{Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"])}";
+    }
+
+    public async Task EditPullRequestCommentAsync(TrackerSettings s, TrackerAuth token, string number, string commentId, string markdown, CancellationToken ct)
+    {
+        var parts = commentId.Split('/');
+        if (parts.Length != 2)
+        {
+            throw new InvalidOperationException("That isn't a pull request comment Inklayer posted.");
+        }
+
+        using var request = Request(HttpMethod.Patch,
+            $"{Project(s)}/_apis/git/repositories/{Uri.EscapeDataString(parts[0])}/pullRequests/{Uri.EscapeDataString(number)}/threads/{Uri.EscapeDataString(parts[1])}/comments/1?{Version}",
+            token, Trackers.Json(new { content = markdown }));
+        await Trackers.SendAsync(http, request, ct);
     }
 }

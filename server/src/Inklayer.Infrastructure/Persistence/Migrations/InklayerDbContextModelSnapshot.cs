@@ -641,6 +641,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("InSummary")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Key")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -652,9 +655,16 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Linked")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("PullRequest")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Url")
@@ -780,6 +790,49 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("IssueTrackerConnections");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Issues.PullRequestSummary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(60000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CommentExternalId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConnectionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("PostedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PullRequestId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectionId", "PullRequestId")
+                        .IsUnique();
+
+                    b.ToTable("PullRequestSummaries");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Issues.TrackerAccount", b =>
@@ -1676,6 +1729,15 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasOne("Inklayer.Domain.Projects.Project", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Issues.PullRequestSummary", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Issues.IssueTrackerConnection", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

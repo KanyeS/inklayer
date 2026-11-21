@@ -16,7 +16,7 @@ import {
 } from "@inklayer/overlay";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { type ComponentChild, render } from "preact";
-import type { LiveAnnotation, LiveInit, LivePage, LiveProject } from "../lib/live";
+import type { LiveAnnotation, LiveInit, LivePage, LiveProject, PullRequestPage } from "../lib/live";
 import { attachPageDetails } from "./bug-context";
 import { call, messageOf, remember } from "./call";
 import type { PageAnnotation, PanelContext, View } from "./context";
@@ -33,6 +33,7 @@ import { bubbleContent, type CommentActions, listEntry } from "./views/comment";
 import { CommentParts } from "./views/comment-parts";
 import { cannotComment, draftBox, scopeChooser, toolbar } from "./views/composer";
 import { InboxView } from "./views/inbox";
+import { pullRequestBox } from "./views/pull-request";
 import { matchWindowSize } from "./window-size";
 
 /** The panel's and bubbles' styles: the theme's tokens scoped to the shadow root, then the panel's own CSS. */
@@ -62,6 +63,8 @@ type ChosenScope = { includeQuery: boolean; includeHash: boolean };
  */
 export class LiveSession {
   readonly #init: LiveInit;
+  /** On a pull request's page: the comments linked to it. */
+  #pullRequest: PullRequestPage | null;
   readonly #host: HTMLElement;
   readonly #shadow: ShadowRoot;
   readonly #root: HTMLDivElement;
@@ -115,6 +118,7 @@ export class LiveSession {
 
   constructor(init: LiveInit) {
     this.#init = init;
+    this.#pullRequest = init.pullRequest;
     this.#projects = new Map(init.projects.map((p) => [p.id, p]));
     const commentable = init.projects.filter((p) => p.canComment);
     this.#target = commentable.find((p) => p.id === init.lastProjectId) ?? commentable[0] ?? null;
@@ -319,7 +323,12 @@ export class LiveSession {
 
   async #load(): Promise<void> {
     try {
-      this.#setPages(await call<LivePage[]>({ type: "live.list", url: location.href }));
+      const [pages, pullRequest] = await Promise.all([
+        call<LivePage[]>({ type: "live.list", url: location.href }),
+        call<PullRequestPage | null>({ type: "live.pullRequest", url: location.href }).catch(() => this.#pullRequest),
+      ]);
+      this.#setPages(pages);
+      this.#pullRequest = pullRequest;
       this.#error = "";
     } catch (e) {
       this.#error = messageOf(e);
@@ -576,7 +585,9 @@ export class LiveSession {
   #draw(): ComponentChild {
     if (!this.#open) {
       return launcher({
-        openCount: this.#annotations.filter((a) => a.status === "Open").length,
+        openCount:
+          this.#annotations.filter((a) => a.status === "Open").length +
+          (this.#pullRequest?.comments.filter((c) => c.status === "Open").length ?? 0),
         unread: this.#inbox.unread,
         pinned: this.#mover.pinned,
         onOpen: () => {
@@ -647,6 +658,7 @@ export class LiveSession {
       this.#target ? this.#toolbar(this.#target) : cannotComment(this.#init.projects.length > 0),
       this.#draft && this.#draftBox(),
       this.#error && <p className="error">{this.#error}</p>,
+      this.#pullRequest && pullRequestBox(this.#pullRequest, this.#init.serverUrl),
       ...this.#commentList(),
     ];
   }

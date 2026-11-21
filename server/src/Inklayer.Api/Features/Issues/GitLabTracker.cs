@@ -12,7 +12,7 @@ namespace Inklayer.Api.Features.Issues;
 /// <see cref="TrackerSettings.ProjectKey"/> is the project's path, such as <c>group/subgroup/project</c>. Token: a personal,
 /// project or group access token with the <c>api</c> scope, from someone with at least the Reporter role.
 /// </summary>
-internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
+internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker, IPullRequests
 {
     private static string Project(TrackerSettings s) =>
         $"{(s.Site is { Length: > 0 } site ? site : "https://gitlab.com").TrimEnd('/')}/api/v4/projects/{Uri.EscapeDataString(s.ProjectKey!.Trim().Trim('/'))}";
@@ -99,5 +99,52 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
     {
         using var request = Request(HttpMethod.Post, $"{Project(s)}/issues/{Uri.EscapeDataString(externalId)}/notes", token, new { body = markdown });
         return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);
+    }
+
+    /// <summary>A merge request: opened, merged, or closed (and locked, which is closing).</summary>
+    private static FoundIssue FoundMerge(JsonNode mr)
+    {
+        var iid = Trackers.Id(mr["iid"]);
+        var state = mr["state"]?.GetValue<string>() switch
+        {
+            "merged" => IssueStates.Merged,
+            "opened" => IssueStates.Open,
+            _ => IssueStates.Closed,
+        };
+        return new FoundIssue(iid, $"!{iid}", mr["title"]?.GetValue<string>() ?? "", mr["web_url"]!.GetValue<string>(), state);
+    }
+
+    public async Task<FoundIssue> GetPullRequestAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
+    {
+        var path = s.ProjectKey!.Trim().Trim('/');
+        var iid = Trackers.IssueNumber(reference, Regex.Escape($"{Trackers.SitePath(s.Site)}/{path}") + "(?:/-)?/merge_requests", path, "merge request");
+        using var request = Request(HttpMethod.Get, $"{Project(s)}/merge_requests/{iid}", token);
+        return FoundMerge((await Trackers.SendAsync(http, request, ct))!);
+    }
+
+    public async Task<IReadOnlyList<FoundIssue>> SearchPullRequestsAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
+    {
+        var q = query.Trim().Length > 0 ? $"&search={Uri.EscapeDataString(query.Trim())}&in=title" : "";
+        using var request = Request(HttpMethod.Get, $"{Project(s)}/merge_requests?state=opened&order_by=updated_at&per_page=10{q}", token);
+        return [.. ((await Trackers.SendAsync(http, request, ct))?.AsArray() ?? []).Select(m => FoundMerge(m!))];
+    }
+
+    public async Task<string> PullRequestStateAsync(TrackerSettings s, TrackerAuth token, string number, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Get, $"{Project(s)}/merge_requests/{Uri.EscapeDataString(number)}", token);
+        return FoundMerge((await Trackers.SendAsync(http, request, ct))!).State;
+    }
+
+    public async Task<string> AddPullRequestCommentAsync(TrackerSettings s, TrackerAuth token, string number, string markdown, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Post, $"{Project(s)}/merge_requests/{Uri.EscapeDataString(number)}/notes", token, new { body = markdown });
+        return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);
+    }
+
+    public async Task EditPullRequestCommentAsync(TrackerSettings s, TrackerAuth token, string number, string commentId, string markdown, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Put, $"{Project(s)}/merge_requests/{Uri.EscapeDataString(number)}/notes/{Uri.EscapeDataString(commentId)}", token,
+            new { body = markdown });
+        await Trackers.SendAsync(http, request, ct);
     }
 }

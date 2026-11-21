@@ -1,24 +1,18 @@
-import type {
-  FoundIssue,
-  IssueCommentResponse,
-  IssueResponse,
-  TrackerConnectionResponse,
-  TrackerSettings,
-} from "@inklayer/api";
+import type { IssueCommentResponse, IssueResponse, TrackerConnectionResponse, TrackerSettings } from "@inklayer/api";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { Checkbox } from "@inklayer/ui/components/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@inklayer/ui/components/field";
 import { Input } from "@inklayer/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@inklayer/ui/components/native-select";
-import { cn } from "@inklayer/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { CircleCheck, CircleDot, ExternalLink, Link2, Plus } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { ExternalLink, GitPullRequest, Link2, Plus } from "lucide-react";
+import { type FormEvent, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { GuideLink } from "@/components/GuideLink";
 import { IssueTypeChoice, IssueTypeField, ParentField, SavedIssueType, TYPED_KINDS } from "@/components/IssueTypes";
 import { ErrorText } from "@/components/Layout";
+import { LinkIssueForm, StateIcon } from "@/components/LinkIssueForm";
 import { accountName, connectTrackerUrl } from "@/components/TrackerAccounts";
 import { api } from "@/lib/api";
 import { dateTime, timeAgo } from "@/lib/format";
@@ -53,11 +47,7 @@ export function IssueChips({ issues }: { issues: Issue[] }) {
           className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-sm hover:bg-muted"
           title={`${TRACKER_NAMES[i.kind]} ${i.key} (${i.state})`}
         >
-          {i.state === "open" ? (
-            <CircleDot className="size-3.5 text-green-600" />
-          ) : (
-            <CircleCheck className="size-3.5 text-purple-600" />
-          )}
+          <StateIcon state={i.state} pullRequest={i.pullRequest} className="size-3.5" />
           {TRACKER_NAMES[i.kind]} {i.key}
           <ExternalLink className="size-3 text-muted-foreground" />
         </a>
@@ -66,7 +56,7 @@ export function IssueChips({ issues }: { issues: Issue[] }) {
   );
 }
 
-type IssueMode = "new" | "existing";
+type IssueMode = "new" | "existing" | "pull";
 
 /**
  * "Create issue" and "Link existing issue" for a comment, in one of the project's connected trackers. Hidden when none
@@ -98,6 +88,20 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
           <Link2 data-icon="inline-start" />
           Link existing issue
         </Button>
+        {choices.data.some((c) => c.pullRequests) && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              // Start on a tracker that has pull requests.
+              const withPulls = choices.data.find((c) => c.pullRequests);
+              if (withPulls && !choice.pullRequests) setConnectionId(withPulls.id);
+              setMode("pull");
+            }}
+          >
+            <GitPullRequest data-icon="inline-start" />
+            Link pull request
+          </Button>
+        )}
       </>
     );
   }
@@ -126,7 +130,10 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
     <div className="mt-3 flex w-full flex-col gap-2 rounded-xl border p-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1" role="tablist" aria-label="Issue">
-          {(["new", "existing"] as const).map((m) => (
+          {(choices.data.some((c) => c.pullRequests)
+            ? (["new", "existing", "pull"] as const)
+            : (["new", "existing"] as const)
+          ).map((m) => (
             <Button
               key={m}
               type="button"
@@ -136,7 +143,7 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
               variant={mode === m ? "secondary" : "ghost"}
               onClick={() => setMode(m)}
             >
-              {m === "new" ? "New issue" : "Existing issue"}
+              {m === "new" ? "New issue" : m === "existing" ? "Existing issue" : "Pull request"}
             </Button>
           ))}
         </div>
@@ -166,13 +173,16 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
             </Button>
           </div>
         </div>
-      ) : mode === "existing" ? (
+      ) : mode === "pull" && !choice.pullRequests ? (
+        <p className="text-sm text-muted-foreground">{TRACKER_NAMES[choice.kind]} has no pull requests to link.</p>
+      ) : mode === "existing" || mode === "pull" ? (
         <LinkIssueForm
-          key={chosen}
+          key={`${mode}-${chosen}`}
           commentId={commentId}
           projectId={projectId}
           connectionId={chosen}
           trackerName={trackerName}
+          pullRequests={mode === "pull"}
           onDone={() => setMode(null)}
         />
       ) : (
@@ -227,121 +237,6 @@ function PostsAs({ choice }: { choice: { postsAs: string; login?: string | null;
   if (choice.postsAs === "you" && choice.login) return <>Posted as {accountName(choice.kind, choice.login)}.</>;
   if (choice.postsAs === "shared") return <>Posted as the project's shared {TRACKER_NAMES[choice.kind]} account.</>;
   return null;
-}
-
-/** Finds an issue that already exists (by title, or a pasted address or number) and links it to the comment. */
-function LinkIssueForm({
-  commentId,
-  projectId,
-  connectionId,
-  trackerName,
-  onDone,
-}: {
-  commentId: string;
-  projectId: string;
-  connectionId: string;
-  trackerName: string;
-  onDone: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<FoundIssue[] | null>(null);
-  const [searchError, setSearchError] = useState<Error | null>(null);
-  const [picked, setPicked] = useState<FoundIssue | null>(null);
-  const [addComment, setAddComment] = useState(true);
-  const { run, error, pending: busy } = useAction();
-
-  // Searches as you type, after a pause; an empty box lists the open issues.
-  useEffect(() => {
-    let current = true;
-    const timer = window.setTimeout(() => {
-      api
-        .get("/api/projects/{projectId}/issue-trackers/{id}/search", {
-          params: { path: { projectId, id: connectionId }, query: { q: query.trim() } },
-        })
-        .then((found) => {
-          if (!current) return;
-          setResults(found);
-          setSearchError(null);
-        })
-        .catch((e: unknown) => {
-          if (!current) return;
-          setResults([]);
-          setSearchError(e instanceof Error ? e : new Error("Search failed."));
-        });
-    }, 300);
-    return () => {
-      current = false;
-      window.clearTimeout(timer);
-    };
-  }, [query, projectId, connectionId]);
-
-  const link = async (e: FormEvent) => {
-    e.preventDefault();
-    const reference = picked?.url ?? query.trim();
-    if (!reference) return;
-    const linked = await run(() =>
-      api.post("/api/annotations/{annotationId}/issues/link", {
-        params: { path: { annotationId: commentId } },
-        body: { connectionId, reference, addComment },
-      }),
-    );
-    if (linked.ok) onDone();
-  };
-
-  return (
-    <form onSubmit={link} className="flex flex-col gap-2">
-      <Input
-        aria-label="Find an issue"
-        placeholder="Search titles, or paste the issue's address or number"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setPicked(null);
-        }}
-      />
-      <ul className="max-h-60 divide-y overflow-y-auto rounded-lg border empty:hidden" aria-label="Issues found">
-        {results?.map((r) => (
-          <li key={r.externalId}>
-            <button
-              type="button"
-              aria-pressed={picked?.externalId === r.externalId}
-              onClick={() => setPicked(r)}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
-                picked?.externalId === r.externalId && "bg-muted",
-              )}
-            >
-              {r.state === "open" ? (
-                <CircleDot className="size-3.5 shrink-0 text-green-600" />
-              ) : (
-                <CircleCheck className="size-3.5 shrink-0 text-purple-600" />
-              )}
-              <span className="shrink-0 font-medium">{r.key}</span>
-              <span className="min-w-0 truncate">{r.title}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {results?.length === 0 && !searchError && <p className="text-xs text-muted-foreground">No open issues match.</p>}
-      <ErrorText error={searchError} />
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox checked={addComment} onCheckedChange={(on) => setAddComment(on === true)} />
-        Add this comment to the issue
-      </label>
-      <p className="text-xs text-muted-foreground">
-        The issue's comments show in this thread, and closing it resolves the comment.
-      </p>
-      <div className="flex items-center gap-2">
-        <Button type="submit" disabled={busy || (!picked && !query.trim())}>
-          {picked ? `Link ${picked.key}` : `Link from ${trackerName}`}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-        <ErrorText error={error} />
-      </div>
-    </form>
-  );
 }
 
 /** A comment on a linked issue, written in the tracker: read-only, in the thread with the replies. */

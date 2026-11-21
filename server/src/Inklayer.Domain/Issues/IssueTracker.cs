@@ -100,6 +100,9 @@ public static class IssueStates
 {
     public const string Open = "open";
     public const string Closed = "closed";
+
+    /// <summary>A pull request that was merged (pull requests only).</summary>
+    public const string Merged = "merged";
 }
 
 /// <summary>An issue made from a comment. Its state is kept in step with the tracker (polled), and with the comment.</summary>
@@ -119,6 +122,9 @@ public sealed class AnnotationIssue
 
     public required string Url { get; init; }
 
+    /// <summary>Its title when it was created or linked, to offer it again without asking the tracker; null for older links.</summary>
+    public string? Title { get; init; }
+
     public string State { get; set; } = IssueStates.Open;
 
     public required Guid CreatedByUserId { get; init; }
@@ -135,6 +141,42 @@ public sealed class AnnotationIssue
 
     /// <summary>Comments changed since this were fetched last time; null until the first fetch.</summary>
     public DateTime? CommentsCheckedAt { get; set; }
+
+    /// <summary>
+    /// A pull request (GitLab: merge request) rather than an issue. Its <see cref="ExternalId"/> is <c>pr:</c> and its number,
+    /// so it can't be mistaken for an issue with the same number. Merging it resolves the comment.
+    /// </summary>
+    public bool PullRequest { get; init; }
+
+    /// <summary>A pull request's: the comment is listed in the summary Inklayer keeps on the pull request.</summary>
+    public bool InSummary { get; set; }
+}
+
+/// <summary>
+/// The comment Inklayer keeps on a pull request, listing the Inklayer comments linked to it. Edited as they change;
+/// <see cref="Body"/> is what was last posted, so unchanged summaries aren't sent again.
+/// </summary>
+public sealed class PullRequestSummary
+{
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+
+    public required Guid ConnectionId { get; init; }
+
+    /// <summary>The pull request's <see cref="AnnotationIssue.ExternalId"/> (<c>pr:12</c>).</summary>
+    public required string PullRequestId { get; init; }
+
+    /// <summary>The tracker's id for the summary comment (Azure DevOps: the repository and thread).</summary>
+    public required string CommentExternalId { get; set; }
+
+    /// <summary>Whose own account posted it; null for the connection's shared one. Only they can edit it.</summary>
+    public Guid? PostedByUserId { get; set; }
+
+    /// <summary>The Inklayer address its links point to, from when it was first posted.</summary>
+    public required string Origin { get; init; }
+
+    public string Body { get; set; } = "";
+
+    public DateTime UpdatedAt { get; set; }
 }
 
 /// <summary>

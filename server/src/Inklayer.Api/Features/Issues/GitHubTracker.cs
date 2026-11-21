@@ -8,7 +8,7 @@ using Inklayer.Domain.Issues;
 namespace Inklayer.Api.Features.Issues;
 
 /// <summary>GitHub Issues (REST). Token: a fine-grained token with Issues read and write on the repository.</summary>
-internal sealed class GitHubTracker(IHttpClientFactory http) : IIssueTracker
+internal sealed class GitHubTracker(IHttpClientFactory http) : IIssueTracker, IPullRequests
 {
     private static string Api(TrackerSettings s) => (s.ApiUrl is { Length: > 0 } url ? url : "https://api.github.com").TrimEnd('/');
 
@@ -93,5 +93,53 @@ internal sealed class GitHubTracker(IHttpClientFactory http) : IIssueTracker
     {
         using var request = Request(HttpMethod.Post, $"{Repo(s)}/issues/{Uri.EscapeDataString(externalId)}/comments", token, new { body = markdown });
         return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);
+    }
+
+    /// <summary>A pull request, from the pulls API or from issue search (where it carries <c>pull_request.merged_at</c>).</summary>
+    private static FoundIssue FoundPull(JsonNode pr)
+    {
+        var number = Trackers.Id(pr["number"]);
+        var merged = pr["merged_at"] is JsonValue || pr["pull_request"]?["merged_at"] is JsonValue || pr["merged"]?.GetValue<bool>() == true;
+        return new FoundIssue(number, $"PR #{number}", pr["title"]?.GetValue<string>() ?? "", pr["html_url"]!.GetValue<string>(),
+            merged ? IssueStates.Merged : pr["state"]?.GetValue<string>() == "closed" ? IssueStates.Closed : IssueStates.Open);
+    }
+
+    public async Task<FoundIssue> GetPullRequestAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
+    {
+        var number = Trackers.IssueNumber(reference, Regex.Escape($"/{s.Owner}/{s.Repo}") + "/pull", $"{s.Owner}/{s.Repo}", "pull request");
+        using var request = Request(HttpMethod.Get, $"{Repo(s)}/pulls/{number}", token);
+        return FoundPull((await Trackers.SendAsync(http, request, ct))!);
+    }
+
+    public async Task<IReadOnlyList<FoundIssue>> SearchPullRequestsAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
+    {
+        if (query.Trim().Length == 0)
+        {
+            using var list = Request(HttpMethod.Get, $"{Repo(s)}/pulls?state=open&sort=updated&direction=desc&per_page=10", token);
+            return [.. ((await Trackers.SendAsync(http, list, ct))?.AsArray() ?? []).Select(p => FoundPull(p!))];
+        }
+
+        var q = Uri.EscapeDataString($"repo:{s.Owner}/{s.Repo} is:pr is:open in:title {query.Trim()}");
+        using var request = Request(HttpMethod.Get, $"{Api(s)}/search/issues?q={q}&sort=updated&per_page=10", token);
+        return [.. ((await Trackers.SendAsync(http, request, ct))?["items"]?.AsArray() ?? []).Select(p => FoundPull(p!))];
+    }
+
+    public async Task<string> PullRequestStateAsync(TrackerSettings s, TrackerAuth token, string number, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Get, $"{Repo(s)}/pulls/{Uri.EscapeDataString(number)}", token);
+        return FoundPull((await Trackers.SendAsync(http, request, ct))!).State;
+    }
+
+    /// <summary>Pull requests take comments through the issues API.</summary>
+    public async Task<string> AddPullRequestCommentAsync(TrackerSettings s, TrackerAuth token, string number, string markdown, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Post, $"{Repo(s)}/issues/{Uri.EscapeDataString(number)}/comments", token, new { body = markdown });
+        return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);
+    }
+
+    public async Task EditPullRequestCommentAsync(TrackerSettings s, TrackerAuth token, string number, string commentId, string markdown, CancellationToken ct)
+    {
+        using var request = Request(HttpMethod.Patch, $"{Repo(s)}/issues/comments/{Uri.EscapeDataString(commentId)}", token, new { body = markdown });
+        await Trackers.SendAsync(http, request, ct);
     }
 }

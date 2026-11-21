@@ -13,9 +13,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Inklayer.Api.Features.Issues;
 
+/// <param name="PullRequest">A pull request (GitLab: merge request) rather than an issue; it can be merged.</param>
 public sealed record IssueResponse(
     Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Key, string Url,
-    [property: AllowedValues(IssueStates.Open, IssueStates.Closed)] string State);
+    [property: AllowedValues(IssueStates.Open, IssueStates.Closed, IssueStates.Merged)] string State, bool PullRequest = false);
 
 /// <summary>A comment on a linked issue, written in the tracker, shown in the Inklayer thread.</summary>
 public sealed record IssueCommentResponse(
@@ -23,7 +24,7 @@ public sealed record IssueCommentResponse(
     string IssueKey, string IssueUrl, string AuthorName, string? AuthorUrl, string Body, DateTime CreatedAt, DateTime UpdatedAt);
 
 /// <summary>Issues made from comments: creating them with everything a developer needs, and closing them when comments are resolved.</summary>
-internal sealed class IssueService(
+internal sealed partial class IssueService(
     InklayerDbContext db, Trackers trackers, TrackerAccounts accounts, NotificationService notifications, IHttpContextAccessor http, IConfiguration configuration,
     FeatureSwitches features, TimeProvider clock)
 {
@@ -74,7 +75,7 @@ internal sealed class IssueService(
         var now = clock.GetUtcNow().UtcDateTime;
         var issue = new AnnotationIssue
         {
-            AnnotationId = comment.Id, ConnectionId = connection.Id, ExternalId = created.ExternalId, Key = created.Key, Url = created.Url,
+            AnnotationId = comment.Id, ConnectionId = connection.Id, ExternalId = created.ExternalId, Key = created.Key, Url = created.Url, Title = Clip(issueTitle),
             CreatedByUserId = actorUserId, CreatedAt = now, LastSyncedAt = now, CommentsCheckedAt = now,
         };
         db.AnnotationIssues.Add(issue);
@@ -84,10 +85,12 @@ internal sealed class IssueService(
     }
 
     /// <summary>Looks up the issue a pasted address or number points to, as the person asking.</summary>
-    public async Task<FoundIssue> FindAsync(IssueTrackerConnection connection, string reference, Guid actorUserId, CancellationToken ct)
+    public async Task<FoundIssue> FindAsync(IssueTrackerConnection connection, string reference, Guid actorUserId, CancellationToken ct, bool pullRequest = false)
     {
         var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
-        return await accounts.WithAsync(token, t => trackers.For(connection.Kind).GetAsync(SettingsOf(connection), t, reference, ct), ct);
+        return pullRequest
+            ? AsPullRequest(await accounts.WithAsync(token, t => PullRequestsOf(connection).GetPullRequestAsync(SettingsOf(connection), t, reference, ct), ct))
+            : await accounts.WithAsync(token, t => trackers.For(connection.Kind).GetAsync(SettingsOf(connection), t, reference, ct), ct);
     }
 
     /// <summary>
@@ -113,10 +116,12 @@ internal sealed class IssueService(
         return Has(current) ?? Has("Bug") ?? Has("Issue") ?? Has("Task") ?? (types.Count > 0 ? types[0] : null);
     }
 
-    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(IssueTrackerConnection connection, string query, Guid actorUserId, CancellationToken ct)
+    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(IssueTrackerConnection connection, string query, Guid actorUserId, CancellationToken ct, bool pullRequests = false)
     {
         var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
-        return await accounts.WithAsync(token, t => trackers.For(connection.Kind).SearchAsync(SettingsOf(connection), t, query, ct), ct);
+        return pullRequests
+            ? [.. (await accounts.WithAsync(token, t => PullRequestsOf(connection).SearchPullRequestsAsync(SettingsOf(connection), t, query, ct), ct)).Select(AsPullRequest)]
+            : await accounts.WithAsync(token, t => trackers.For(connection.Kind).SearchAsync(SettingsOf(connection), t, query, ct), ct);
     }
 
     /// <summary>
@@ -126,6 +131,11 @@ internal sealed class IssueService(
     public async Task<AnnotationIssue> LinkAsync(
         Annotation comment, IssueTrackerConnection connection, FoundIssue found, bool addComment, Guid actorUserId, CancellationToken ct)
     {
+        if (IsPullRequest(found.ExternalId))
+        {
+            return await LinkPullRequestAsync(comment, connection, found, addComment, actorUserId, ct);
+        }
+
         var tracker = trackers.For(connection.Kind);
         var settings = SettingsOf(connection);
         var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
@@ -140,7 +150,7 @@ internal sealed class IssueService(
         var issue = new AnnotationIssue
         {
             AnnotationId = comment.Id, ConnectionId = connection.Id, ExternalId = found.ExternalId, Key = found.Key, Url = found.Url, State = found.State,
-            ClosedAt = found.State == IssueStates.Closed ? now : null, Linked = true, CreatedByUserId = actorUserId, CreatedAt = now, LastSyncedAt = now,
+            Title = Clip(found.Title), ClosedAt = found.State == IssueStates.Closed ? now : null, Linked = true, CreatedByUserId = actorUserId, CreatedAt = now, LastSyncedAt = now,
         };
         db.AnnotationIssues.Add(issue);
         await db.SaveChangesAsync(ct);
@@ -221,7 +231,7 @@ internal sealed class IssueService(
         }
 
         var linked = await (from i in db.AnnotationIssues
-                            where i.AnnotationId == comment.Id
+                            where i.AnnotationId == comment.Id && !i.PullRequest
                             join c in db.IssueTrackerConnections on i.ConnectionId equals c.Id
                             where c.PostRepliesToIssue
                             select new { Issue = i, Connection = c }).ToListAsync(ct);
@@ -285,7 +295,9 @@ internal sealed class IssueService(
             return;
         }
 
-        var open = await db.AnnotationIssues.Where(i => i.AnnotationId == comment.Id && i.State == IssueStates.Open).ToListAsync(ct);
+        // Pull requests aren't closed: their summaries say the comment is resolved.
+        await UpdateSummariesForAsync(comment.Id, actorUserId, ct);
+        var open = await db.AnnotationIssues.Where(i => i.AnnotationId == comment.Id && i.State == IssueStates.Open && !i.PullRequest).ToListAsync(ct);
         foreach (var issue in open)
         {
             var connection = await db.IssueTrackerConnections.SingleOrDefaultAsync(c => c.Id == issue.ConnectionId, ct);
@@ -340,7 +352,7 @@ internal sealed class IssueService(
                           where annotationIds.Contains(i.AnnotationId)
                           join c in db.IssueTrackerConnections on i.ConnectionId equals c.Id
                           orderby i.CreatedAt
-                          select new { i.AnnotationId, Issue = new IssueResponse(i.Id, c.Kind, i.Key, i.Url, i.State) }).ToListAsync(ct);
+                          select new { i.AnnotationId, Issue = new IssueResponse(i.Id, c.Kind, i.Key, i.Url, i.State, i.PullRequest) }).ToListAsync(ct);
         return rows.GroupBy(r => r.AnnotationId).ToDictionary(g => g.Key, g => g.Select(r => r.Issue).ToList());
     }
 

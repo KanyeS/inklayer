@@ -2173,6 +2173,7 @@ export interface paths {
             parameters: {
                 query?: {
                     q?: string;
+                    pullRequests?: boolean;
                 };
                 header?: never;
                 path: {
@@ -2553,6 +2554,80 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["LivePageSummaryResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/pull-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Addresses of pull requests linked to comments the caller can see */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": string[];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The comments linked to a pull request: ?url=<the pull request's address, from /pull-requests> */
+        get: {
+            parameters: {
+                query?: {
+                    url?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PullRequestPageResponse"];
                     };
                 };
             };
@@ -3724,7 +3799,9 @@ export interface components {
             title: string;
             url: string;
             /** @enum {string} */
-            state: "open" | "closed";
+            state: "open" | "closed" | "merged";
+            /** @default false */
+            recent?: boolean;
         };
         InboxResponse: {
             /** Format: int32 */
@@ -3785,7 +3862,9 @@ export interface components {
             key: string;
             url: string;
             /** @enum {string} */
-            state: "open" | "closed";
+            state: "open" | "closed" | "merged";
+            /** @default false */
+            pullRequest?: boolean;
         };
         IssueTypesRequest: {
             kind: string;
@@ -3805,6 +3884,8 @@ export interface components {
             reference?: null | string;
             /** @default true */
             addComment?: boolean;
+            /** @default false */
+            pullRequest?: boolean;
         };
         LivePageAnnotationsResponse: {
             /** Format: uuid */
@@ -4002,6 +4083,27 @@ export interface components {
             pages: null | components["schemas"]["PublicPageResponse"][];
             doc: null | components["schemas"]["PublicDocResponse"];
         };
+        PullRequestCommentResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            pageUrl: string;
+            body: string;
+            status: components["schemas"]["AnnotationStatus"];
+            authorName: string;
+            /** Format: date-time */
+            createdAt: string;
+            issues: components["schemas"]["IssueResponse"][];
+        };
+        PullRequestPageResponse: {
+            url: string;
+            key: string;
+            kind: string;
+            state: string;
+            comments: components["schemas"]["PullRequestCommentResponse"][];
+        };
         ReplyResponse: {
             /** Format: uuid */
             id: string;
@@ -4081,6 +4183,8 @@ export interface components {
             /** @enum {string} */
             postsAs: "you" | "shared" | "connect";
             login: null | string;
+            /** @default false */
+            pullRequests?: boolean;
         };
         TrackerConnectionResponse: {
             /** Format: uuid */
@@ -4265,6 +4369,8 @@ export type PublicDocResponse = components['schemas']['PublicDocResponse'];
 export type PublicPageResponse = components['schemas']['PublicPageResponse'];
 export type PublicReplyResponse = components['schemas']['PublicReplyResponse'];
 export type PublicShareResponse = components['schemas']['PublicShareResponse'];
+export type PullRequestCommentResponse = components['schemas']['PullRequestCommentResponse'];
+export type PullRequestPageResponse = components['schemas']['PullRequestPageResponse'];
 export type ReplyResponse = components['schemas']['ReplyResponse'];
 export type Role = components['schemas']['Role'];
 export type SetProjectRoleRequest = components['schemas']['SetProjectRoleRequest'];

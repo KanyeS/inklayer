@@ -2,7 +2,7 @@ import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-
 import { api } from "./api";
 import { NotSignedInError } from "./auth";
 import { bytesToBase64 } from "./base64";
-import type { LiveInit, LiveRequest } from "./live-types";
+import type { LiveInit, LiveRequest, PullRequestPage } from "./live-types";
 import { inbox, markRead } from "./notifications";
 import { captureScreenshot, screenshotForPage, uploadResult } from "./screenshots";
 import { getSettings } from "./settings";
@@ -61,6 +61,30 @@ class Cached<T> {
 const origins = new Cached(async () => new Set(await api.get("/api/live/origins")));
 const projects = new Cached(() => api.get("/api/live/projects"));
 const features = new Cached(() => api.get("/api/features"));
+/** Addresses of pull requests with linked comments: matched here, so other pages' addresses are never sent. */
+const pullRequestUrls = new Cached(() => api.get("/api/live/pull-requests"));
+
+/** The linked pull request this page is (or is a tab of, like its files), if any. */
+async function pullRequestUrlOf(url: string): Promise<string | null> {
+  if (!(await features.get()).issueTrackers) return null;
+  return matchPullRequest(url, await pullRequestUrls.get());
+}
+
+/** Which of the pull requests `url` is: the address itself, or one of its tabs (`/files`, `?_a=files`, `#…`). */
+export function matchPullRequest(url: string, pullRequests: readonly string[]): string | null {
+  return pullRequests.find((u) => url === u || ["/", "?", "#"].some((next) => url.startsWith(u + next))) ?? null;
+}
+
+/** The comments linked to the pull request this page is; null on other pages. */
+async function pullRequestOf(url: string): Promise<PullRequestPage | null> {
+  const match = await pullRequestUrlOf(url);
+  if (!match) return null;
+  try {
+    return await api.get("/api/live/pull-request", { params: { query: { url: match } } });
+  } catch {
+    return null;
+  }
+}
 
 async function signedIn(): Promise<boolean> {
   const { serverUrl, tokens } = await getSettings();
@@ -108,6 +132,7 @@ export async function stopLive(): Promise<void> {
   origins.clear();
   projects.clear();
   features.clear();
+  pullRequestUrls.clear();
   await syncLiveScript();
 }
 
@@ -168,8 +193,10 @@ async function checkOrganization(orgId: string): Promise<void> {
 
 const HANDLERS: Handlers = {
   // Automatic, on every page load: stay quiet unless this site has comments. Only the origin is checked here.
+  // Pull requests with linked comments count too, though their site may have no comments of its own.
   "live.check": async (r, { origin }) => {
-    if (!(await signedIn()) || !(await origins.get()).has(origin)) return null;
+    if (!(await signedIn())) return null;
+    if (!(await origins.get()).has(origin) && !(await pullRequestUrlOf(r.url))) return null;
     return init(r.url);
   },
   // The user asked to comment on this page.
@@ -178,6 +205,7 @@ const HANDLERS: Handlers = {
     return init(r.url);
   },
   "live.list": (r) => pageComments(r.url),
+  "live.pullRequest": (r) => pullRequestOf(r.url),
 
   /* ---------------- comments */
   "live.create": async (r, { origin }) => {
@@ -260,14 +288,24 @@ const HANDLERS: Handlers = {
   "live.issueSearch": async (r) => {
     if (!(await projects.get()).some((p) => p.id === r.projectId)) throw new Error("Unknown project.");
     return api.get("/api/projects/{projectId}/issue-trackers/{id}/search", {
-      params: { path: { projectId: r.projectId, id: r.connectionId }, query: { q: r.q.slice(0, 2000) } },
+      params: {
+        path: { projectId: r.projectId, id: r.connectionId },
+        query: { q: r.q.slice(0, 2000), pullRequests: r.pullRequests === true },
+      },
     });
   },
-  "live.issueLink": (r) =>
-    api.post("/api/annotations/{annotationId}/issues/link", {
+  "live.issueLink": async (r) => {
+    if (r.pullRequest) pullRequestUrls.clear();
+    return api.post("/api/annotations/{annotationId}/issues/link", {
       params: { path: { annotationId: r.annotationId } },
-      body: { connectionId: r.connectionId, reference: r.reference.slice(0, 2000), addComment: r.addComment },
-    }),
+      body: {
+        connectionId: r.connectionId,
+        reference: r.reference.slice(0, 2000),
+        addComment: r.addComment,
+        pullRequest: r.pullRequest === true,
+      },
+    });
+  },
   // A read-only link to this page's open comments in one project. The page address is the sender's own (checked above).
   "live.share": (r) =>
     api.post("/api/shares", { body: { kind: "page", projectId: r.projectId, pageUrl: r.url, expiresInDays: 30 } }),
@@ -338,12 +376,13 @@ function panelFont(): Promise<string> {
 
 /** Everything the panel needs to start on a page: the user's projects, the page's comments, and settings. */
 async function init(url: string): Promise<LiveInit> {
-  const [all, pages, stored, settings, on] = await Promise.all([
+  const [all, pages, stored, settings, on, pullRequest] = await Promise.all([
     projects.get(),
     pageComments(url),
     chrome.storage.local.get("lastLiveProjectId"),
     getSettings(),
     features.get(),
+    pullRequestOf(url),
   ]);
   const last = stored.lastLiveProjectId as string | undefined;
   return {
@@ -352,6 +391,7 @@ async function init(url: string): Promise<LiveInit> {
     lastProjectId: last && all.some((p) => p.id === last && p.canComment) ? last : null,
     serverUrl: new URL(settings.serverUrl ?? "").origin,
     features: on,
+    pullRequest,
   };
 }
 

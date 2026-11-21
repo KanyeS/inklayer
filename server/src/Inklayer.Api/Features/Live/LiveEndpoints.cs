@@ -40,6 +40,7 @@ internal static class LiveEndpoints
         live.MapGet("/origins", OriginsAsync).Produces<List<string>>().WithSummary("Sites (scheme://host[:port]) with live comments the caller can see");
         live.MapGet("/projects", ProjectsAsync).Produces<List<LiveProjectResponse>>().WithSummary("Projects the caller can use on live pages, with their role");
         live.MapGet("/pages", AllPagesAsync).Produces<List<LivePageSummaryResponse>>().WithSummary("Every page with comments in every project the caller can view, most recently active first");
+        LivePullRequests.Map(live);
         live.MapGet("/annotations", ListAsync).Produces<List<LivePageAnnotationsResponse>>().WithSummary("Comments on one live page across the caller's projects: ?url=<the page's address>");
 
         var byProject = app.MapGroup("/api/projects/{projectId:guid}/live").WithTags("Live").RequireAuthorization();

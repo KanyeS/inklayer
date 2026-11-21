@@ -179,6 +179,10 @@ internal static partial class AnnotationEndpoints
             await notifications.ResolvedAsync(annotation, userId, ct);
             await issues.CommentResolvedAsync(annotation, userId, ct);
         }
+        else if (previousStatus == AnnotationStatus.Resolved && annotation.Status == AnnotationStatus.Open)
+        {
+            await issues.UpdateSummariesForAsync(annotation.Id, userId, ct);
+        }
 
         return TypedResults.Ok((await EnrichAsync(db, [ToResponse(annotation, authors, check.Role, userId)], _ => check.Role, userId, ct))[0]);
     }

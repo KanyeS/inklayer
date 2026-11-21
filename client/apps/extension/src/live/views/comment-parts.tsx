@@ -141,7 +141,8 @@ export class CommentParts {
               rel="noopener noreferrer"
               title={`${name} ${issue.key} (${issue.state})`}
             >
-              {issue.state === "open" ? "●" : "✓"} {name} {issue.key}
+              {issue.state === "open" ? "●" : issue.state === "closed" && issue.pullRequest ? "✕" : "✓"} {name}{" "}
+              {issue.key}
             </a>
           );
         })}
@@ -175,10 +176,10 @@ export class CommentParts {
             projectId={a.projectId}
             trackers={trackers}
             busy={this.#ctx.busy}
-            onLink={(connectionId, reference, addComment) => {
+            onLink={(connectionId, reference, addComment, pullRequest) => {
               this.#linking.delete(a.id);
               this.#ctx.mutate(() =>
-                call({ type: "live.issueLink", annotationId: a.id, connectionId, reference, addComment }),
+                call({ type: "live.issueLink", annotationId: a.id, connectionId, reference, addComment, pullRequest }),
               );
             }}
             onCancel={close}
@@ -481,7 +482,10 @@ function showLightbox(parent: ParentNode, bitmap: ImageBitmap): void {
 /** Trackers that can create an issue under another. */
 const NESTING_KINDS: ReadonlySet<TrackerChoice["kind"]> = new Set<TrackerChoice["kind"]>(["jira", "azuredevops"]);
 
-/** Finds an issue to link to the comment, by searching or by its address or number. */
+/**
+ * Finds an issue to link to the comment, by searching or by its address or number; or a pull request (GitLab: merge
+ * request) in trackers that have them.
+ */
 function LinkIssue({
   projectId,
   trackers,
@@ -492,7 +496,7 @@ function LinkIssue({
   projectId: string;
   trackers: TrackerChoice[];
   busy: boolean;
-  onLink: (connectionId: string, reference: string, addComment: boolean) => void;
+  onLink: (connectionId: string, reference: string, addComment: boolean, pullRequest: boolean) => void;
   onCancel: () => void;
 }) {
   const [connectionId, setConnectionId] = useState(trackers[0]?.id ?? "");
@@ -501,11 +505,15 @@ function LinkIssue({
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<FoundIssue | null>(null);
   const [addComment, setAddComment] = useState(true);
+  const [pulls, setPulls] = useState(false);
+  const tracker = trackers.find((t) => t.id === connectionId);
+  const pullRequests = pulls && tracker?.pullRequests === true;
+  const noun = pullRequests ? "pull request" : "issue";
 
   useEffect(() => {
     let current = true;
     const timer = window.setTimeout(() => {
-      call<FoundIssue[]>({ type: "live.issueSearch", projectId, connectionId, q: query.trim() })
+      call<FoundIssue[]>({ type: "live.issueSearch", projectId, connectionId, q: query.trim(), pullRequests })
         .then((found) => {
           if (!current) return;
           setResults(found);
@@ -521,12 +529,12 @@ function LinkIssue({
       current = false;
       window.clearTimeout(timer);
     };
-  }, [projectId, connectionId, query]);
+  }, [projectId, connectionId, query, pullRequests]);
 
   const reference = picked?.url ?? query.trim();
   const submit = (e: Event) => {
     e.preventDefault();
-    if (reference) onLink(connectionId, reference, addComment);
+    if (reference) onLink(connectionId, reference, addComment, pullRequests);
   };
 
   return (
@@ -547,10 +555,30 @@ function LinkIssue({
           ))}
         </select>
       )}
+      {tracker?.pullRequests && (
+        <div className="row" role="tablist" aria-label="Link">
+          {[false, true].map((pr) => (
+            <button
+              key={String(pr)}
+              type="button"
+              role="tab"
+              className={pulls === pr ? "picked" : "link"}
+              aria-selected={pulls === pr}
+              onClick={() => {
+                setPulls(pr);
+                setPicked(null);
+                setResults(null);
+              }}
+            >
+              {pr ? "Pull request" : "Issue"}
+            </button>
+          ))}
+        </div>
+      )}
       <input
         type="text"
-        aria-label="Find an issue"
-        placeholder="Search titles, or paste an address or #number"
+        aria-label={`Find a ${noun}`}
+        placeholder={`Search titles, or paste a ${noun}'s address or number`}
         value={query}
         onInput={(e) => {
           setQuery((e.currentTarget as HTMLInputElement).value);
@@ -568,12 +596,13 @@ function LinkIssue({
                 onClick={() => setPicked(r)}
               >
                 <strong>{r.key}</strong> {r.title}
+                {r.recent && <span className="muted"> · recent</span>}
               </button>
             </li>
           ))}
         </ul>
       )}
-      {results?.length === 0 && !error && <p className="muted">No open issues match.</p>}
+      {results?.length === 0 && !error && <p className="muted">No open {noun}s match.</p>}
       {error && <p className="error">{error}</p>}
       <label className="row muted">
         <input
@@ -581,7 +610,7 @@ function LinkIssue({
           checked={addComment}
           onChange={(e) => setAddComment((e.currentTarget as HTMLInputElement).checked)}
         />
-        Add this comment to the issue
+        {pullRequests ? "List it in the pull request's Inklayer summary" : "Add this comment to the issue"}
       </label>
       <div className="row">
         <button type="submit" disabled={busy || !reference}>

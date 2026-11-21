@@ -16,8 +16,10 @@ public sealed record TrackerSettings(string? Owner = null, string? Repo = null, 
 public sealed record CreatedIssue(string ExternalId, string Key, string Url);
 
 /// <summary>An issue that already exists in the tracker, found by search or by its address or number.</summary>
+/// <param name="State">Open or closed; a pull request can also be merged.</param>
+/// <param name="Recent">Linked to a comment recently in this tracker (by you first): offered before searching.</param>
 public sealed record FoundIssue(string ExternalId, string Key, string Title, string Url,
-    [property: AllowedValues(IssueStates.Open, IssueStates.Closed)] string State);
+    [property: AllowedValues(IssueStates.Open, IssueStates.Closed, IssueStates.Merged)] string State, bool Recent = false);
 
 /// <summary>A comment on a tracker issue. <see cref="Body"/> is plain text or markdown.</summary>
 public sealed record TrackerComment(string ExternalId, string AuthorName, string? AuthorUrl, string Body, DateTime CreatedAt, DateTime UpdatedAt);
@@ -77,6 +79,27 @@ internal interface IChildIssues
     Task<CreatedIssue> CreateUnderAsync(TrackerSettings settings, TrackerAuth token, string title, string markdown, string parentExternalId, CancellationToken ct);
 }
 
+/// <summary>
+/// Pull requests (GitLab: merge requests) in the connection's repository or project: GitHub, GitLab, Forgejo, Azure DevOps.
+/// Numbers here are the tracker's own (<c>12</c>), without Inklayer's <c>pr:</c> prefix.
+/// </summary>
+internal interface IPullRequests
+{
+    /// <summary>The pull request a pasted address or number points to. Throws when it's in another repository or project.</summary>
+    Task<FoundIssue> GetPullRequestAsync(TrackerSettings settings, TrackerAuth token, string reference, CancellationToken ct);
+
+    /// <summary>Up to 10 open pull requests whose title matches <paramref name="query"/>, recently updated first; all open ones if it's empty.</summary>
+    Task<IReadOnlyList<FoundIssue>> SearchPullRequestsAsync(TrackerSettings settings, TrackerAuth token, string query, CancellationToken ct);
+
+    /// <summary><see cref="IssueStates.Open"/>, <see cref="IssueStates.Merged"/> or <see cref="IssueStates.Closed"/> (closed without merging).</summary>
+    Task<string> PullRequestStateAsync(TrackerSettings settings, TrackerAuth token, string number, CancellationToken ct);
+
+    /// <summary>Posts a comment on the pull request; returns its id, to edit it later.</summary>
+    Task<string> AddPullRequestCommentAsync(TrackerSettings settings, TrackerAuth token, string number, string markdown, CancellationToken ct);
+
+    Task EditPullRequestCommentAsync(TrackerSettings settings, TrackerAuth token, string number, string commentId, string markdown, CancellationToken ct);
+}
+
 internal sealed class Trackers(IHttpClientFactory httpClients)
 {
     public IIssueTracker For(string kind) => kind switch
@@ -116,9 +139,15 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
     /// <summary>The issue number in <c>#12</c>, <c>12</c>, or an address whose path matches <paramref name="pathPattern"/> followed by <c>/12</c>.</summary>
     /// <param name="pathPattern">A regular expression for the path before the number, such as the escaped <c>/acme/shop/issues</c>.</param>
     /// <param name="where">Names the repository or project in the error, such as <c>acme/shop</c>.</param>
-    internal static string IssueNumber(string reference, string pathPattern, string where)
+    internal static string IssueNumber(string reference, string pathPattern, string where, string noun = "issue")
     {
         var text = reference.Trim();
+        // GitLab and Azure DevOps write merge and pull requests as !12.
+        if (noun != "issue" && Regex.Match(text, @"^!(\d{1,12})$") is { Success: true } bang)
+        {
+            return bang.Groups[1].Value;
+        }
+
         if (Regex.Match(text, @"^#?(\d{1,12})$") is { Success: true } plain)
         {
             return plain.Groups[1].Value;
@@ -132,10 +161,10 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
                 return inUrl.Groups[1].Value;
             }
 
-            throw new InvalidOperationException($"That address isn't an issue in {where}.");
+            throw new InvalidOperationException($"That address isn't {(noun == "issue" ? "an" : "a")} {noun} in {where}.");
         }
 
-        throw new InvalidOperationException("Give the issue's number, such as #12, or its address.");
+        throw new InvalidOperationException($"Give the {noun}'s number, such as #12, or its address.");
     }
 
     /// <summary>The path of an instance address, for instances served under a folder (<c>https://acme.com/git</c> → <c>/git</c>).</summary>

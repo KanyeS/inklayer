@@ -181,8 +181,9 @@ internal static class InklayerTools
     public static async Task<string> SearchIssues(
         [Description("Project id")] Guid projectId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
         [Description("Words in the title, or the issue's address, number (#12) or key (ABC-12)")] string query,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct) =>
-        ToolResults.ToJson(ToolResults.Value<List<FoundIssue>>(await IssueEndpoints.SearchIssuesAsync(projectId, trackerId, query, access, currentUser, db, issues, ct)));
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct,
+        [Description("Search pull requests (GitLab: merge requests) instead of issues: GitHub, GitLab, Forgejo, Azure DevOps")] bool pullRequests = false) =>
+        ToolResults.ToJson(ToolResults.Value<List<FoundIssue>>(await IssueEndpoints.SearchIssuesAsync(projectId, trackerId, query, access, currentUser, db, issues, ct, pullRequests)));
 
     [McpServerTool(Name = "link_issue_to_comment", OpenWorld = true),
      Description("Link an issue that already exists to a comment. By default also posts the comment (with its replies, page and details) on the issue. The issue's comments then show in the comment's thread, and closing it resolves the comment.")]
@@ -193,6 +194,16 @@ internal static class InklayerTools
         [Description("Post the comment on the issue (default true)")] bool addComment = true) =>
         ToolResults.ToJson(ToolResults.Value<IssueResponse>(
             await IssueEndpoints.LinkIssueAsync(commentId, new LinkIssueRequest(trackerId, issue, addComment), access, currentUser, db, issues, ct)));
+
+    [McpServerTool(Name = "link_pull_request_to_comment", OpenWorld = true),
+     Description("Link a pull request (GitLab: merge request) to a comment: GitHub, GitLab, Forgejo, Azure DevOps. Merging it resolves the comment. By default the comment is listed in the summary Inklayer keeps on the pull request.")]
+    public static async Task<string> LinkPullRequestToComment(
+        [Description("Comment id")] Guid commentId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
+        [Description("The pull request's address or number (#12, !12)")] string pullRequest,
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct,
+        [Description("List the comment in the pull request's Inklayer summary (default true)")] bool inSummary = true) =>
+        ToolResults.ToJson(ToolResults.Value<IssueResponse>(
+            await IssueEndpoints.LinkIssueAsync(commentId, new LinkIssueRequest(trackerId, pullRequest, inSummary, PullRequest: true), access, currentUser, db, issues, ct)));
 
     /* ------------------------------------------------------------------ docs: reading */
 

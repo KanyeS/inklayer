@@ -4,6 +4,7 @@ import type {
   DocSummaryResponse,
   LivePageAnnotationsResponse,
   LiveProjectResponse,
+  PullRequestPageResponse,
 } from "@inklayer/api";
 import type { AnnotationKind, Rect } from "@inklayer/overlay";
 import type { Features } from "./api";
@@ -21,6 +22,7 @@ export type {
   LivePageAnnotationsResponse as LivePage,
   LiveProjectResponse as LiveProject,
   PersonResponse as PersonLookup,
+  PullRequestPageResponse as PullRequestPage,
   ReplyResponse as LiveReply,
   TrackerChoiceResponse as TrackerChoice,
 } from "@inklayer/api";
@@ -39,6 +41,8 @@ export interface LiveInit {
   serverUrl: string;
   /** Which major features are on for this server. */
   features: Features;
+  /** On a pull request's page: the Inklayer comments linked to it. */
+  pullRequest: PullRequestPageResponse | null;
 }
 
 /** Messages from the live content script. The background checks each one against the sender's actual origin. */
@@ -46,6 +50,7 @@ export type LiveRequest =
   | { type: "live.check"; url: string }
   | { type: "live.open"; url: string }
   | { type: "live.list"; url: string }
+  | { type: "live.pullRequest"; url: string }
   | {
       type: "live.create";
       projectId: string;
@@ -74,8 +79,15 @@ export type LiveRequest =
   | { type: "live.trackers"; projectId: string }
   | { type: "live.issue"; annotationId: string; connectionId: string; parent?: string; issueType?: string }
   | { type: "live.issueTypes"; projectId: string; connectionId: string }
-  | { type: "live.issueSearch"; projectId: string; connectionId: string; q: string }
-  | { type: "live.issueLink"; annotationId: string; connectionId: string; reference: string; addComment: boolean }
+  | { type: "live.issueSearch"; projectId: string; connectionId: string; q: string; pullRequests?: boolean }
+  | {
+      type: "live.issueLink";
+      annotationId: string;
+      connectionId: string;
+      reference: string;
+      addComment: boolean;
+      pullRequest?: boolean;
+    }
   | { type: "live.share"; projectId: string; url: string }
   | { type: "live.matchSize"; width: number; height?: number; left?: number; top?: number }
   | { type: "live.restoreSize" }

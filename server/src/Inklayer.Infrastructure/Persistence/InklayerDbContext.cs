@@ -64,6 +64,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<TrackerAccount> TrackerAccounts => Set<TrackerAccount>();
 
+    public DbSet<PullRequestSummary> PullRequestSummaries => Set<PullRequestSummary>();
+
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
 
     public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();

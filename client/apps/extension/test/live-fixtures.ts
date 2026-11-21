@@ -67,6 +67,7 @@ export function init(overrides: Partial<LiveInit> = {}): LiveInit {
     lastProjectId: null,
     serverUrl: "https://ink.test",
     features: ALL_FEATURES,
+    pullRequest: null,
     ...overrides,
   };
 }

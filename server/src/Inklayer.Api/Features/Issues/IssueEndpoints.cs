@@ -19,7 +19,7 @@ public sealed record TrackerConnectionResponse(
 /// account; <c>connect</c>: neither, so connect your account first.</param>
 public sealed record TrackerChoiceResponse(
     Guid Id, [property: AllowedValues(TrackerKinds.GitHub, TrackerKinds.Jira, TrackerKinds.Linear, TrackerKinds.AzureDevOps, TrackerKinds.GitLab, TrackerKinds.Forgejo)] string Kind, string Name,
-    [property: AllowedValues("you", "shared", "connect")] string PostsAs, string? Login);
+    [property: AllowedValues("you", "shared", "connect")] string PostsAs, string? Login, bool PullRequests = false);
 
 /// <param name="Token">The shared account's token. Optional where people can connect their own accounts (GitHub, when the server allows it).</param>
 public sealed record CreateTrackerRequest(string Kind, string? Name, string? Token, TrackerSettings Settings, bool CloseIssueOnResolve = true, bool PostRepliesToIssue = false);
@@ -43,7 +43,9 @@ public sealed record IssueTypesResponse(List<string> Types, string? Suggested);
 
 /// <param name="Reference">The issue's address or number (<c>#12</c>, <c>ABC-12</c>, <c>ENG-5</c>), or a search result's url.</param>
 /// <param name="AddComment">Post the comment, with its replies, page and details, on the issue.</param>
-public sealed record LinkIssueRequest(Guid ConnectionId, [property: Required, StringLength(2000)] string? Reference, bool AddComment = true);
+/// <param name="PullRequest">Link a pull request (GitLab: merge request) instead of an issue: GitHub, GitLab, Forgejo, Azure DevOps.
+/// <see cref="AddComment"/> then lists the comment in the summary Inklayer keeps on the pull request.</param>
+public sealed record LinkIssueRequest(Guid ConnectionId, [property: Required, StringLength(2000)] string? Reference, bool AddComment = true, bool PullRequest = false);
 
 /// <summary>
 /// Issue trackers: project Admins connect GitHub, GitLab, Forgejo or Gitea (such as Codeberg), Jira Cloud, Linear or
@@ -103,7 +105,7 @@ internal static class IssueEndpoints
         {
             var login = accounts.PersonalFor(c) ? mine.GetValueOrDefault(c.Kind) : null;
             var postsAs = login is not null ? "you" : c.ProtectedToken is not null ? "shared" : "connect";
-            return new TrackerChoiceResponse(c.Id, c.Kind, c.Name, postsAs, login);
+            return new TrackerChoiceResponse(c.Id, c.Kind, c.Name, postsAs, login, IssueService.KindHasPullRequests(c.Kind));
         }).ToList());
     }
 
@@ -384,8 +386,10 @@ internal static class IssueEndpoints
         }
     }
 
+    /// <param name="pullRequests">Search pull requests (GitLab: merge requests) instead of issues.</param>
     internal static async Task<IResult> SearchIssuesAsync(
-        Guid projectId, Guid id, string? q, AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct)
+        Guid projectId, Guid id, string? q, AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct,
+        bool? pullRequests = null)
     {
         var check = await access.CheckProjectAsync(projectId, Permission.Comment, ct);
         if (!check.IsAllowed)
@@ -403,14 +407,24 @@ internal static class IssueEndpoints
         var userId = currentUser.Id!.Value;
         try
         {
+            if (query.Length == 0)
+            {
+                // Before anything's typed: what was linked lately, then the tracker's open ones.
+                var recent = await RecentAsync(db, connection.Id, userId, pullRequests == true, ct);
+                var open = await issues.SearchAsync(connection, "", userId, ct, pullRequests == true);
+                // Older links didn't keep their title: take it from the tracker's list where it's there.
+                recent = [.. recent.Select(r => r.Title.Length > 0 ? r : r with { Title = open.FirstOrDefault(o => o.ExternalId == r.ExternalId)?.Title ?? "" })];
+                return TypedResults.Ok(recent.Concat(open.Where(o => !recent.Any(r => r.ExternalId == o.ExternalId))).ToList());
+            }
+
             if (!LooksLikeReference(query))
             {
-                return TypedResults.Ok((await issues.SearchAsync(connection, query.Length > 200 ? query[..200] : query, userId, ct)).ToList());
+                return TypedResults.Ok((await issues.SearchAsync(connection, query.Length > 200 ? query[..200] : query, userId, ct, pullRequests == true)).ToList());
             }
 
             try
             {
-                return TypedResults.Ok(new List<FoundIssue> { await issues.FindAsync(connection, query, userId, ct) });
+                return TypedResults.Ok(new List<FoundIssue> { await issues.FindAsync(connection, query, userId, ct, pullRequests == true) });
             }
             catch (HttpRequestException ex) when (ex.Message.StartsWith("Not found", StringComparison.Ordinal))
             {
@@ -432,9 +446,30 @@ internal static class IssueEndpoints
     }
 
     /// <summary>An address, a number (<c>12</c>, <c>#12</c>) or a key (<c>ABC-12</c>), rather than words to search titles for.</summary>
+    private const int RecentCount = 5;
+
+    /// <summary>
+    /// Open issues (or pull requests) linked to comments in this tracker lately: the person's own first, then anyone's in
+    /// the project, newest first.
+    /// </summary>
+    private static async Task<List<FoundIssue>> RecentAsync(InklayerDbContext db, Guid connectionId, Guid userId, bool pullRequests, CancellationToken ct)
+    {
+        var links = await db.AnnotationIssues.AsNoTracking()
+            .Where(i => i.ConnectionId == connectionId && i.PullRequest == pullRequests && i.State == IssueStates.Open)
+            .OrderByDescending(i => i.CreatedAt)
+            .Take(200)
+            .Select(i => new { i.ExternalId, i.Key, i.Url, i.Title, i.CreatedByUserId, i.CreatedAt })
+            .ToListAsync(ct);
+        return [.. links
+            .OrderByDescending(i => i.CreatedByUserId == userId).ThenByDescending(i => i.CreatedAt)
+            .DistinctBy(i => i.ExternalId)
+            .Take(RecentCount)
+            .Select(i => new FoundIssue(i.ExternalId, i.Key, i.Title ?? "", i.Url, IssueStates.Open, Recent: true))];
+    }
+
     private static bool LooksLikeReference(string query) =>
         query.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || query.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-        || System.Text.RegularExpressions.Regex.IsMatch(query, @"^(#?\d{1,12}|[A-Za-z][A-Za-z0-9_]*-\d{1,12})$");
+        || System.Text.RegularExpressions.Regex.IsMatch(query, @"^([#!]?\d{1,12}|[A-Za-z][A-Za-z0-9_]*-\d{1,12})$");
 
     internal static async Task<IResult> LinkIssueAsync(
         Guid annotationId, LinkIssueRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct)
@@ -465,7 +500,7 @@ internal static class IssueEndpoints
         FoundIssue found;
         try
         {
-            found = await issues.FindAsync(connection, reference, currentUser.Id!.Value, ct);
+            found = await issues.FindAsync(connection, reference, currentUser.Id!.Value, ct, request.PullRequest);
         }
         catch (TrackerAccountNeededException ex)
         {
@@ -488,7 +523,7 @@ internal static class IssueEndpoints
         try
         {
             var issue = await issues.LinkAsync(comment, connection, found, request.AddComment, currentUser.Id!.Value, ct);
-            return TypedResults.Created(issue.Url, new IssueResponse(issue.Id, connection.Kind, issue.Key, issue.Url, issue.State));
+            return TypedResults.Created(issue.Url, new IssueResponse(issue.Id, connection.Kind, issue.Key, issue.Url, issue.State, issue.PullRequest));
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {

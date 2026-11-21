@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bytesToBase64 } from "../src/lib/base64";
-import { HANDLED_REQUEST_TYPES, handleLive, isLiveRequest, safeOrigin } from "../src/lib/live";
+import { HANDLED_REQUEST_TYPES, handleLive, isLiveRequest, matchPullRequest, safeOrigin } from "../src/lib/live";
 import { cropFor } from "../src/lib/screenshots";
 import { clampZoom } from "../src/lib/window-sizing";
 
@@ -40,6 +40,27 @@ describe("zoom", () => {
     expect(clampZoom(0.1)).toBe(0.25);
     expect(clampZoom(1.5)).toBe(1.5);
     expect(clampZoom(9)).toBe(5);
+  });
+});
+
+describe("pull request pages", () => {
+  const linked = [
+    "https://github.com/acme/shop/pull/12",
+    "https://dev.azure.com/acme/Web%20Shop/_git/web/pullrequest/7",
+  ];
+
+  it("recognises a linked pull request and its tabs", () => {
+    expect(matchPullRequest("https://github.com/acme/shop/pull/12", linked)).toBe(linked[0]);
+    expect(matchPullRequest("https://github.com/acme/shop/pull/12/files", linked)).toBe(linked[0]);
+    expect(matchPullRequest("https://dev.azure.com/acme/Web%20Shop/_git/web/pullrequest/7?_a=files", linked)).toBe(
+      linked[1],
+    );
+  });
+
+  it("ignores other pages, including other pull requests whose number starts the same", () => {
+    expect(matchPullRequest("https://github.com/acme/shop/pull/123", linked)).toBeNull();
+    expect(matchPullRequest("https://github.com/acme/shop/pulls", linked)).toBeNull();
+    expect(matchPullRequest("https://github.com/acme/shop", linked)).toBeNull();
   });
 });
 

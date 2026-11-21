@@ -95,10 +95,24 @@ if (!globalThis.__inklayerLive && window.top === window) {
       .then(() => session?.focusComment(wanted))
       .catch(() => undefined);
   } else {
-    // Automatically, only if this site has comments (the background checks the origin before asking about this page).
-    void startSession(() => call<LiveInit | null>({ type: "live.check", url: location.href }), false).catch(
-      () => undefined,
-    );
+    // Automatically, only if this site has comments, or this page is a pull request with comments linked to it (the
+    // background checks both locally before asking about this page).
+    const check = () =>
+      startSession(() => call<LiveInit | null>({ type: "live.check", url: location.href }), false).catch(
+        () => undefined,
+      );
+    void check();
+    // Sites like GitHub change pages without reloading: check again when the address changes, until a session starts.
+    let checked = location.href;
+    const watch = window.setInterval(() => {
+      if (session) {
+        window.clearInterval(watch);
+        return;
+      }
+      if (location.href === checked || starting) return;
+      checked = location.href;
+      void check();
+    }, 1500);
   }
 
   startPresence();

@@ -91,7 +91,10 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
             string state;
             try
             {
-                state = await accounts.WithAsync(token, t => trackers.For(connection.Kind).StateAsync(IssueService.SettingsOf(connection), t, group.Key.ExternalId, ct), ct);
+                state = IssueService.IsPullRequest(group.Key.ExternalId)
+                    ? await accounts.WithAsync(token, t => ((IPullRequests)trackers.For(connection.Kind)).PullRequestStateAsync(
+                        IssueService.SettingsOf(connection), t, IssueService.PullRequestNumber(group.Key.ExternalId), ct), ct)
+                    : await accounts.WithAsync(token, t => trackers.For(connection.Kind).StateAsync(IssueService.SettingsOf(connection), t, group.Key.ExternalId, ct), ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -102,7 +105,9 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
 
             // New comments in the tracker, while the issue is open and for a while after it closes.
             var newComments = new List<IssueComment>();
-            var readComments = state == IssueStates.Open || rows.Any(r => r.State == IssueStates.Open || r.ClosedAt > now - CommentsAfterClosing);
+            // Pull requests' conversations stay in the tracker: only their state is followed.
+            var pullRequest = IssueService.IsPullRequest(group.Key.ExternalId);
+            var readComments = !pullRequest && (state == IssueStates.Open || rows.Any(r => r.State == IssueStates.Open || r.ClosedAt > now - CommentsAfterClosing));
             var firstRead = rows.Any(r => r.CommentsCheckedAt is null);
             if (readComments)
             {
@@ -142,14 +147,15 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
                 }
 
                 issue.State = state;
-                issue.ClosedAt = state == IssueStates.Closed ? now : null;
+                issue.ClosedAt = state == IssueStates.Open ? null : now;
                 changed++;
                 if (comment is null)
                 {
                     continue;
                 }
 
-                if (state == IssueStates.Closed && comment.Status == AnnotationStatus.Open)
+                // An issue closing resolves its comment; a pull request only when it's merged, not closed unmerged.
+                if ((pullRequest ? state == IssueStates.Merged : state == IssueStates.Closed) && comment.Status == AnnotationStatus.Open)
                 {
                     comment.Status = AnnotationStatus.Resolved;
                     comment.ResolvedAt = now;
@@ -159,12 +165,12 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
                     db.AnnotationRevisions.Add(AnnotationEndpoints.Revision(comment, AnnotationActions.Resolved, issue.CreatedByUserId, now));
                     db.AnnotationReplies.Add(new AnnotationReply
                     {
-                        AnnotationId = comment.Id, AuthorUserId = issue.CreatedByUserId, Body = $"Closed in {key}.", CreatedAt = now, UpdatedAt = now,
+                        AnnotationId = comment.Id, AuthorUserId = issue.CreatedByUserId, Body = pullRequest ? $"Merged in {key}." : $"Closed in {key}.", CreatedAt = now, UpdatedAt = now,
                     });
                     await db.SaveChangesAsync(ct);
                     await notifications.IssueClosedAsync(comment, issue.CreatedByUserId, key, ct);
                 }
-                else if (state == IssueStates.Open && comment.Status == AnnotationStatus.Resolved)
+                else if (!pullRequest && state == IssueStates.Open && comment.Status == AnnotationStatus.Resolved)
                 {
                     comment.Status = AnnotationStatus.Open;
                     comment.ResolvedAt = null;
@@ -175,6 +181,13 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
                 }
 
                 await indexer.IndexCommentAsync(comment, ct);
+            }
+
+            // Merging resolved comments: the pull request's summary says so.
+            if (pullRequest && rows.Any(r => r.InSummary))
+            {
+                await db.SaveChangesAsync(ct);
+                await issueService.UpdateSummaryAsync(connection, group.Key.ExternalId, null, ct);
             }
         }
 

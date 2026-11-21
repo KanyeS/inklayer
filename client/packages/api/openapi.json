@@ -2157,6 +2157,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "pullRequests",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -2449,6 +2456,58 @@
                   "items": {
                     "$ref": "#/components/schemas/LivePageSummaryResponse"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/live/pull-requests": {
+      "get": {
+        "tags": [
+          "Live"
+        ],
+        "summary": "Addresses of pull requests linked to comments the caller can see",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/live/pull-request": {
+      "get": {
+        "tags": [
+          "Live"
+        ],
+        "summary": "The comments linked to a pull request: ?url=\u003Cthe pull request\u0027s address, from /pull-requests\u003E",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullRequestPageResponse"
                 }
               }
             }
@@ -5053,9 +5112,14 @@
           "state": {
             "enum": [
               "open",
-              "closed"
+              "closed",
+              "merged"
             ],
             "type": "string"
+          },
+          "recent": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -5291,9 +5355,14 @@
           "state": {
             "enum": [
               "open",
-              "closed"
+              "closed",
+              "merged"
             ],
             "type": "string"
+          },
+          "pullRequest": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -5368,6 +5437,10 @@
           "addComment": {
             "type": "boolean",
             "default": true
+          },
+          "pullRequest": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -6113,6 +6186,85 @@
           }
         }
       },
+      "PullRequestCommentResponse": {
+        "required": [
+          "id",
+          "projectId",
+          "projectName",
+          "pageUrl",
+          "body",
+          "status",
+          "authorName",
+          "createdAt",
+          "issues"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "pageUrl": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AnnotationStatus"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueResponse"
+            }
+          }
+        }
+      },
+      "PullRequestPageResponse": {
+        "required": [
+          "url",
+          "key",
+          "kind",
+          "state",
+          "comments"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PullRequestCommentResponse"
+            }
+          }
+        }
+      },
       "ReplyResponse": {
         "required": [
           "id",
@@ -6434,6 +6586,10 @@
               "null",
               "string"
             ]
+          },
+          "pullRequests": {
+            "type": "boolean",
+            "default": false
           }
         }
       },

@@ -29,12 +29,27 @@ internal sealed class AnnotationIssueConfiguration : IEntityTypeConfiguration<An
         builder.Property(i => i.ExternalId).HasMaxLength(100);
         builder.Property(i => i.Key).HasMaxLength(50);
         builder.Property(i => i.Url).HasMaxLength(500);
+        builder.Property(i => i.Title).HasMaxLength(300);
         builder.Property(i => i.State).HasMaxLength(16);
         builder.HasIndex(i => i.AnnotationId);
         builder.HasIndex(i => i.LastSyncedAt);
         builder.HasIndex(i => new { i.ConnectionId, i.ExternalId });
         builder.HasOne<Annotation>().WithMany().HasForeignKey(i => i.AnnotationId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<IssueTrackerConnection>().WithMany().HasForeignKey(i => i.ConnectionId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class PullRequestSummaryConfiguration : IEntityTypeConfiguration<PullRequestSummary>
+{
+    public void Configure(EntityTypeBuilder<PullRequestSummary> builder)
+    {
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.PullRequestId).HasMaxLength(100);
+        builder.Property(s => s.CommentExternalId).HasMaxLength(200);
+        builder.Property(s => s.Origin).HasMaxLength(500);
+        builder.Property(s => s.Body).HasMaxLength(60_000);
+        builder.HasIndex(s => new { s.ConnectionId, s.PullRequestId }).IsUnique();
+        builder.HasOne<IssueTrackerConnection>().WithMany().HasForeignKey(s => s.ConnectionId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

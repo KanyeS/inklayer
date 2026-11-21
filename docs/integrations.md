@@ -45,6 +45,16 @@ With a parent:
 
 The parent must be in the same project. Leave it empty for an ordinary issue.
 
+### Pull requests
+
+A comment can be linked to a **pull request** (a **merge request** in GitLab) in GitHub, GitLab, Codeberg/Forgejo/Gitea and Azure DevOps, for feedback a change is meant to fix. Jira and Linear have no pull requests.
+- **Linking:** in the extension, **Link issue** → **Pull request**; in the web app, **Link pull request**. Search the open pull requests by title, or paste the address or number (`#12`, or `!12` in GitLab and Azure DevOps). Before you type, the ones linked to comments lately come first, marked **Recent**: yours, then the rest of the project's. Linking issues works the same way. In Azure DevOps, pull requests come from any repository in the tracker's project.
+- **Merging resolves the comment**, within about 5 minutes, with a "Merged in …" reply. A pull request closed without merging leaves its comments open. Resolving a comment in Inklayer doesn't close the pull request.
+- **The summary on the pull request.** Inklayer keeps one comment on the pull request listing the comments linked to it: each one's state, first line, author and page, its issues, and a link to open it in Inklayer. It's edited as comments are linked, resolved or reopened, and when the pull request is merged. Turn off **List this comment in the pull request's Inklayer summary** to link a comment without listing it. The summary is posted as your [own account](#your-own-tracker-account) where you've connected one, otherwise as the connection's token account. In Azure DevOps it's a closed thread, so it doesn't hold up policies that want comments resolved.
+- **On the pull request's page**, the extension shows **Linked to this pull request**, with each comment, its page and its issues. Clicking a comment opens it where it was left. The extension knows which pull requests have comments, and only asks the server about pages that are one.
+- **Azure DevOps tokens** need **Code: Read & write** as well as Work Items, for pull requests. Your own connected account already has it.
+- A pull request's own conversation stays in the tracker: unlike issues, its comments aren't brought into the Inklayer thread.
+
 ### Following an issue's comments
 
 Comments written on a linked issue in the tracker show in the Inklayer thread, mixed in with the replies by time. Each is marked with the issue it came from, such as "on GitHub #12". They are read-only in Inklayer.
