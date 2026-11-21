@@ -36,9 +36,9 @@ public sealed class SharingTests(InklayerApiFactory factory)
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var project = await Scenario.CreateProjectAsync(admin, org.Id);
-        var (ana, anaMe) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
-        var (ben, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
-        var (viewer, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+        var (ana, anaMe) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var (ben, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var (viewer, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Viewer");
         return (admin, org.Id, project.Id, ana, anaMe, ben, viewer);
     }
 

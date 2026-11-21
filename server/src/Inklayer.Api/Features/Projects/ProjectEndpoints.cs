@@ -16,12 +16,10 @@ public sealed record UpdateProjectRequest(
     [property: StringLength(200, MinimumLength = 1)] string? Name,
     bool? IsArchived);
 
+/// <param name="MyRole">The caller's role in the product, or null if they can't open it (they can ask for access).</param>
+/// <param name="AccessRequested">The caller has asked for access and is waiting for an answer.</param>
 public sealed record ProjectResponse(
-    Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role MyRole);
-
-public sealed record ProjectMemberResponse(Guid UserId, string Email, string DisplayName, Role OrganizationRole, Role? ProjectRole, Role EffectiveRole);
-
-public sealed record SetProjectRoleRequest([property: Required] Role? Role);
+    Guid Id, Guid OrganizationId, string Name, bool IsArchived, DateTime CreatedAt, Role? MyRole, bool AccessRequested = false);
 
 internal static class ProjectEndpoints
 {
@@ -34,10 +32,6 @@ internal static class ProjectEndpoints
         var projects = app.MapGroup("/api/projects").WithTags("Projects").RequireAuthorization();
         projects.MapGet("/{projectId:guid}", GetAsync).Produces<ProjectResponse>().WithName("GetProject");
         projects.MapPatch("/{projectId:guid}", UpdateAsync).Produces<ProjectResponse>();
-        projects.MapGet("/{projectId:guid}/members", ListMembersAsync).Produces<List<ProjectMemberResponse>>().WithSummary("Every organisation member's effective role in this project");
-        projects.MapPut("/{projectId:guid}/members/{userId:guid}", SetRoleAsync).Produces(StatusCodes.Status204NoContent)
-            .WithSummary("Override a member's role in this project (Viewer, Commenter or Editor). Doesn't apply to organisation Admins and Owners.");
-        projects.MapDelete("/{projectId:guid}/members/{userId:guid}", RemoveRoleAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Remove the override; the organisation role applies again");
 
         return app;
     }
@@ -50,14 +44,17 @@ internal static class ProjectEndpoints
             return check.Denied!;
         }
 
-        var overrides = await access.GetProjectOverridesAsync(orgId, ct);
+        // Every member sees every product's name, so they know what exists and can ask for access. What's inside a product
+        // stays closed until they have a role in it.
+        var roles = await access.GetProjectRolesAsync(orgId, ct);
+        var requested = await access.GetPendingRequestsAsync(orgId, ct);
         var projects = await db.Projects.AsNoTracking()
             .Where(p => p.OrganizationId == orgId && (includeArchived == true || !p.IsArchived))
             .OrderBy(p => p.Name)
             .ToListAsync(ct);
 
         return TypedResults.Ok(projects
-            .Select(p => ToResponse(p, PermissionPolicy.EffectiveProjectRole(check.Role, overrides.TryGetValue(p.Id, out var r) ? r : null)))
+            .Select(p => roles.TryGetValue(p.Id, out var role) ? ToResponse(p, role) : ToResponse(p, null, requested.Contains(p.Id)))
             .ToList());
     }
 
@@ -76,21 +73,24 @@ internal static class ProjectEndpoints
         return TypedResults.CreatedAtRoute(ToResponse(project, check.Role), "GetProject", new { projectId = project.Id });
     }
 
+    /// <summary>The product, for its members. Other members of the organisation get its name only, with no role, so they can ask for access.</summary>
     private static async Task<IResult> GetAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.View, ct);
-        if (!check.IsAllowed)
+        var project = await db.Projects.AsNoTracking().SingleOrDefaultAsync(p => p.Id == projectId, ct);
+        var caller = project is null ? null : await access.GetCallerAsync(project.OrganizationId, ct);
+        if (project is null || caller?.OrganizationRole is null)
         {
-            return check.Denied!;
+            return TypedResults.NotFound();
         }
 
-        var project = await db.Projects.AsNoTracking().SingleAsync(p => p.Id == projectId, ct);
-        return TypedResults.Ok(ToResponse(project, check.Role));
+        return caller.ProjectRole(projectId) is { } role
+            ? TypedResults.Ok(ToResponse(project, role))
+            : TypedResults.Ok(ToResponse(project, null, (await access.GetPendingRequestsAsync(project.OrganizationId, ct)).Contains(projectId)));
     }
 
     private static async Task<IResult> UpdateAsync(Guid projectId, UpdateProjectRequest request, AccessService access, InklayerDbContext db, AuditLog audit, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -105,85 +105,6 @@ internal static class ProjectEndpoints
         return TypedResults.Ok(ToResponse(project, check.Role));
     }
 
-    private static async Task<IResult> ListMembersAsync(Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct)
-    {
-        var check = await access.CheckProjectAsync(projectId, Permission.View, ct);
-        if (!check.IsAllowed)
-        {
-            return check.Denied!;
-        }
-
-        var rows = await db.OrganizationMembers.AsNoTracking()
-            .Where(m => m.OrganizationId == check.OrganizationId)
-            .Select(m => new
-            {
-                m.UserId,
-                m.User!.Email,
-                DisplayName = m.User.PreferredName ?? m.User.DisplayName,
-                m.Role,
-                Override = db.ProjectMembers.Where(pm => pm.ProjectId == projectId && pm.UserId == m.UserId).Select(pm => (Role?)pm.Role).FirstOrDefault(),
-            })
-            .OrderBy(m => m.DisplayName)
-            .ToListAsync(ct);
-
-        return TypedResults.Ok(rows.Select(r => new ProjectMemberResponse(
-            r.UserId, r.Email, r.DisplayName, r.Role, r.Override, PermissionPolicy.EffectiveProjectRole(r.Role, r.Override))).ToList());
-    }
-
-    private static async Task<IResult> SetRoleAsync(Guid projectId, Guid userId, SetProjectRoleRequest request, AccessService access, InklayerDbContext db, AuditLog audit, CancellationToken ct)
-    {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
-        if (!check.IsAllowed)
-        {
-            return check.Denied!;
-        }
-
-        var role = request.Role!.Value;
-        if (role is not (Role.Viewer or Role.Commenter or Role.Editor))
-        {
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["role"] = ["A project role must be Viewer, Commenter or Editor."] });
-        }
-
-        if (!await db.OrganizationMembers.AnyAsync(m => m.OrganizationId == check.OrganizationId && m.UserId == userId, ct))
-        {
-            return TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: "That user isn't a member of this organisation.");
-        }
-
-        var existing = await db.ProjectMembers.SingleOrDefaultAsync(m => m.ProjectId == projectId && m.UserId == userId, ct);
-        if (existing is null)
-        {
-            db.ProjectMembers.Add(new ProjectMember { ProjectId = projectId, UserId = userId, Role = role });
-        }
-        else
-        {
-            existing.Role = role;
-        }
-
-        audit.Record(AuditActions.ProjectRoleSet, check.OrganizationId, "project", projectId, new { userId, role });
-        await db.SaveChangesAsync(ct);
-        return TypedResults.NoContent();
-    }
-
-    private static async Task<IResult> RemoveRoleAsync(Guid projectId, Guid userId, AccessService access, InklayerDbContext db, AuditLog audit, CancellationToken ct)
-    {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
-        if (!check.IsAllowed)
-        {
-            return check.Denied!;
-        }
-
-        var existing = await db.ProjectMembers.SingleOrDefaultAsync(m => m.ProjectId == projectId && m.UserId == userId, ct);
-        if (existing is null)
-        {
-            return TypedResults.NotFound();
-        }
-
-        db.ProjectMembers.Remove(existing);
-        audit.Record(AuditActions.ProjectRoleRemoved, check.OrganizationId, "project", projectId, new { userId });
-        await db.SaveChangesAsync(ct);
-        return TypedResults.NoContent();
-    }
-
-    private static ProjectResponse ToResponse(Project p, Role myRole) =>
-        new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole);
+    private static ProjectResponse ToResponse(Project p, Role? myRole, bool accessRequested = false) =>
+        new(p.Id, p.OrganizationId, p.Name, p.IsArchived, p.CreatedAt, myRole, accessRequested);
 }

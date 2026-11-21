@@ -40,6 +40,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{orgId}/access-map/{principalType}/{principalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a person or team can reach and how; ?addProjectId=&addRole= or ?addTeamId= previews a change */
+        get: {
+            parameters: {
+                query?: {
+                    addProjectId?: string;
+                    addRole?: components["schemas"]["Role"];
+                    addTeamId?: string;
+                };
+                header?: never;
+                path: {
+                    orgId: string;
+                    principalType: string;
+                    principalId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessMapResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{orgId}/members/lookup": {
         parameters: {
             query?: never;
@@ -909,20 +953,19 @@ export interface paths {
         };
         trace?: never;
     };
-    "/api/projects/{projectId}/members": {
+    "/api/orgs/{orgId}/teams": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Every organisation member's effective role in this project */
         get: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    projectId: string;
+                    orgId: string;
                 };
                 cookie?: never;
             };
@@ -934,7 +977,130 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ProjectMemberResponse"][];
+                        "application/json": components["schemas"]["TeamResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    orgId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TeamRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teams/{teamId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete the team and everything it was given access to */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    teamId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    teamId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TeamRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/teams/{teamId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    teamId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TeamMemberResponse"][];
                     };
                 };
             };
@@ -947,7 +1113,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/projects/{projectId}/members/{userId}": {
+    "/api/teams/{teamId}/members/{userId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -955,20 +1121,155 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Override a member's role in this project (Viewer, Commenter or Editor). Doesn't apply to organisation Admins and Owners. */
         put: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    projectId: string;
+                    teamId: string;
                     userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    teamId: string;
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/{resourceType}/{resourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    resourceType: string;
+                    resourceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/{resourceType}/{resourceId}/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone who can reach this item, with their role and why */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    resourceType: string;
+                    resourceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessPersonResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/{resourceType}/{resourceId}/{principalType}/{principalId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Give a person or team a role on this item: Viewer, Commenter, Editor or Manager */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    resourceType: string;
+                    resourceId: string;
+                    principalType: string;
+                    principalId: string;
                 };
                 cookie?: never;
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["SetProjectRoleRequest"];
+                    "application/json": components["schemas"]["SetGrantRequest"];
                 };
             };
             responses: {
@@ -982,14 +1283,201 @@ export interface paths {
             };
         };
         post?: never;
-        /** Remove the override; the organisation role applies again */
         delete: {
             parameters: {
                 query?: never;
                 header?: never;
                 path: {
-                    projectId: string;
-                    userId: string;
+                    resourceType: string;
+                    resourceId: string;
+                    principalType: string;
+                    principalId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/{resourceType}/{resourceId}/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending requests for this item (Managers) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    resourceType: string;
+                    resourceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessRequestResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Ask for access to an item you can't open, or for a higher role */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    resourceType: string;
+                    resourceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateAccessRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessRequestResponse"];
+                    };
+                };
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccessRequestResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/requests/{requestId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give the person the role they asked for, or the one sent */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": null | components["schemas"]["ApproveAccessRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/requests/{requestId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/access/requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Withdraw your own pending request */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    requestId: string;
                 };
                 cookie?: never;
             };
@@ -3414,6 +3902,75 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {unknown} */
+        AccessMapChange: "Added" | "Raised";
+        AccessMapEdge: {
+            from: string;
+            to: string;
+            role: null | components["schemas"]["Role"];
+            change?: null | components["schemas"]["AccessMapChange"];
+        };
+        AccessMapNode: {
+            id: string;
+            kind: components["schemas"]["AccessMapNodeKind"];
+            /** Format: int32 */
+            column: number;
+            label: string;
+            detail: null | string;
+            /** Format: uuid */
+            entityId: null | string;
+            role: null | components["schemas"]["Role"];
+            previousRole?: null | components["schemas"]["Role"];
+            change?: null | components["schemas"]["AccessMapChange"];
+        };
+        /** @enum {unknown} */
+        AccessMapNodeKind: "Person" | "Team" | "Direct" | "Organisation" | "Product";
+        AccessMapResponse: {
+            subjectId: string;
+            nodes: components["schemas"]["AccessMapNode"][];
+            edges: components["schemas"]["AccessMapEdge"][];
+            /** Format: int32 */
+            hiddenProducts: number;
+        };
+        AccessPersonResponse: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            displayName: string;
+            role: components["schemas"]["Role"];
+            via: string[];
+        };
+        /** @enum {unknown} */
+        AccessPrincipalType: "User" | "Team";
+        AccessRequestResponse: {
+            /** Format: uuid */
+            id: string;
+            resourceType: components["schemas"]["AccessResourceType"];
+            /** Format: uuid */
+            resourceId: string;
+            /** Format: uuid */
+            userId: string;
+            displayName: string;
+            email: string;
+            role: components["schemas"]["Role"];
+            message: string;
+            status: components["schemas"]["AccessRequestStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            currentRole?: null | components["schemas"]["Role"];
+        };
+        /** @enum {unknown} */
+        AccessRequestStatus: "Pending" | "Approved" | "Declined";
+        /** @enum {unknown} */
+        AccessResourceType: "Project" | "Feature" | "Doc";
+        AccessResponse: {
+            resourceType: components["schemas"]["AccessResourceType"];
+            /** Format: uuid */
+            resourceId: string;
+            myRole: components["schemas"]["Role"];
+            canManage: boolean;
+            grants: components["schemas"]["GrantResponse"][];
+        };
         ActivityActor: {
             /** Format: uuid */
             id: string;
@@ -3605,6 +4162,9 @@ export interface components {
         };
         /** @enum {unknown} */
         AnnotationStatus: "Open" | "Resolved";
+        ApproveAccessRequest: {
+            role?: null | components["schemas"]["Role"];
+        };
         AuditEventResponse: {
             /** Format: uuid */
             id: string;
@@ -3638,6 +4198,10 @@ export interface components {
             message: string;
             /** Format: date-time */
             at: null | string;
+        };
+        CreateAccessRequest: {
+            role?: null | components["schemas"]["Role"];
+            message?: null | string;
         };
         CreateDocRequest: {
             folder?: null | string;
@@ -3884,6 +4448,14 @@ export interface components {
             /** @default false */
             recent?: boolean;
         };
+        GrantResponse: {
+            principalType: components["schemas"]["AccessPrincipalType"];
+            /** Format: uuid */
+            principalId: string;
+            name: string;
+            email: null | string;
+            role: components["schemas"]["Role"];
+        };
         InboxResponse: {
             /** Format: int32 */
             unread: number;
@@ -4079,7 +4651,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "mention" | "reply" | "resolved" | "issue_closed" | "issue_comment";
+            kind: "mention" | "reply" | "resolved" | "issue_closed" | "issue_comment" | "access_requested" | "access_granted" | "access_declined";
             actor: null | components["schemas"]["NotificationActor"];
             /** Format: uuid */
             organizationId: string;
@@ -4092,6 +4664,8 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             read: boolean;
+            /** Format: uuid */
+            projectId?: null | string;
         };
         OrganizationResponse: {
             /** Format: uuid */
@@ -4114,15 +4688,6 @@ export interface components {
             /** Format: int32 */
             expiresInSeconds: number;
         };
-        ProjectMemberResponse: {
-            /** Format: uuid */
-            userId: string;
-            email: string;
-            displayName: string;
-            organizationRole: components["schemas"]["Role"];
-            projectRole: null | components["schemas"]["Role"];
-            effectiveRole: components["schemas"]["Role"];
-        };
         ProjectResponse: {
             /** Format: uuid */
             id: string;
@@ -4132,7 +4697,9 @@ export interface components {
             isArchived: boolean;
             /** Format: date-time */
             createdAt: string;
-            myRole: components["schemas"]["Role"];
+            myRole: null | components["schemas"]["Role"];
+            /** @default false */
+            accessRequested?: boolean;
         };
         PublicCommentResponse: {
             /** Format: uuid */
@@ -4210,8 +4777,8 @@ export interface components {
             canDelete: boolean;
         };
         /** @enum {unknown} */
-        Role: "Viewer" | "Commenter" | "Editor" | "Admin" | "Owner";
-        SetProjectRoleRequest: {
+        Role: "Viewer" | "Commenter" | "Editor" | "Manager" | "Admin" | "Owner";
+        SetGrantRequest: {
             role?: null | components["schemas"]["Role"];
         };
         SetRoleRequest: {
@@ -4251,6 +4818,29 @@ export interface components {
             id: string;
             displayName: string;
         };
+        TeamMemberResponse: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            displayName: string;
+            avatarUrl: null | string;
+        };
+        TeamRequest: {
+            name: string;
+        };
+        TeamResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            source: components["schemas"]["TeamSource"];
+            /** Format: int32 */
+            memberCount: number;
+            isMember: boolean;
+        };
+        /** @enum {unknown} */
+        TeamSource: "Manual" | "Claim" | "Scim";
         TestResultResponse: {
             ok: boolean;
             error: null | string;
@@ -4376,6 +4966,17 @@ export interface components {
     headers: never;
     pathItems: never;
 }
+export type AccessMapChange = components['schemas']['AccessMapChange'];
+export type AccessMapEdge = components['schemas']['AccessMapEdge'];
+export type AccessMapNode = components['schemas']['AccessMapNode'];
+export type AccessMapNodeKind = components['schemas']['AccessMapNodeKind'];
+export type AccessMapResponse = components['schemas']['AccessMapResponse'];
+export type AccessPersonResponse = components['schemas']['AccessPersonResponse'];
+export type AccessPrincipalType = components['schemas']['AccessPrincipalType'];
+export type AccessRequestResponse = components['schemas']['AccessRequestResponse'];
+export type AccessRequestStatus = components['schemas']['AccessRequestStatus'];
+export type AccessResourceType = components['schemas']['AccessResourceType'];
+export type AccessResponse = components['schemas']['AccessResponse'];
 export type ActivityActor = components['schemas']['ActivityActor'];
 export type ActivityItemResponse = components['schemas']['ActivityItemResponse'];
 export type ActivityResponse = components['schemas']['ActivityResponse'];
@@ -4389,10 +4990,12 @@ export type AnnotationMention = components['schemas']['AnnotationMention'];
 export type AnnotationResponse = components['schemas']['AnnotationResponse'];
 export type AnnotationRevisionResponse = components['schemas']['AnnotationRevisionResponse'];
 export type AnnotationStatus = components['schemas']['AnnotationStatus'];
+export type ApproveAccessRequest = components['schemas']['ApproveAccessRequest'];
 export type AuditEventResponse = components['schemas']['AuditEventResponse'];
 export type AuthorSummary = components['schemas']['AuthorSummary'];
 export type ConnectedAppResponse = components['schemas']['ConnectedAppResponse'];
 export type ConsoleEntry = components['schemas']['ConsoleEntry'];
+export type CreateAccessRequest = components['schemas']['CreateAccessRequest'];
 export type CreateDocRequest = components['schemas']['CreateDocRequest'];
 export type CreateIntegrationRequest = components['schemas']['CreateIntegrationRequest'];
 export type CreateInvitationRequest = components['schemas']['CreateInvitationRequest'];
@@ -4426,6 +5029,7 @@ export type FeatureSource = components['schemas']['FeatureSource'];
 export type FeaturesResponse = components['schemas']['FeaturesResponse'];
 export type FolderRequest = components['schemas']['FolderRequest'];
 export type FoundIssue = components['schemas']['FoundIssue'];
+export type GrantResponse = components['schemas']['GrantResponse'];
 export type InboxResponse = components['schemas']['InboxResponse'];
 export type IntegrationCreatedResponse = components['schemas']['IntegrationCreatedResponse'];
 export type IntegrationResponse = components['schemas']['IntegrationResponse'];
@@ -4453,7 +5057,6 @@ export type NotificationResponse = components['schemas']['NotificationResponse']
 export type OrganizationResponse = components['schemas']['OrganizationResponse'];
 export type PersonResponse = components['schemas']['PersonResponse'];
 export type PresenceTicketResponse = components['schemas']['PresenceTicketResponse'];
-export type ProjectMemberResponse = components['schemas']['ProjectMemberResponse'];
 export type ProjectResponse = components['schemas']['ProjectResponse'];
 export type PublicCommentResponse = components['schemas']['PublicCommentResponse'];
 export type PublicDocLinkResponse = components['schemas']['PublicDocLinkResponse'];
@@ -4465,10 +5068,14 @@ export type PullRequestCommentResponse = components['schemas']['PullRequestComme
 export type PullRequestPageResponse = components['schemas']['PullRequestPageResponse'];
 export type ReplyResponse = components['schemas']['ReplyResponse'];
 export type Role = components['schemas']['Role'];
-export type SetProjectRoleRequest = components['schemas']['SetProjectRoleRequest'];
+export type SetGrantRequest = components['schemas']['SetGrantRequest'];
 export type SetRoleRequest = components['schemas']['SetRoleRequest'];
 export type ShareResponse = components['schemas']['ShareResponse'];
 export type SignInProvider = components['schemas']['SignInProvider'];
+export type TeamMemberResponse = components['schemas']['TeamMemberResponse'];
+export type TeamRequest = components['schemas']['TeamRequest'];
+export type TeamResponse = components['schemas']['TeamResponse'];
+export type TeamSource = components['schemas']['TeamSource'];
 export type TestResultResponse = components['schemas']['TestResultResponse'];
 export type TrackerAccountResponse = components['schemas']['TrackerAccountResponse'];
 export type TrackerChoiceResponse = components['schemas']['TrackerChoiceResponse'];

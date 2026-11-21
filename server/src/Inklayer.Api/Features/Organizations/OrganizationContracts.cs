@@ -35,6 +35,12 @@ internal static partial class OrganizationRules
     /// <summary>Roles that can be given automatically to anyone from an allowed domain. Admin and Owner must be granted explicitly.</summary>
     public static bool IsValidDefaultRole(Role role) => role is Role.Viewer or Role.Commenter or Role.Editor;
 
+    /// <summary>
+    /// An organisation role sets what someone can do in the General space (Viewer, Commenter, Editor), or makes them an Admin or
+    /// Owner of everything. Manager only exists on a product, feature or doc.
+    /// </summary>
+    public static bool IsValidOrganizationRole(Role role) => role != Role.Manager && Enum.IsDefined(role);
+
     public static string NormalizeDomain(string domain) => domain.Trim().TrimEnd('.').ToLowerInvariant();
 
     public static bool IsValidDomain(string domain) => domain.Length <= 253 && DomainPattern().IsMatch(domain);

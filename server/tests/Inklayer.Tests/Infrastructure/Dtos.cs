@@ -11,7 +11,7 @@ public sealed record MemberDto(Guid UserId, string Email, string Role);
 
 public sealed record InvitationDto(Guid Id, string Email, string Role);
 
-public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string MyRole);
+public sealed record ProjectDto(Guid Id, Guid OrganizationId, string Name, bool IsArchived, string? MyRole, bool AccessRequested = false);
 
 public sealed record LiveProjectDto(Guid Id, string Name, Guid OrganizationId, string MyRole, bool CanComment);
 
@@ -19,7 +19,13 @@ public sealed record LivePageDto(Guid ProjectId, string PageUrl, List<Annotation
 
 public sealed record LivePageSummaryDto(string PageUrl, int OpenCount, int ResolvedCount);
 
-public sealed record ProjectMemberDto(Guid UserId, string Email, string OrganizationRole, string? ProjectRole, string EffectiveRole);
+public sealed record TeamDto(Guid Id, Guid OrganizationId, string Name, string Source, int MemberCount, bool IsMember);
+
+public sealed record GrantDto(string PrincipalType, Guid PrincipalId, string Name, string? Email, string Role);
+
+public sealed record AccessDto(string ResourceType, Guid ResourceId, string MyRole, bool CanManage, List<GrantDto> Grants);
+
+public sealed record AccessPersonDto(Guid UserId, string Email, string DisplayName, string Role, List<string> Via);
 
 public sealed record AuditDto(Guid Id, string Action, Guid? ActorUserId, string? TargetId, string? Data);
 
@@ -37,3 +43,5 @@ public sealed record AnnotationDto(
     System.Text.Json.JsonElement Anchor, System.Text.Json.JsonElement Geometry, int Version, AuthorDto Author, bool CanEdit, bool CanDelete);
 
 public sealed record RevisionDto(int Version, string Action, AuthorDto Actor, System.Text.Json.JsonElement State);
+
+public sealed record TeamMemberDto(Guid UserId, string Email, string DisplayName, string? AvatarUrl);

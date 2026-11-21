@@ -136,7 +136,7 @@ public sealed partial class McpTests(InklayerApiFactory factory)
     public async Task Tools_respect_the_persons_role()
     {
         var (admin, orgId, commenter) = await MemberAsync("Commenter");
-        var (viewer, _) = await Scenario.AddMemberAsync(factory, admin, orgId, "Viewer");
+        var (viewer, _) = await Scenario.AddProjectMemberAsync(factory, admin, orgId, "Viewer");
         await using var asCommenter = await ConnectAsync((await SignInAppAsync(commenter)).AccessToken);
         await using var asViewer = await ConnectAsync((await SignInAppAsync(viewer)).AccessToken);
 
@@ -200,6 +200,11 @@ public sealed partial class McpTests(InklayerApiFactory factory)
     {
         var (admin, orgId, commenter) = await MemberAsync("Commenter");
         var project = await Scenario.CreateProjectAsync(admin, orgId);
+        using (var me = await commenter.GetAsync(new Uri("/api/me", UriKind.Relative)))
+        {
+            await Scenario.GrantAsync(admin, project.Id, (await me.ReadAsync<MeDto>()).Id, "Commenter");
+        }
+
         var url = $"https://site-{Guid.NewGuid():N}.example/page";
         using (var created = await commenter.PostJsonAsync($"/api/projects/{project.Id}/live/annotations",
             new { url, kind = "Pin", body = "Typo in the heading", anchor = new { element = new { path = new[] { "h1" }, tag = "h1" } }, geometry = new { kind = "Pin", point = new { x = 0.5, y = 0.5 } }, viewportWidth = 1200 }))
@@ -311,7 +316,7 @@ public sealed partial class McpTests(InklayerApiFactory factory)
     {
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
-        var (member, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, role);
+        var (member, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, role);
         return (admin, org.Id, member);
     }
 

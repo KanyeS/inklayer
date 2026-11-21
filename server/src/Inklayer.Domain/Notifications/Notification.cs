@@ -18,6 +18,15 @@ public static class NotificationKinds
 
     /// <summary>Someone commented on an issue linked to a comment you're in, in the tracker.</summary>
     public const string IssueComment = "issue_comment";
+
+    /// <summary>Someone asked for access to a product you manage (or, as an Admin, to any product).</summary>
+    public const string AccessRequested = "access_requested";
+
+    /// <summary>Your request for access was approved.</summary>
+    public const string AccessGranted = "access_granted";
+
+    /// <summary>Your request for access was declined.</summary>
+    public const string AccessDeclined = "access_declined";
 }
 
 /// <summary>Something for one person to look at, shown in their in-app inbox (and emailed, if their organisation sends emails).</summary>
@@ -36,6 +45,9 @@ public sealed class Notification
     public Guid? AnnotationId { get; init; }
 
     public Guid? DocId { get; init; }
+
+    /// <summary>The product, for access requests.</summary>
+    public Guid? ProjectId { get; init; }
 
     /// <summary>A short preview of what happened (comment or reply text), with mentions written as names.</summary>
     public string Preview { get; init; } = "";

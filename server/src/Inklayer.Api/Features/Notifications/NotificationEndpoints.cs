@@ -12,7 +12,7 @@ namespace Inklayer.Api.Features.Notifications;
 public sealed record NotificationActor(Guid Id, string DisplayName, string FullName);
 
 public sealed record NotificationResponse(
-    Guid Id, [property: AllowedValues(NotificationKinds.Mention, NotificationKinds.Reply, NotificationKinds.Resolved, NotificationKinds.IssueClosed, NotificationKinds.IssueComment)] string Kind, NotificationActor? Actor, Guid OrganizationId, Guid? AnnotationId, Guid? DocId, string Preview, string Where, DateTime CreatedAt, bool Read);
+    Guid Id, [property: AllowedValues(NotificationKinds.Mention, NotificationKinds.Reply, NotificationKinds.Resolved, NotificationKinds.IssueClosed, NotificationKinds.IssueComment, NotificationKinds.AccessRequested, NotificationKinds.AccessGranted, NotificationKinds.AccessDeclined)] string Kind, NotificationActor? Actor, Guid OrganizationId, Guid? AnnotationId, Guid? DocId, string Preview, string Where, DateTime CreatedAt, bool Read, Guid? ProjectId = null);
 
 public sealed record InboxResponse(int Unread, IReadOnlyList<NotificationResponse> Items);
 
@@ -99,7 +99,7 @@ internal static class NotificationEndpoints
         var actors = await db.Users.AsNoTracking().Where(u => actorIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => new NotificationActor(u.Id, u.PreferredName ?? u.DisplayName, u.DisplayName), ct);
         return TypedResults.Ok(new InboxResponse(unread, [.. rows.Select(n => new NotificationResponse(
-            n.Id, n.Kind, n.ActorUserId is { } a ? actors.GetValueOrDefault(a) : null, n.OrganizationId, n.AnnotationId, n.DocId, n.Preview, n.Where, n.CreatedAt, n.ReadAt is not null))]));
+            n.Id, n.Kind, n.ActorUserId is { } a ? actors.GetValueOrDefault(a) : null, n.OrganizationId, n.AnnotationId, n.DocId, n.Preview, n.Where, n.CreatedAt, n.ReadAt is not null, n.ProjectId))]));
     }
 
     private static async Task<IResult> MarkReadAsync(MarkReadRequest request, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)

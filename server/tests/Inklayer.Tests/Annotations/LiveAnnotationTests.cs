@@ -44,7 +44,7 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     public async Task Commenters_can_annotate_any_site_without_setup()
     {
         var (admin, org, project) = await SetUpAsync();
-        var (commenter, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (commenter, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         var site = NewSite();
 
         var created = await CreateAsync(commenter, project.Id, $"{site}/pricing/?utm_source=newsletter#plans");
@@ -62,7 +62,7 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     public async Task Viewers_see_live_comments_but_cannot_add_them()
     {
         var (admin, org, project) = await SetUpAsync();
-        var (viewer, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+        var (viewer, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Viewer");
         var site = NewSite();
         await CreateAsync(admin, project.Id, $"{site}/");
 
@@ -80,9 +80,9 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     public async Task Origins_list_only_sites_with_comments_the_caller_can_see()
     {
         var (admin, org, project) = await SetUpAsync();
-        var (member, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+        var (member, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Viewer");
         var otherOrg = await Scenario.CreateOrganizationAsync(admin);
-        var (outsider, _) = await Scenario.AddMemberAsync(factory, admin, otherOrg.Id, "Owner");
+        var (outsider, _) = await Scenario.AddProjectMemberAsync(factory, admin, otherOrg.Id, "Owner");
         var site = NewSite();
         var deletedSite = NewSite();
         await CreateAsync(admin, project.Id, $"{site}/deep/page?x=1");
@@ -101,7 +101,7 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     public async Task Commenters_choose_the_whole_page_or_the_exact_address()
     {
         var (admin, org, project) = await SetUpAsync();
-        var (commenter, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (commenter, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         var site = NewSite();
 
         var everyVideo = await CreateAsync(commenter, project.Id, $"{site}/watch?v=abc", "player controls");
@@ -154,9 +154,9 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     public async Task Live_annotations_follow_the_usual_permissions_and_history()
     {
         var (admin, org, project) = await SetUpAsync();
-        var (commenter, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (commenter, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         var otherOrg = await Scenario.CreateOrganizationAsync(admin);
-        var (outsider, _) = await Scenario.AddMemberAsync(factory, admin, otherOrg.Id, "Owner");
+        var (outsider, _) = await Scenario.AddProjectMemberAsync(factory, admin, otherOrg.Id, "Owner");
         var url = $"{NewSite()}/checkout";
 
         await outsider.PostJsonAsync($"/api/projects/{project.Id}/live/annotations", new { url, kind = "Pin", anchor = Anchor, geometry = Geometry })
@@ -207,8 +207,8 @@ public sealed class LiveAnnotationTests(InklayerApiFactory factory)
     public async Task Only_the_author_or_an_admin_can_edit_but_anyone_who_comments_can_resolve()
     {
         var (admin, org, project) = await SetUpAsync();
-        var (author, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
-        var (other, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Editor");
+        var (author, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var (other, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Editor");
         var annotation = await CreateAsync(author, project.Id, $"{NewSite()}/");
 
         await other.PatchJsonAsync($"/api/annotations/{annotation.Id}", new { version = 1, body = "hijacked" }).ExpectAsync(HttpStatusCode.Forbidden);

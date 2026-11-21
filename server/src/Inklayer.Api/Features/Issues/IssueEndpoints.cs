@@ -79,7 +79,7 @@ internal static class IssueEndpoints
 
     private static async Task<IResult> ListAsync(Guid projectId, AccessService access, InklayerDbContext db, IntegrationSecrets secrets, TrackerAccounts accounts, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -113,7 +113,7 @@ internal static class IssueEndpoints
         Guid projectId, CreateTrackerRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, IntegrationSecrets secrets,
         Trackers trackers, TrackerAccounts accounts, TimeProvider clock, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -174,7 +174,7 @@ internal static class IssueEndpoints
         Guid projectId, Guid id, UpdateTrackerRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, IntegrationSecrets secrets,
         Trackers trackers, TrackerAccounts accounts, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -233,7 +233,7 @@ internal static class IssueEndpoints
         Guid projectId, IssueTypesRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, IntegrationSecrets secrets,
         Trackers trackers, TrackerAccounts accounts, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -279,7 +279,7 @@ internal static class IssueEndpoints
 
     private static async Task<IResult> DeleteAsync(Guid projectId, Guid id, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -291,7 +291,7 @@ internal static class IssueEndpoints
     private static async Task<IResult> TestAsync(
         Guid projectId, Guid id, AccessService access, CurrentUser currentUser, InklayerDbContext db, Trackers trackers, TrackerAccounts accounts, CancellationToken ct)
     {
-        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;

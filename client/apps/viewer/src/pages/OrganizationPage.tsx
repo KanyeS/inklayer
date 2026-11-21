@@ -18,11 +18,13 @@ import { useQuery } from "@tanstack/react-query";
 import { BookText } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useMe } from "@/App";
+import { AccessMapButton } from "@/components/access/AccessMap";
+import { TeamsSection } from "@/components/access/TeamsSection";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { IntegrationsSection } from "@/components/IntegrationsSection";
 import { ErrorText, Loading, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { LinkCards } from "@/components/LinkCards";
-import { api, atLeast, type Member, type Organization, ROLES, type Role } from "@/lib/api";
+import { api, atLeast, type Member, ORG_ROLES, type Organization, type Role } from "@/lib/api";
 import { dateTime } from "@/lib/format";
 import { personTitle } from "@/lib/people";
 import { queries } from "@/lib/queries";
@@ -47,6 +49,8 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
       </Page>
     );
   const isAdmin = atLeast(org.data.myRole, "Admin");
+  // Admins and product Managers can see what people and teams can reach.
+  const canSeeMaps = isAdmin || (projects.data?.some((p) => p.myRole === "Manager") ?? false);
 
   return (
     <Page>
@@ -72,8 +76,9 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
       </div>
       <Tabs defaultValue="projects">
         <TabsList variant="line" className="mb-4">
-          <TabsTrigger value="projects">Projects</TabsTrigger>
+          <TabsTrigger value="projects">Products</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="teams">Teams</TabsTrigger>
           {isAdmin && <TabsTrigger value="integrations">Integrations</TabsTrigger>}
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
@@ -83,18 +88,26 @@ export function OrganizationPage({ orgId }: { orgId: string }) {
           {projects.data?.length === 0 && (
             <Empty className="border">
               <EmptyHeader>
-                <EmptyTitle>No projects yet</EmptyTitle>
+                <EmptyTitle>No products yet</EmptyTitle>
               </EmptyHeader>
             </Empty>
           )}
           {projects.data && (
             <LinkCards
-              items={projects.data.map((p) => ({ key: p.id, to: `/projects/${p.id}`, title: p.name, badge: p.myRole }))}
+              items={projects.data.map((p) => ({
+                key: p.id,
+                to: `/projects/${p.id}`,
+                title: p.name,
+                badge: p.myRole ?? (p.accessRequested ? "Requested" : "No access"),
+              }))}
             />
           )}
         </TabsContent>
         <TabsContent value="members">
-          <Members org={org.data} />
+          <Members org={org.data} canSeeMaps={canSeeMaps} />
+        </TabsContent>
+        <TabsContent value="teams">
+          <TeamsSection orgId={orgId} isAdmin={isAdmin} canSeeMaps={canSeeMaps} />
         </TabsContent>
         {isAdmin && (
           <TabsContent value="integrations">
@@ -125,20 +138,20 @@ function CreateProject({ orgId }: { orgId: string }) {
     <form className="flex flex-wrap items-center gap-2" onSubmit={submit}>
       <Input
         className="w-64"
-        aria-label="New project name"
-        placeholder="New project name"
+        aria-label="New product name"
+        placeholder="New product name"
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
         maxLength={200}
       />
-      <Button type="submit">Create project</Button>
+      <Button type="submit">Create product</Button>
       <ErrorText error={error} />
     </form>
   );
 }
 
-function Members({ org }: { org: Organization }) {
+function Members({ org, canSeeMaps }: { org: Organization; canSeeMaps: boolean }) {
   const { me } = useMe();
   const isAdmin = atLeast(org.myRole, "Admin");
   const isOwner = org.myRole === "Owner";
@@ -150,7 +163,7 @@ function Members({ org }: { org: Organization }) {
   const [role, setRole] = useState<Role>("Commenter");
 
   const act = async (fn: () => Promise<unknown>) => (await run(fn)).ok;
-  const assignable = ROLES.filter((r) => isOwner || r !== "Owner");
+  const assignable = ORG_ROLES.filter((r) => isOwner || r !== "Owner");
   const remove = async (m: Member) => {
     const ok = await act(() =>
       api.delete("/api/orgs/{orgId}/members/{userId}", { params: { path: { orgId: org.id, userId: m.userId } } }),
@@ -238,7 +251,10 @@ function Members({ org }: { org: Organization }) {
                     m.role
                   )}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="space-x-2 text-right">
+                  {canSeeMaps && (
+                    <AccessMapButton orgId={org.id} subject={{ type: "user", id: m.userId }} label="Access" />
+                  )}
                   {(isMe || canManage) && (
                     <ConfirmButton
                       title={isMe ? "Leave this organisation?" : `Remove ${m.displayName}?`}

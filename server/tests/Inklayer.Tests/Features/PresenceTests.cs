@@ -104,7 +104,7 @@ public sealed class PresenceTests(InklayerApiFactory factory)
             await Scenario.CreateProjectAsync(admin, orgId.Value);
         }
 
-        return await Scenario.AddMemberAsync(factory, admin, orgId.Value, "Viewer");
+        return await Scenario.AddProjectMemberAsync(factory, admin, orgId.Value, "Viewer");
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public sealed class PresenceNetworkTests(InklayerApiFactory factory)
         using var admin = await factory.SignInAsAdminAsync();
         admin.DefaultRequestHeaders.Add(InklayerApiFactory.ClientIpHeader, "10.8.0.5");
         var org = await Scenario.CreateOrganizationAsync(admin);
-        var (member, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+        var (member, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Viewer");
 
         await using var fromVpn = await PresenceProbe.ConnectAsync(factory, member, "10.8.3.4");
         await using var fromHome = await PresenceProbe.ConnectAsync(factory, member, "198.51.100.7");

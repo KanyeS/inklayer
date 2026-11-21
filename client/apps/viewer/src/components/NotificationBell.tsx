@@ -14,6 +14,9 @@ const KIND_TEXT: Record<InboxItem["kind"], string> = {
   resolved: "resolved your comment",
   issue_closed: "An issue linked to your comment was closed",
   issue_comment: "New comment on a linked issue",
+  access_requested: "asked for access",
+  access_granted: "gave you access",
+  access_declined: "declined your access request",
 };
 
 /** Notifications that come from a tracker, not a person: no name in front. */
@@ -56,7 +59,9 @@ export function NotificationBell() {
         ? `/comments/${item.annotationId}`
         : item.docId
           ? `/orgs/${item.organizationId}/docs/${item.docId}`
-          : "/",
+          : item.projectId
+            ? `/projects/${item.projectId}${item.kind === "access_requested" ? "#access" : ""}`
+            : "/",
     );
   };
 

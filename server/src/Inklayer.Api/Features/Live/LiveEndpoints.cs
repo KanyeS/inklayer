@@ -58,24 +58,8 @@ internal static class LiveEndpoints
     }
 
     /// <summary>Every non-archived project <paramref name="user"/> can view, with their effective role.</summary>
-    internal static async Task<List<(Project Project, Role Role, string OrganizationName)>> VisibleProjectsAsync(User user, InklayerDbContext db, CancellationToken ct)
-    {
-        var orgRoles = user.IsSystemAdmin
-            ? await db.Organizations.ToDictionaryAsync(o => o.Id, _ => Role.Owner, ct)
-            : await db.OrganizationMembers.Where(m => m.UserId == user.Id).ToDictionaryAsync(m => m.OrganizationId, m => m.Role, ct);
-        var orgIds = orgRoles.Keys.ToList();
-        var orgNames = await db.Organizations.Where(o => orgIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Name, ct);
-        var overrides = await db.ProjectMembers.Where(m => m.UserId == user.Id).ToDictionaryAsync(m => m.ProjectId, m => m.Role, ct);
-        var projects = await db.Projects.AsNoTracking()
-            .Where(p => !p.IsArchived && orgIds.Contains(p.OrganizationId))
-            .ToListAsync(ct);
-
-        return projects
-            .Select(p => (Project: p, Role: PermissionPolicy.EffectiveProjectRole(orgRoles[p.OrganizationId], overrides.TryGetValue(p.Id, out var r) ? r : null), OrganizationName: orgNames.GetValueOrDefault(p.OrganizationId, "")))
-            .Where(x => x.Role.Grants(Permission.View))
-            .OrderBy(x => x.OrganizationName, StringComparer.OrdinalIgnoreCase).ThenBy(x => x.Project.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
+    internal static Task<List<(Project Project, Role Role, string OrganizationName)>> VisibleProjectsAsync(User user, InklayerDbContext db, CancellationToken ct) =>
+        AccessService.VisibleProjectsAsync(user, db, ct);
 
     private static async Task<IResult> OriginsAsync(CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {

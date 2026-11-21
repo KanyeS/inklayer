@@ -113,7 +113,7 @@ internal static class ShareEndpoints
                     .FirstOrDefault(s => LivePageUrl.Candidates(s.PageUrl).SequenceEqual(keys));
                 if (same is not null)
                 {
-                    return TypedResults.Ok((await ToResponsesAsync(db, secrets, http, [same], s => s.CreatedByUserId == currentUser.Id || check.Role.Grants(Permission.ManageProjects), now, ct))[0]
+                    return TypedResults.Ok((await ToResponsesAsync(db, secrets, http, [same], s => s.CreatedByUserId == currentUser.Id || check.Role.Grants(Permission.ManageAccess), now, ct))[0]
                         with { Existing = true });
                 }
             }
@@ -154,7 +154,7 @@ internal static class ShareEndpoints
                 return check.Denied!;
             }
 
-            var isAdmin = check.Role.Grants(Permission.ManageProjects);
+            var isAdmin = check.Role.Grants(Permission.ManageAccess);
             var rows = await db.ShareLinks.AsNoTracking().Where(s => s.ProjectId == p && s.RevokedAt == null).OrderByDescending(s => s.CreatedAt).Take(200).ToListAsync(ct);
             return TypedResults.Ok(await ToResponsesAsync(db, secrets, http, rows, s => isAdmin || s.CreatedByUserId == me, now, ct));
         }
@@ -188,7 +188,7 @@ internal static class ShareEndpoints
         // Doc links: anyone who could make the doc public. Page and project links: who made them, or a project Admin.
         var check = share.DocId is { }
             ? await access.CheckOrganizationAsync(share.OrganizationId, Permission.Comment, ct)
-            : await access.CheckProjectAsync(share.ProjectId!.Value, share.CreatedByUserId == me ? Permission.View : Permission.ManageProjects, ct);
+            : await access.CheckProjectAsync(share.ProjectId!.Value, share.CreatedByUserId == me ? Permission.View : Permission.ManageAccess, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;

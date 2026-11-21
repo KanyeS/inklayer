@@ -52,7 +52,10 @@ public sealed class NameTests(InklayerApiFactory factory)
         var identity = Identities.Consumer() with { Name = "Grace Hopper" };
         await admin.PostJsonAsync($"/api/orgs/{org.Id}/invitations", new { email = identity.Email, role = "Commenter" }).ExpectAsync(HttpStatusCode.Created);
         using var member = await factory.SignInAsync(identity);
-        await member.PatchJsonAsync("/api/me", new { preferredName = "Amazing Grace" }).ExpectAsync(HttpStatusCode.OK);
+        using (var me = await member.PatchJsonAsync("/api/me", new { preferredName = "Amazing Grace" }))
+        {
+            await Scenario.GrantAsync(admin, project.Id, (await me.ReadAsync<NamedMeDto>()).Id, "Commenter");
+        }
 
         using var created = await member.PostJsonAsync($"/api/projects/{project.Id}/live/annotations", new
         {

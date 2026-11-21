@@ -144,6 +144,11 @@ internal static class OrganizationEndpoints
         }
 
         var newRole = request.Role!.Value;
+        if (!OrganizationRules.IsValidOrganizationRole(newRole))
+        {
+            return InvalidOrganizationRole();
+        }
+
         if ((member.Role == Role.Owner || newRole == Role.Owner) && !check.Role.Grants(Permission.ManageOwners))
         {
             return TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only Owners can grant or remove the Owner role.");
@@ -190,8 +195,14 @@ internal static class OrganizationEndpoints
         }
 
         db.OrganizationMembers.Remove(member);
-        await db.ProjectMembers
-            .Where(pm => pm.UserId == userId && db.Projects.Any(p => p.Id == pm.ProjectId && p.OrganizationId == orgId))
+        await db.AccessGrants
+            .Where(g => g.OrganizationId == orgId && g.PrincipalType == AccessPrincipalType.User && g.PrincipalId == userId)
+            .ExecuteDeleteAsync(ct);
+        await db.TeamMembers
+            .Where(m => m.UserId == userId && db.Teams.Any(t => t.Id == m.TeamId && t.OrganizationId == orgId))
+            .ExecuteDeleteAsync(ct);
+        await db.AccessRequests
+            .Where(r => r.OrganizationId == orgId && r.UserId == userId && r.Status == AccessRequestStatus.Pending)
             .ExecuteDeleteAsync(ct);
         audit.Record(AuditActions.MemberRemoved, orgId, "user", userId, new { member.Role, self = isSelf });
         await db.SaveChangesAsync(ct);
@@ -226,6 +237,11 @@ internal static class OrganizationEndpoints
         }
 
         var role = request.Role!.Value;
+        if (!OrganizationRules.IsValidOrganizationRole(role))
+        {
+            return InvalidOrganizationRole();
+        }
+
         if (role == Role.Owner && !check.Role.Grants(Permission.ManageOwners))
         {
             return TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Only Owners can invite Owners.");
@@ -342,6 +358,9 @@ internal static class OrganizationEndpoints
 
     private static Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult LastOwner() =>
         TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "An organisation must keep at least one Owner.");
+
+    private static Microsoft.AspNetCore.Http.HttpResults.ValidationProblem InvalidOrganizationRole() =>
+        TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["role"] = ["Manager is given on a product, feature or doc, not on the organisation."] });
 
     private static Microsoft.AspNetCore.Http.HttpResults.ValidationProblem InvalidDefaultRole() =>
         TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["defaultRole"] = ["The default role must be Viewer, Commenter or Editor."] });

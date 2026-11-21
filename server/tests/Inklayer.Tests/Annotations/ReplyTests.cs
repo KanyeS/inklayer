@@ -29,9 +29,9 @@ public sealed class ReplyTests(InklayerApiFactory factory)
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var project = await Scenario.CreateProjectAsync(admin, org.Id);
-        var (ana, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
-        var (ben, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
-        var (viewer, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+        var (ana, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var (ben, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var (viewer, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Viewer");
         var url = $"https://site-{Guid.NewGuid():N}.example/page";
         using var created = await ana.PostJsonAsync($"/api/projects/{project.Id}/live/annotations",
             new { url, kind = "Pin", body = "The logo is blurry", anchor = Anchor, geometry = Geometry, viewportWidth = 1440 });

@@ -15,6 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@inklayer/ui/component
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { useMe } from "@/App";
+import { AccessSection } from "@/components/access/AccessSection";
+import { RequestAccess } from "@/components/access/RequestAccess";
 import { IssueTrackersSection } from "@/components/Issues";
 import { ErrorText, Loading, Page, PageTitle } from "@/components/Layout";
 import { PagesTable } from "@/components/PagesTable";
@@ -40,7 +42,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
         <Loading />
       </Page>
     );
-  const isAdmin = atLeast(project.data.myRole, "Admin");
+  const isManager = atLeast(project.data.myRole, "Manager");
   const canShare = me.features.sharing && atLeast(project.data.myRole, "Commenter");
   const orgName = me.organizations.find((o) => o.id === project.data!.organizationId)?.name ?? "Organisation";
 
@@ -61,33 +63,43 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <PageTitle badge={<Badge variant="secondary">{project.data.myRole}</Badge>}>{project.data.name}</PageTitle>
-      <Tabs defaultValue="pages">
-        <TabsList variant="line" className="mb-4">
-          <TabsTrigger value="pages">Pages</TabsTrigger>
-          {canShare && <TabsTrigger value="sharing">Sharing</TabsTrigger>}
-          {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
-        </TabsList>
-        <TabsContent value="pages">
-          <Pages project={project.data} />
-        </TabsContent>
-        {canShare && (
-          <TabsContent value="sharing">
-            <ProjectSharesSection projectId={project.data.id} />
+      <PageTitle badge={project.data.myRole && <Badge variant="secondary">{project.data.myRole}</Badge>}>
+        {project.data.name}
+      </PageTitle>
+      {project.data.myRole == null ? (
+        <RequestAccess project={project.data} />
+      ) : (
+        <Tabs defaultValue={window.location.hash === "#access" ? "access" : "pages"}>
+          <TabsList variant="line" className="mb-4">
+            <TabsTrigger value="pages">Pages</TabsTrigger>
+            {canShare && <TabsTrigger value="sharing">Sharing</TabsTrigger>}
+            <TabsTrigger value="access">Access</TabsTrigger>
+            {isManager && <TabsTrigger value="settings">Settings</TabsTrigger>}
+          </TabsList>
+          <TabsContent value="pages">
+            <Pages project={project.data} />
           </TabsContent>
-        )}
-        {isAdmin && (
-          <TabsContent value="settings">
-            <Settings project={project.data} />
-            {me.features.issueTrackers && <IssueTrackersSection projectId={project.data.id} />}
+          {canShare && (
+            <TabsContent value="sharing">
+              <ProjectSharesSection projectId={project.data.id} />
+            </TabsContent>
+          )}
+          <TabsContent value="access">
+            <AccessSection orgId={project.data.organizationId} resourceType="project" resourceId={project.data.id} />
           </TabsContent>
-        )}
-      </Tabs>
+          {isManager && (
+            <TabsContent value="settings">
+              <Settings project={project.data} />
+              {me.features.issueTrackers && <IssueTrackersSection projectId={project.data.id} />}
+            </TabsContent>
+          )}
+        </Tabs>
+      )}
     </Page>
   );
 }
 
-/** Pages with comments in this project. Opening one shows the comments on the page itself, through the extension. */
+/** Pages with comments in this product. Opening one shows the comments on the page itself, through the extension. */
 function Pages({ project }: { project: Project }) {
   const pages = useQuery(queries.projectPages(project.id));
 
@@ -131,7 +143,7 @@ function Settings({ project }: { project: Project }) {
     <form className="max-w-md" onSubmit={submit}>
       <FieldGroup className="gap-6">
         <Field>
-          <FieldLabel htmlFor="project-name">Name</FieldLabel>
+          <FieldLabel htmlFor="project-name">Product name</FieldLabel>
           <Input id="project-name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={200} />
         </Field>
         <div className="flex items-center gap-3">

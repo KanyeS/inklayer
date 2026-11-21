@@ -34,7 +34,13 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<Project> Projects => Set<Project>();
 
-    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
+    public DbSet<Team> Teams => Set<Team>();
+
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+
+    public DbSet<AccessGrant> AccessGrants => Set<AccessGrant>();
+
+    public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 

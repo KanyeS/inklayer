@@ -74,8 +74,8 @@ public sealed partial class IssueTrackerTests
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var projectId = (await Scenario.CreateProjectAsync(admin, org.Id)).Id;
-        var (ana, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
-        var (bob, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (ana, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var (bob, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         using var _a = admin;
         using var _b = ana;
         using var _c = bob;

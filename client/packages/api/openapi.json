@@ -25,6 +25,77 @@
         }
       }
     },
+    "/api/orgs/{orgId}/access-map/{principalType}/{principalId}": {
+      "get": {
+        "tags": [
+          "Access"
+        ],
+        "summary": "What a person or team can reach and how; ?addProjectId=\u0026addRole= or ?addTeamId= previews a change",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "principalType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "addProjectId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "addRole",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Role"
+            }
+          },
+          {
+            "name": "addTeamId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessMapResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/orgs/{orgId}/members/lookup": {
       "get": {
         "tags": [
@@ -906,15 +977,14 @@
         }
       }
     },
-    "/api/projects/{projectId}/members": {
+    "/api/orgs/{orgId}/teams": {
       "get": {
         "tags": [
-          "Projects"
+          "Teams"
         ],
-        "summary": "Every organisation member\u0027s effective role in this project",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "orgId",
             "in": "path",
             "required": true,
             "schema": {
@@ -931,7 +1001,140 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ProjectMemberResponse"
+                    "$ref": "#/components/schemas/TeamResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Teams"
+        ],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}": {
+      "patch": {
+        "tags": [
+          "Teams"
+        ],
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Teams"
+        ],
+        "summary": "Delete the team and everything it was given access to",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}/members": {
+      "get": {
+        "tags": [
+          "Teams"
+        ],
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TeamMemberResponse"
                   }
                 }
               }
@@ -940,15 +1143,14 @@
         }
       }
     },
-    "/api/projects/{projectId}/members/{userId}": {
+    "/api/teams/{teamId}/members/{userId}": {
       "put": {
         "tags": [
-          "Projects"
+          "Teams"
         ],
-        "summary": "Override a member\u0027s role in this project (Viewer, Commenter or Editor). Doesn\u0027t apply to organisation Admins and Owners.",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "teamId",
             "in": "path",
             "required": true,
             "schema": {
@@ -966,11 +1168,170 @@
             }
           }
         ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Teams"
+        ],
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/access/{resourceType}/{resourceId}": {
+      "get": {
+        "tags": [
+          "Access"
+        ],
+        "parameters": [
+          {
+            "name": "resourceType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/access/{resourceType}/{resourceId}/people": {
+      "get": {
+        "tags": [
+          "Access"
+        ],
+        "summary": "Everyone who can reach this item, with their role and why",
+        "parameters": [
+          {
+            "name": "resourceType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessPersonResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/access/{resourceType}/{resourceId}/{principalType}/{principalId}": {
+      "put": {
+        "tags": [
+          "Access"
+        ],
+        "summary": "Give a person or team a role on this item: Viewer, Commenter, Editor or Manager",
+        "parameters": [
+          {
+            "name": "resourceType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "principalType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SetProjectRoleRequest"
+                "$ref": "#/components/schemas/SetGrantRequest"
               }
             }
           },
@@ -984,12 +1345,19 @@
       },
       "delete": {
         "tags": [
-          "Projects"
+          "Access"
         ],
-        "summary": "Remove the override; the organisation role applies again",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "resourceType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
             "in": "path",
             "required": true,
             "schema": {
@@ -998,7 +1366,201 @@
             }
           },
           {
-            "name": "userId",
+            "name": "principalType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "principalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/access/{resourceType}/{resourceId}/requests": {
+      "post": {
+        "tags": [
+          "Access"
+        ],
+        "summary": "Ask for access to an item you can\u0027t open, or for a higher role",
+        "parameters": [
+          {
+            "name": "resourceType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Access"
+        ],
+        "summary": "Pending requests for this item (Managers)",
+        "parameters": [
+          {
+            "name": "resourceType",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessRequestResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/access/requests/{requestId}/approve": {
+      "post": {
+        "tags": [
+          "Access"
+        ],
+        "summary": "Give the person the role they asked for, or the one sent",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ApproveAccessRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/access/requests/{requestId}/decline": {
+      "post": {
+        "tags": [
+          "Access"
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
+    "/api/access/requests/{requestId}": {
+      "delete": {
+        "tags": [
+          "Access"
+        ],
+        "summary": "Withdraw your own pending request",
+        "parameters": [
+          {
+            "name": "requestId",
             "in": "path",
             "required": true,
             "schema": {
@@ -3312,6 +3874,300 @@
   },
   "components": {
     "schemas": {
+      "AccessMapChange": {
+        "enum": [
+          "Added",
+          "Raised"
+        ]
+      },
+      "AccessMapEdge": {
+        "required": [
+          "from",
+          "to",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "change": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessMapChange"
+              }
+            ]
+          }
+        }
+      },
+      "AccessMapNode": {
+        "required": [
+          "id",
+          "kind",
+          "column",
+          "label",
+          "detail",
+          "entityId",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AccessMapNodeKind"
+          },
+          "column": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "label": {
+            "type": "string"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "entityId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "previousRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "change": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessMapChange"
+              }
+            ]
+          }
+        }
+      },
+      "AccessMapNodeKind": {
+        "enum": [
+          "Person",
+          "Team",
+          "Direct",
+          "Organisation",
+          "Product"
+        ]
+      },
+      "AccessMapResponse": {
+        "required": [
+          "subjectId",
+          "nodes",
+          "edges",
+          "hiddenProducts"
+        ],
+        "type": "object",
+        "properties": {
+          "subjectId": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessMapNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccessMapEdge"
+            }
+          },
+          "hiddenProducts": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "AccessPersonResponse": {
+        "required": [
+          "userId",
+          "email",
+          "displayName",
+          "role",
+          "via"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "via": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AccessPrincipalType": {
+        "enum": [
+          "User",
+          "Team"
+        ]
+      },
+      "AccessRequestResponse": {
+        "required": [
+          "id",
+          "resourceType",
+          "resourceId",
+          "userId",
+          "displayName",
+          "email",
+          "role",
+          "message",
+          "status",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceType": {
+            "$ref": "#/components/schemas/AccessResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AccessRequestStatus"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currentRole": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          }
+        }
+      },
+      "AccessRequestStatus": {
+        "enum": [
+          "Pending",
+          "Approved",
+          "Declined"
+        ]
+      },
+      "AccessResourceType": {
+        "enum": [
+          "Project",
+          "Feature",
+          "Doc"
+        ]
+      },
+      "AccessResponse": {
+        "required": [
+          "resourceType",
+          "resourceId",
+          "myRole",
+          "canManage",
+          "grants"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceType": {
+            "$ref": "#/components/schemas/AccessResourceType"
+          },
+          "resourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "myRole": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "canManage": {
+            "type": "boolean"
+          },
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GrantResponse"
+            }
+          }
+        }
+      },
       "ActivityActor": {
         "required": [
           "id",
@@ -4106,6 +4962,21 @@
           "Resolved"
         ]
       },
+      "ApproveAccessRequest": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          }
+        }
+      },
       "AuditEventResponse": {
         "required": [
           "id",
@@ -4252,6 +5123,29 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "CreateAccessRequest": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "message": {
+            "maxLength": 1000,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -5278,6 +6172,37 @@
           }
         }
       },
+      "GrantResponse": {
+        "required": [
+          "principalType",
+          "principalId",
+          "name",
+          "email",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "principalType": {
+            "$ref": "#/components/schemas/AccessPrincipalType"
+          },
+          "principalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      },
       "InboxResponse": {
         "required": [
           "unread",
@@ -6014,7 +6939,10 @@
               "reply",
               "resolved",
               "issue_closed",
-              "issue_comment"
+              "issue_comment",
+              "access_requested",
+              "access_granted",
+              "access_declined"
             ],
             "type": "string"
           },
@@ -6058,6 +6986,13 @@
           },
           "read": {
             "type": "boolean"
+          },
+          "projectId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -6133,45 +7068,6 @@
           }
         }
       },
-      "ProjectMemberResponse": {
-        "required": [
-          "userId",
-          "email",
-          "displayName",
-          "organizationRole",
-          "projectRole",
-          "effectiveRole"
-        ],
-        "type": "object",
-        "properties": {
-          "userId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "email": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "organizationRole": {
-            "$ref": "#/components/schemas/Role"
-          },
-          "projectRole": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Role"
-              }
-            ]
-          },
-          "effectiveRole": {
-            "$ref": "#/components/schemas/Role"
-          }
-        }
-      },
       "ProjectResponse": {
         "required": [
           "id",
@@ -6202,7 +7098,18 @@
             "format": "date-time"
           },
           "myRole": {
-            "$ref": "#/components/schemas/Role"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ]
+          },
+          "accessRequested": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -6498,11 +7405,12 @@
           "Viewer",
           "Commenter",
           "Editor",
+          "Manager",
           "Admin",
           "Owner"
         ]
       },
-      "SetProjectRoleRequest": {
+      "SetGrantRequest": {
         "type": "object",
         "properties": {
           "role": {
@@ -6659,6 +7567,87 @@
             "type": "string"
           }
         }
+      },
+      "TeamMemberResponse": {
+        "required": [
+          "userId",
+          "email",
+          "displayName",
+          "avatarUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "TeamRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      },
+      "TeamResponse": {
+        "required": [
+          "id",
+          "organizationId",
+          "name",
+          "source",
+          "memberCount",
+          "isMember"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/TeamSource"
+          },
+          "memberCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isMember": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TeamSource": {
+        "enum": [
+          "Manual",
+          "Claim",
+          "Scim"
+        ]
       },
       "TestResultResponse": {
         "required": [
@@ -7241,6 +8230,9 @@
       "name": "Features"
     },
     {
+      "name": "Access"
+    },
+    {
       "name": "Organizations"
     },
     {
@@ -7266,6 +8258,9 @@
     },
     {
       "name": "Projects"
+    },
+    {
+      "name": "Teams"
     },
     {
       "name": "Annotations"

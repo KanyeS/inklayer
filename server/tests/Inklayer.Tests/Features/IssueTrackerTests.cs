@@ -27,8 +27,8 @@ public sealed partial class IssueTrackerTests(InklayerApiFactory factory)
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var project = await Scenario.CreateProjectAsync(admin, org.Id);
-        var (ana, anaMe) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
-        var (viewer, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+        var (ana, anaMe) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var (viewer, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Viewer");
         return (admin, project.Id, ana, anaMe, viewer);
     }
 
@@ -130,7 +130,7 @@ public sealed partial class IssueTrackerTests(InklayerApiFactory factory)
         using var _c = viewer;
         var org = await Scenario.CreateOrganizationAsync(admin);
         var second = await Scenario.CreateProjectAsync(admin, org.Id);
-        var (outsider, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (outsider, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         using var _d = outsider;
         await CommentAsync(ana, projectId, "One");
         await CommentAsync(ana, projectId, "Two");

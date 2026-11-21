@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { docsApi } from "@/docs/docsApi";
-import { api } from "./api";
+import { api, type Role } from "./api";
 
 /**
  * Everything the viewer reads from the server, as TanStack Query options: one place for each query's key and request,
@@ -33,6 +33,49 @@ export const queries = {
     queryOptions({
       queryKey: ["orgs", orgId, "invitations"],
       queryFn: () => api.get("/api/orgs/{orgId}/invitations", org(orgId)),
+    }),
+  orgTeams: (orgId: string) =>
+    queryOptions({
+      queryKey: ["orgs", orgId, "teams"],
+      queryFn: () => api.get("/api/orgs/{orgId}/teams", org(orgId)),
+    }),
+  teamMembers: (teamId: string) =>
+    queryOptions({
+      queryKey: ["teams", teamId, "members"],
+      queryFn: () => api.get("/api/teams/{teamId}/members", { params: { path: { teamId } } }),
+    }),
+  /** Who has access to a product (`project`), feature or doc. */
+  access: (resourceType: "project" | "feature" | "doc", resourceId: string) =>
+    queryOptions({
+      queryKey: ["access", resourceType, resourceId],
+      queryFn: () =>
+        api.get("/api/access/{resourceType}/{resourceId}", { params: { path: { resourceType, resourceId } } }),
+    }),
+  accessPeople: (resourceType: "project" | "feature" | "doc", resourceId: string) =>
+    queryOptions({
+      queryKey: ["access", resourceType, resourceId, "people"],
+      queryFn: () =>
+        api.get("/api/access/{resourceType}/{resourceId}/people", { params: { path: { resourceType, resourceId } } }),
+    }),
+  accessRequests: (resourceType: "project" | "feature" | "doc", resourceId: string) =>
+    queryOptions({
+      queryKey: ["access", resourceType, resourceId, "requests"],
+      queryFn: () =>
+        api.get("/api/access/{resourceType}/{resourceId}/requests", { params: { path: { resourceType, resourceId } } }),
+    }),
+  /** What a person (`user`) or team can reach and how; `preview` shows a change before it's made. */
+  accessMap: (
+    orgId: string,
+    principalType: "user" | "team",
+    principalId: string,
+    preview?: { addProjectId: string; addRole: Role } | { addTeamId: string },
+  ) =>
+    queryOptions({
+      queryKey: ["access", "map", orgId, principalType, principalId, preview ?? null],
+      queryFn: () =>
+        api.get("/api/orgs/{orgId}/access-map/{principalType}/{principalId}", {
+          params: { path: { orgId, principalType, principalId }, query: preview ?? {} },
+        }),
     }),
   orgIntegrations: (orgId: string) =>
     queryOptions({

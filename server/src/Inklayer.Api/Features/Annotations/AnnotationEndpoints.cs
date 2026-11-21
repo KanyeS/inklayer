@@ -387,7 +387,7 @@ internal static partial class AnnotationEndpoints
     }
 
     private static bool CanChangeReply(AnnotationReply reply, Role role, Guid userId) =>
-        (reply.AuthorUserId == userId && role.Grants(Permission.Comment)) || role.Grants(Permission.ManageProjects);
+        (reply.AuthorUserId == userId && role.Grants(Permission.Comment)) || role.Grants(Permission.ManageAccess);
 
     private static ReplyResponse ToReply(AnnotationReply r, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) => new(
         r.Id, r.Body, authors.GetValueOrDefault(r.AuthorUserId) ?? new AuthorSummary(r.AuthorUserId, "", null), r.CreatedAt, r.UpdatedAt, r.Version,
@@ -493,7 +493,7 @@ internal static partial class AnnotationEndpoints
     }
 
     private static bool CanEdit(Annotation annotation, Role role, Guid userId) =>
-        (annotation.AuthorUserId == userId && role.Grants(Permission.Comment)) || role.Grants(Permission.ManageProjects);
+        (annotation.AuthorUserId == userId && role.Grants(Permission.Comment)) || role.Grants(Permission.ManageAccess);
 
     private static IResult Conflict(Annotation current, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) =>
         TypedResults.Problem(

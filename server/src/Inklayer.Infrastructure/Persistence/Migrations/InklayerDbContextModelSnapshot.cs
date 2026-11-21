@@ -428,6 +428,100 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("ErrorEvents");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Authorization.AccessGrant", b =>
+                {
+                    b.Property<string>("ResourceType")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrincipalType")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ResourceType", "ResourceId", "PrincipalType", "PrincipalId");
+
+                    b.HasIndex("OrganizationId", "PrincipalType", "PrincipalId");
+
+                    b.ToTable("AccessGrants");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Authorization.AccessRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResourceType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("OrganizationId", "Status");
+
+                    b.HasIndex("ResourceType", "ResourceId", "UserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.ToTable("AccessRequests");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Docs.Doc", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1069,6 +1163,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("ReadAt")
                         .HasColumnType("TEXT");
 
@@ -1244,6 +1341,57 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("OrganizationMembers");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Organizations.Team", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("Teams");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Organizations.TeamMember", b =>
+                {
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TeamId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("TeamMembers");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Projects.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1269,26 +1417,6 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.HasIndex("OrganizationId");
 
                     b.ToTable("Projects");
-                });
-
-            modelBuilder.Entity("Inklayer.Domain.Projects.ProjectMember", b =>
-                {
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("ProjectId", "UserId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("ProjectMembers");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Settings.InstanceSetting", b =>
@@ -1723,6 +1851,32 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Authorization.AccessGrant", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Authorization.AccessRequest", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Inklayer.Domain.Users.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Docs.Doc", b =>
                 {
                     b.HasOne("Inklayer.Domain.Organizations.Organization", null)
@@ -1913,7 +2067,7 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Inklayer.Domain.Projects.Project", b =>
+            modelBuilder.Entity("Inklayer.Domain.Organizations.Team", b =>
                 {
                     b.HasOne("Inklayer.Domain.Organizations.Organization", null)
                         .WithMany()
@@ -1922,17 +2076,28 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Inklayer.Domain.Projects.ProjectMember", b =>
+            modelBuilder.Entity("Inklayer.Domain.Organizations.TeamMember", b =>
                 {
-                    b.HasOne("Inklayer.Domain.Projects.Project", null)
+                    b.HasOne("Inklayer.Domain.Organizations.Team", null)
                         .WithMany("Members")
-                        .HasForeignKey("ProjectId")
+                        .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Inklayer.Domain.Users.User", null)
+                    b.HasOne("Inklayer.Domain.Users.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Projects.Project", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -1996,7 +2161,7 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Navigation("Members");
                 });
 
-            modelBuilder.Entity("Inklayer.Domain.Projects.Project", b =>
+            modelBuilder.Entity("Inklayer.Domain.Organizations.Team", b =>
                 {
                     b.Navigation("Members");
                 });

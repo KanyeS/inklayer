@@ -44,7 +44,7 @@ internal static class InklayerTools
     public static async Task<string> WhoAmI(CurrentUser currentUser, InklayerDbContext db, FeatureSwitches features, CancellationToken ct) =>
         ToolResults.ToJson(ToolResults.Value<MeResponse>(await MeEndpoints.MeAsync(currentUser, db, features, ct)));
 
-    [McpServerTool(Name = "list_projects", ReadOnly = true), Description("Projects in an organisation. Page comments belong to projects.")]
+    [McpServerTool(Name = "list_projects", ReadOnly = true), Description("Products (projects) in an organisation. Page comments belong to them. myRole is null for products the person can't open yet; they can ask for access in Inklayer.")]
     public static async Task<string> ListProjects(
         [Description("Organisation id (from whoami)")] Guid orgId, AccessService access, InklayerDbContext db, CancellationToken ct) =>
         ToolResults.ToJson(ToolResults.Value<object>(await ProjectEndpoints.ListAsync(orgId, false, access, db, ct)));

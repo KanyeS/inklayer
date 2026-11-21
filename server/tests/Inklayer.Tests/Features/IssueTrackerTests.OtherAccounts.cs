@@ -111,7 +111,7 @@ public sealed partial class IssueTrackerTests
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var projectId = (await Scenario.CreateProjectAsync(admin, org.Id)).Id;
-        var (ana, anaMe) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (ana, anaMe) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         using var _a = admin;
         using var _b = ana;
         var fake = InstallTracker(kind);

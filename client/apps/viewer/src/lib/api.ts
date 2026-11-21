@@ -11,6 +11,9 @@ export const api = createApi({
 });
 
 export type {
+  AccessPersonResponse as AccessPerson,
+  AccessRequestResponse as AccessRequest,
+  AccessResponse as Access,
   AdminUserResponse as AdminUser,
   FeaturesResponse as Features,
   InvitationResponse as Invitation,
@@ -21,6 +24,8 @@ export type {
   OrganizationResponse as Organization,
   ProjectResponse as Project,
   Role,
+  TeamMemberResponse as TeamMember,
+  TeamResponse as Team,
 } from "@inklayer/api";
 export { ApiError } from "@inklayer/api";
 
@@ -28,5 +33,14 @@ export { ApiError } from "@inklayer/api";
 export const lookupPeople = (orgId: string, q: string) =>
   api.get("/api/orgs/{orgId}/members/lookup", { params: { path: { orgId }, query: { q } } });
 
-export const ROLES: Role[] = ["Viewer", "Commenter", "Editor", "Admin", "Owner"];
-export const atLeast = (role: Role, minimum: Role) => ROLES.indexOf(role) >= ROLES.indexOf(minimum);
+/** Every role, lowest first. Manager is only given on a product, feature or doc. */
+export const ROLES: Role[] = ["Viewer", "Commenter", "Editor", "Manager", "Admin", "Owner"];
+
+/** Roles someone can have in the organisation itself. */
+export const ORG_ROLES: Role[] = ROLES.filter((r) => r !== "Manager");
+
+/** Roles that can be given to a person or team on a product, feature or doc. */
+export const GRANT_ROLES: Role[] = ["Viewer", "Commenter", "Editor", "Manager"];
+/** Whether `role` is `minimum` or higher. No role (no access) is never enough. */
+export const atLeast = (role: Role | null | undefined, minimum: Role) =>
+  role != null && ROLES.indexOf(role) >= ROLES.indexOf(minimum);

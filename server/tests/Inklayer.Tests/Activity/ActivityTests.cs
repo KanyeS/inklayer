@@ -38,7 +38,7 @@ public sealed class ActivityTests(InklayerApiFactory factory)
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var project = await Scenario.CreateProjectAsync(admin, org.Id);
-        var (viewer, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Viewer");
+        var (viewer, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Viewer");
         var otherOrg = await Scenario.CreateOrganizationAsync(admin);
         var otherProject = await Scenario.CreateProjectAsync(admin, otherOrg.Id);
         var site = NewSite();
@@ -86,10 +86,10 @@ public sealed class ActivityTests(InklayerApiFactory factory)
     {
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
-        var (orgAdmin, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Admin");
-        var (member, memberMe) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (orgAdmin, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Admin");
+        var (member, memberMe) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         var otherOrg = await Scenario.CreateOrganizationAsync(admin);
-        var (_, outsiderMe) = await Scenario.AddMemberAsync(factory, admin, otherOrg.Id, "Owner");
+        var (_, outsiderMe) = await Scenario.AddProjectMemberAsync(factory, admin, otherOrg.Id, "Owner");
 
         var activity = await ActivityAsync(orgAdmin, "?kind=signins&limit=200");
 

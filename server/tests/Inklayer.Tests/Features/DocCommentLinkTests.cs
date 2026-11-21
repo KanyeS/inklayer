@@ -27,7 +27,7 @@ public sealed class DocCommentLinkTests(InklayerApiFactory factory)
         var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
         var project = await Scenario.CreateProjectAsync(admin, org.Id);
-        var (commenter, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (commenter, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         return (admin, org.Id, project.Id, commenter);
     }
 

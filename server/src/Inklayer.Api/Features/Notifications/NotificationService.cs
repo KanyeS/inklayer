@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Inklayer.Api.Auth;
 using Inklayer.Domain.Annotations;
+using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Docs;
 using Inklayer.Domain.Notifications;
 using Inklayer.Infrastructure.Persistence;
@@ -118,10 +119,29 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Someone asked for access to a product: tell <paramref name="deciders"/> (its Managers and the organisation's Admins).</summary>
+    public async Task AccessRequestedAsync(AccessRequest request, string productName, IReadOnlyCollection<Guid> deciders, CancellationToken ct)
+    {
+        var text = request.Message.Length > 0 ? $"Asked to be {request.Role}: {request.Message}" : $"Asked to be {request.Role}";
+        await NotifyAsync(NotificationKinds.AccessRequested, deciders, request.OrganizationId, request.UserId, null, null, text, ct, (request.ResourceId, productName));
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>A request was approved (with <paramref name="role"/>) or declined: tell the person who asked.</summary>
+    public async Task AccessDecidedAsync(AccessRequest request, string productName, Role? role, Guid actorUserId, CancellationToken ct)
+    {
+        var (kind, text) = role is { } r
+            ? (NotificationKinds.AccessGranted, $"You're now {r} on {productName}")
+            : (NotificationKinds.AccessDeclined, $"Your request for access to {productName} was declined");
+        await NotifyAsync(kind, [request.UserId], request.OrganizationId, actorUserId, null, null, text, ct, (request.ResourceId, productName));
+        await db.SaveChangesAsync(ct);
+    }
+
     /* ------------------------------------------------------------------ in-app and email */
 
     private async Task NotifyAsync(
-        string kind, IReadOnlyCollection<Guid> recipients, Guid organizationId, Guid? actorUserId, Annotation? comment, Doc? doc, string text, CancellationToken ct)
+        string kind, IReadOnlyCollection<Guid> recipients, Guid organizationId, Guid? actorUserId, Annotation? comment, Doc? doc, string text, CancellationToken ct,
+        (Guid Id, string Name)? product = null)
     {
         var ids = recipients.Where(r => r != actorUserId).Distinct().ToList();
         if (ids.Count == 0)
@@ -139,13 +159,14 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
         }
 
         var preview = await PreviewAsync(text, ct);
-        var where = comment?.PageUrl ?? doc?.Title ?? "";
+        var where = comment?.PageUrl ?? doc?.Title ?? product?.Name ?? "";
         var now = clock.GetUtcNow().UtcDateTime;
         foreach (var person in people)
         {
             db.Notifications.Add(new Notification
             {
                 UserId = person.Id, OrganizationId = organizationId, Kind = kind, ActorUserId = actorUserId, AnnotationId = comment?.Id, DocId = doc?.Id,
+                ProjectId = product?.Id,
                 Preview = preview, Where = Clip(where, 300), CreatedAt = now,
             });
         }
@@ -164,9 +185,15 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
             NotificationKinds.Resolved => $"{actor} resolved your comment",
             NotificationKinds.IssueClosed => "An issue linked to your comment was closed",
             NotificationKinds.IssueComment => "New comment on a linked issue",
+            NotificationKinds.AccessRequested => $"{actor} asked for access",
+            NotificationKinds.AccessGranted => $"{actor} gave you access",
+            NotificationKinds.AccessDeclined => $"{actor} declined your access request",
             _ => "Inklayer",
         };
-        var link = comment is not null ? $"{Origin()}/comments/{comment.Id}" : doc is not null ? $"{Origin()}/orgs/{doc.OrganizationId}/docs/{doc.Id}" : Origin();
+        var link = comment is not null ? $"{Origin()}/comments/{comment.Id}"
+            : doc is not null ? $"{Origin()}/orgs/{doc.OrganizationId}/docs/{doc.Id}"
+            : product is { } p ? $"{Origin()}/projects/{p.Id}{(kind == NotificationKinds.AccessRequested ? "#access" : "")}"
+            : Origin();
         var body = $"{subject}{(where.Length > 0 ? $" on {where}" : "")}:\n\n{preview}\n\nOpen it: {link}\n\n" +
             "You get these emails because your organisation sends Inklayer notifications by email. Turn them off in Inklayer's Settings.";
         foreach (var person in people.Where(p => p.EmailNotifications))

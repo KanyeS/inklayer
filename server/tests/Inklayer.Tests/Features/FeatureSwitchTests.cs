@@ -34,7 +34,7 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
     {
         using var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
-        var (member, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (member, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         try
         {
             var saved = await SaveAsync(admin, new { docs = false });
@@ -103,7 +103,7 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
     {
         using var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
-        var (member, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        var (member, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
         await using var live = await PresenceProbe.ConnectAsync(factory, member);
         try
         {
@@ -173,7 +173,7 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
     {
         using var admin = await factory.SignInAsAdminAsync();
         var org = await Scenario.CreateOrganizationAsync(admin);
-        var (owner, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Owner");
+        var (owner, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Owner");
 
         await owner.GetAsync(new Uri("/api/admin/features", UriKind.Relative)).ExpectAsync(HttpStatusCode.Forbidden);
         await owner.PutJsonAsync("/api/admin/features", new { docs = false }).ExpectAsync(HttpStatusCode.Forbidden);

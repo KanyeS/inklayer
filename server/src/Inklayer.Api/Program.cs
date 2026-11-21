@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Inklayer.Api.Activity;
 using Inklayer.Api.Auth;
 using Inklayer.Api.Endpoints;
+using Inklayer.Api.Features.Access;
 using Inklayer.Api.Features.Admin;
 using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Docs;
@@ -59,6 +60,10 @@ try
     app.MapAppsEndpoints();
     app.MapOrganizationEndpoints();
     app.MapProjectEndpoints();
+    app.MapTeamEndpoints();
+    app.MapAccessEndpoints();
+    app.MapAccessRequestEndpoints();
+    app.MapAccessMapEndpoints();
     app.MapAdminEndpoints();
     app.MapAnnotationEndpoints();
     app.MapContextEndpoints();
