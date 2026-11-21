@@ -3,7 +3,6 @@ import {
   type Anchor,
   type AnchorQuality,
   type AnnotationKind,
-  copyText,
   type Draft,
   type Geometry,
   Overlay,
@@ -19,6 +18,7 @@ import type { RecorderState } from "../lib/recorder-protocol";
 import { call, messageOf, remember } from "./call";
 import { Captures } from "./captures";
 import { Carry, scopeFor } from "./carry";
+import { commentActions } from "./comment-actions";
 import type { PageAnnotation, PanelContext, View } from "./context";
 import type { Scope } from "./format";
 import { HoverBubbles } from "./hover-bubbles";
@@ -26,13 +26,17 @@ import { COLORS } from "./labels";
 import { NextFrame } from "./next-frame";
 import { panelHost } from "./page-io";
 import { PanelMover } from "./panel-mover";
+import { SettleTimer } from "./settle-timer";
+import { sharePage } from "./share";
+import { SiteProduct } from "./site-product";
 import panelCss from "./styles/panel.css?inline";
-import { draftBody, draftOf, EMPTY_DRAFT, type TextDraft } from "./suggestions";
+import { draftBody, EMPTY_DRAFT, type TextDraft } from "./suggestions";
 import { ActivityView } from "./views/activity";
 import { cornerPin, header, launcher, type SharedLink, sharedBox, sizeBar } from "./views/chrome";
 import { bubbleContent, type CommentActions, listEntry } from "./views/comment";
 import { CommentParts } from "./views/comment-parts";
 import { cannotComment, draftBox, draftInput, scopeChooser, toolbar } from "./views/composer";
+import { commentList, productFilter } from "./views/filter";
 import { InboxView } from "./views/inbox";
 import { pullRequestBox } from "./views/pull-request";
 import { SizeMatcher } from "./window-size";
@@ -113,6 +117,8 @@ export class LiveSession {
   #view: View = "comments";
   #selected: string | null = null;
   #showResolved = false;
+  /** The product whose comments are shown ("Showing"), or all; remembered per site. */
+  readonly #site: SiteProduct;
   #marksVisible = true;
   /** Every comment's bubble open, not just on hover (the user's choice, remembered). */
   #bubblesOpen = false;
@@ -130,15 +136,23 @@ export class LiveSession {
 
   // Following the page
   #href = location.href;
-  #reanchorTimer = 0;
-  #reanchorSince = 0;
+  /** Re-anchors the marks once the page's content stops changing. */
+  readonly #reanchor = new SettleTimer(
+    () => this.#annotations.length > 0 && this.#overlay.reanchor(),
+    REANCHOR_DELAY_MS,
+    REANCHOR_MAX_WAIT_MS,
+  );
 
   constructor(init: LiveInit) {
     this.#init = init;
     this.#pullRequest = init.pullRequest;
     this.#projects = new Map(init.projects.map((p) => [p.id, p]));
     const commentable = init.projects.filter((p) => p.canComment);
-    this.#target = commentable.find((p) => p.id === init.lastProjectId) ?? commentable[0] ?? null;
+    this.#site = new SiteProduct((init.siteProjectIds ?? []).filter((id) => this.#projects.has(id)));
+    // New comments go where they last went, preferring the products this site shows, so they stay in view.
+    const shown = commentable.filter((p) => this.#site.shows(p.id));
+    const pick = (list: LiveProject[]) => list.find((p) => p.id === init.lastProjectId) ?? list[0];
+    this.#target = pick(shown) ?? pick(commentable) ?? null;
     this.#setPages(init.pages);
 
     [this.#host, this.#shadow, this.#root] = panelHost(PANEL_STYLES);
@@ -261,7 +275,7 @@ export class LiveSession {
       this.#render();
       return;
     }
-    if (annotation.status === "Resolved") this.#showResolved = true;
+    this.#reveal(annotation);
     this.#selected = id;
     this.#syncOverlay();
     this.#overlay.handle({ type: "select", id, scroll: true });
@@ -291,7 +305,7 @@ export class LiveSession {
 
     // The page's DOM changes: find the annotated elements again, but not on every mutation.
     if (document.body) {
-      new MutationObserver(() => this.#scheduleReanchor()).observe(document.body, { childList: true, subtree: true });
+      new MutationObserver(() => this.#reanchor.poke()).observe(document.body, { childList: true, subtree: true });
     }
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this.#draft) this.#cancelDraft();
@@ -410,13 +424,24 @@ export class LiveSession {
     return this.#projects.get(projectId)?.organizationId ?? null;
   }
 
-  /** A comment's number on the page (its badge), by when it was made. */
+  /** A comment's number on the page (its badge), by when it was made, among the comments of the products shown. */
   #labelOf(id: string): number {
-    return this.#annotations.findIndex((a) => a.id === id) + 1;
+    return this.#site.shown(this.#annotations).findIndex((a) => a.id === id) + 1;
   }
 
   #visible(): PageAnnotation[] {
-    return this.#annotations.filter((a) => this.#showResolved || a.status === "Open");
+    return this.#site.shown(this.#annotations).filter((a) => this.#showResolved || a.status === "Open");
+  }
+
+  /** Shows some products' comments (empty, or every product: all). New comments move to a shown product if they can. */
+  #setFilter(projectIds: string[], remember = true): void {
+    this.#site.set(projectIds.length === this.#projects.size ? [] : projectIds, remember);
+    if (this.#target && !this.#site.shows(this.#target.id)) {
+      this.#target = [...this.#projects.values()].find((p) => p.canComment && this.#site.shows(p.id)) ?? this.#target;
+    }
+    if (this.#selected && !this.#visible().some((a) => a.id === this.#selected)) this.#selected = null;
+    this.#syncOverlay();
+    this.#render();
   }
 
   #syncOverlay(): void {
@@ -433,37 +458,15 @@ export class LiveSession {
     this.#overlay.handle({ type: "select", id: this.#selected, scroll: false });
   }
 
-  #scheduleReanchor(): void {
-    const now = Date.now();
-    if (!this.#reanchorTimer) this.#reanchorSince = now;
-    clearTimeout(this.#reanchorTimer);
-    const wait = now - this.#reanchorSince > REANCHOR_MAX_WAIT_MS ? 0 : REANCHOR_DELAY_MS;
-    this.#reanchorTimer = window.setTimeout(() => {
-      this.#reanchorTimer = 0;
-      if (this.#annotations.length > 0) this.#overlay.reanchor();
-    }, wait);
-  }
-
   /** Changes to one comment, for the views' buttons. */
   #actionsFor(a: PageAnnotation): CommentActions {
-    const update = (change: { status: "Open" | "Resolved" } | { body: string }) =>
-      void this.#mutate(() => call({ type: "live.update", id: a.id, version: a.version, ...change }));
-    return {
-      setResolved: (resolved) => update({ status: resolved ? "Resolved" : "Open" }),
-      remove: () => void this.#mutate(() => call({ type: "live.delete", id: a.id, version: a.version })),
-      startEdit: () => {
-        this.#editing = { id: a.id, draft: draftOf(a.body, a.people ?? []) };
+    return commentActions(a, {
+      mutate: (action) => void this.#mutate(action),
+      setEditing: (editing) => {
+        this.#editing = editing;
         this.#render();
       },
-      saveEdit: (draft) => {
-        this.#editing = null;
-        update({ body: draftBody(draft) });
-      },
-      cancelEdit: () => {
-        this.#editing = null;
-        this.#render();
-      },
-    };
+    });
   }
 
   /* ------------------------------------------------------------------ overlay events */
@@ -569,17 +572,9 @@ export class LiveSession {
   }
 
   async #sharePage(): Promise<void> {
-    const target = this.#target;
-    if (!target) return;
+    if (!this.#target) return;
     try {
-      const share = await call<{ url: string; existing: boolean; expiresAt: string | null }>({
-        type: "live.share",
-        projectId: target.id,
-        url: location.href,
-      });
-      const copied = await copyText(share.url);
-      const { url, existing, expiresAt } = share;
-      this.#shared = { url, existing, expiresAt, projectName: target.name, copied };
+      this.#shared = await sharePage(this.#target);
       this.#render();
     } catch (e) {
       this.#flashNote(`Couldn't share: ${messageOf(e)}`);
@@ -595,13 +590,19 @@ export class LiveSession {
     this.#render();
   }
 
+  /**
+   * Makes sure a comment being opened is listed: resolved ones are hidden by default, and one in another product than
+   * the ones shown switches to all products (without changing the site's choice).
+   */
+  #reveal(a: PageAnnotation | undefined): void {
+    if (a?.status === "Resolved") this.#showResolved = true;
+    if (a && !this.#site.shows(a.projectId)) this.#site.set([], false);
+  }
+
   /** Selects a comment on this page and switches to the comments list. */
   #showOnPage(id: string): void {
-    // Resolved comments are hidden by default; show them if that's the one being opened.
-    if (this.#annotations.find((a) => a.id === id)?.status === "Resolved" && !this.#showResolved) {
-      this.#showResolved = true;
-      this.#syncOverlay();
-    }
+    this.#reveal(this.#annotations.find((a) => a.id === id));
+    this.#syncOverlay();
     this.#selected = id;
     this.#overlay.handle({ type: "select", id, scroll: true });
     this.#setView("comments");
@@ -620,7 +621,7 @@ export class LiveSession {
     if (!this.#open) {
       return launcher({
         openCount:
-          this.#annotations.filter((a) => a.status === "Open").length +
+          this.#site.shown(this.#annotations).filter((a) => a.status === "Open").length +
           (this.#pullRequest?.comments.filter((c) => c.status === "Open").length ?? 0),
         unread: this.#inbox.unread,
         pinned: this.#mover.pinned,
@@ -707,7 +708,9 @@ export class LiveSession {
       drafting: this.#draft !== null,
       onTarget: (projectId) => {
         this.#target = this.#projects.get(projectId) ?? this.#target;
-        this.#render();
+        // Not among the products shown: add it, so what's written there stays in view.
+        if (!this.#site.shows(projectId)) this.#setFilter([...this.#site.ids, projectId]);
+        else this.#render();
       },
       onTool: (tool) => this.#setTool(tool),
       onColor: (color) => {
@@ -745,33 +748,30 @@ export class LiveSession {
     });
   }
 
-  /** The page's comments, and "Show resolved" when some are hidden. */
   #commentList(): ComponentChild[] {
-    const visible = this.#visible();
-    const resolvedCount = this.#annotations.filter((a) => a.status !== "Open").length;
-    const empty = this.#annotations.length ? "No open comments." : "No comments on this page yet.";
-    const list = (
-      <ol className="list">
-        {visible.map((a) => this.#listEntry(a))}
-        {visible.length === 0 && <li className="empty">{empty}</li>}
-      </ol>
-    );
-    if (resolvedCount === 0) return [list];
-    const toggle = () => {
-      this.#showResolved = !this.#showResolved;
-      this.#syncOverlay();
-      this.#render();
-    };
-    return [
-      list,
-      <button key="resolved" type="button" className="link" onClick={toggle}>
-        {this.#showResolved ? "Hide resolved" : `Show resolved (${resolvedCount})`}
-      </button>,
-    ];
+    return commentList({
+      all: this.#annotations,
+      shown: this.#site.shown(this.#annotations),
+      visible: this.#visible(),
+      showResolved: this.#showResolved,
+      menu: productFilter({
+        projects: [...this.#projects.values()],
+        annotations: this.#annotations,
+        selected: this.#site.ids,
+        onChange: (projectIds) => this.#setFilter(projectIds),
+      }),
+      entry: (a) => this.#listEntry(a),
+      onShowAllProducts: () => this.#setFilter([]),
+      onToggleResolved: () => {
+        this.#showResolved = !this.#showResolved;
+        this.#syncOverlay();
+        this.#render();
+      },
+    });
   }
 
   #listEntry(a: PageAnnotation): ComponentChild {
-    const multiProject = new Set(this.#annotations.map((x) => x.projectId)).size > 1;
+    const multiProject = new Set(this.#site.shown(this.#annotations).map((x) => x.projectId)).size > 1;
     const editing = this.#editing?.id === a.id ? this.#editing : null;
     return listEntry(this.#ctx, this.#parts, a, {
       label: this.#labelOf(a.id),

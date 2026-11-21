@@ -25,6 +25,7 @@ import {
   uploadResult,
 } from "./screenshots";
 import { getSettings } from "./settings";
+import { SITE_PRODUCTS_KEY, siteProductsFor } from "./site-products";
 import { resizeWindow, restoreWindow, windowResized, zoomTab } from "./window-sizing";
 
 export type * from "./live-types";
@@ -454,7 +455,7 @@ async function init(url: string): Promise<LiveInit> {
   const [all, pages, stored, settings, on, pullRequest] = await Promise.all([
     projects.get(),
     pageComments(url),
-    chrome.storage.local.get("lastLiveProjectId"),
+    chrome.storage.local.get(["lastLiveProjectId", SITE_PRODUCTS_KEY]),
     getSettings(),
     features.get(),
     pullRequestOf(url),
@@ -464,6 +465,7 @@ async function init(url: string): Promise<LiveInit> {
     projects: all,
     pages,
     lastProjectId: last && all.some((p) => p.id === last && p.canComment) ? last : null,
+    siteProjectIds: siteProductsFor(stored[SITE_PRODUCTS_KEY], safeOrigin(url), all),
     serverUrl: new URL(settings.serverUrl ?? "").origin,
     features: on,
     pullRequest,

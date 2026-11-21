@@ -38,6 +38,8 @@ export interface LiveInit {
   pages: LivePageAnnotationsResponse[];
   /** The project new comments went into last time, if the user can still comment there. */
   lastProjectId: string | null;
+  /** The products whose comments this site shows (the user's last pick here); empty for all products. */
+  siteProjectIds?: string[];
   /** The Inklayer server, for links to docs and comments. */
   serverUrl: string;
   /** Which major features are on for this server. */

@@ -359,6 +359,66 @@ button.link.danger {
   color: var(--muted-foreground);
   font-size: 12px;
 }
+/* "Showing": which products' comments are listed, set apart from the tools above. A checklist that opens below. */
+.target.filter {
+  margin-top: 8px;
+  position: relative;
+}
+.filter summary {
+  cursor: pointer;
+  list-style: none;
+}
+.filter summary::-webkit-details-marker {
+  display: none;
+}
+.filter summary .value {
+  display: inline-block;
+  margin-left: 4px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: color-mix(in oklch, var(--input) 50%, transparent);
+  color: var(--foreground);
+}
+.filter summary .value::after {
+  content: " ▾";
+}
+.filter-menu {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.15);
+}
+.filter-menu .choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  font-size: 13px;
+}
+.filter-menu .org {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 0;
+  border: none;
+  padding: 0;
+}
+.filter-menu .org > .choice:not(.org-name) {
+  padding-left: 22px;
+}
+.filter-menu .org-name {
+  font-weight: 600;
+}
 select {
   appearance: auto;
   border: 1px solid transparent;

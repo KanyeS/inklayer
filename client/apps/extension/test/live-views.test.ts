@@ -15,6 +15,7 @@ import {
 import { bubbleContent, type CommentActions, type ListEntryOptions, listEntry } from "../src/live/views/comment";
 import { CommentParts } from "../src/live/views/comment-parts";
 import { cannotComment, draftBox, isChosen, scopeChooser, toolbar } from "../src/live/views/composer";
+import { summary } from "../src/live/views/filter";
 import { InboxView } from "../src/live/views/inbox";
 import {
   ALL_FEATURES,
@@ -680,6 +681,12 @@ describe("inbox", () => {
     expect(inboxItemUrl({ ...base, annotationId: "a1" }, "https://ink.test")).toBe("https://ink.test/comments/a1");
     expect(inboxItemUrl({ ...base, docId: "d1" }, "https://ink.test")).toBe("https://ink.test/orgs/o1/docs/d1");
     expect(inboxItemUrl(base, "https://ink.test")).toBe("https://ink.test");
+    expect(inboxItemUrl({ ...base, projectId: "p1", kind: "access_requested" }, "https://ink.test")).toBe(
+      "https://ink.test/projects/p1#access",
+    );
+    expect(inboxItemUrl({ ...base, projectId: "p1", kind: "access_granted" }, "https://ink.test")).toBe(
+      "https://ink.test/projects/p1",
+    );
   });
 
   it("lists notifications, marking unread ones", async () => {
@@ -723,5 +730,16 @@ describe("inbox", () => {
     const root = mount(view.parts());
     expect(root.querySelector(".inbox-head strong")?.textContent).toBe("All read");
     expect(root.querySelector(".empty")?.textContent).toContain("Nothing yet.");
+  });
+});
+
+describe("the Showing menu's label", () => {
+  const projects = ["Checkout", "Search", "Blog", "Docs"].map((name, i) => project({ id: `p${i}`, name }));
+
+  it("names up to two products, then counts the rest", () => {
+    expect(summary(projects, new Set())).toBe("All products");
+    expect(summary(projects, new Set(["p1"]))).toBe("Search");
+    expect(summary(projects, new Set(["p1", "p0"]))).toBe("Checkout, Search");
+    expect(summary(projects, new Set(["p0", "p2", "p3"]))).toBe("Checkout + 2 more");
   });
 });
