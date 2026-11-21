@@ -11,14 +11,24 @@
       button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid #7c3aed; background: #7c3aed; color: #fff; cursor: pointer; }
       button.stop { background: #dc2626; border-color: #dc2626; }
       button:disabled { opacity: 0.5; cursor: default; }
+      button.draw { background: transparent; color: inherit; border-color: #a1a1aa; margin-left: 6px; }
       .time { font-variant-numeric: tabular-nums; margin-left: 8px; }
       .error { color: #dc2626; }
+      /* As a bar at the bottom of the page: the buttons, the time and a short status, on one line. */
+      body.embedded { margin: 0; height: 100vh; padding: 0 12px; display: flex; align-items: center; gap: 6px;
+        background: #18181b; color: #eee; font-size: 13px; overflow: hidden; }
+      body.embedded h1, body.embedded #hint { display: none; }
+      body.embedded button { padding: 4px 12px; }
+      body.embedded #status { margin: 0 0 0 4px; color: #a1a1aa; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      body.embedded .error { color: #f87171; }
     </style>
   </head>
   <body>
     <h1>Record the tab</h1>
     <p id="hint">Pick the tab to record, then show what's wrong. Up to 1 minute; it's attached to your new comment.</p>
-    <button id="action" type="button">Start recording</button><span class="time" id="time"></span>
+    <button id="action" type="button">Start recording</button>
+    <button id="draw" class="draw" type="button" hidden title="Draw on the page; the line fades. Esc stops drawing.">✎ Draw</button>
+    <span class="time" id="time"></span>
     <p id="status" role="status"></p>
     <script type="module" src="./src/recorder/main.ts"></script>
   </body>

@@ -356,6 +356,7 @@ public sealed partial class IssueTrackerTests
         var html = ops.Single(o => o.GetProperty("path").GetString() == "/fields/Microsoft.VSTS.TCM.ReproSteps").GetProperty("value").GetString()!;
         Assert.Contains($"<a href=\"http://localhost/comments/{comment}\"><img src=\"https://dev.azure.com/files/_apis/wit/attachments/att-1\"", html, StringComparison.Ordinal);
         Assert.Contains("<a href=\"https://dev.azure.com/files/_apis/wit/attachments/att-2\">Download the recording</a>", html, StringComparison.Ordinal);
+        Assert.Contains($"<a href=\"http://localhost/comments/{comment}\">▶ Play the recording</a>", html, StringComparison.Ordinal);
         Assert.Equal(2, ops.Count(o => o.GetProperty("path").GetString() == "/relations/-"));
     }
 }

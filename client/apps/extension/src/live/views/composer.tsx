@@ -125,7 +125,13 @@ export interface DraftBoxOptions {
   onFullPage(on: boolean): void;
   /** The recording attached to the comment (its length), undefined if none; null when bug context is off. */
   recording: { seconds: number } | undefined | null;
+  /** The recorder's bar is open at the bottom of the page. */
+  recorderOpen: boolean;
+  /** Opens the recorder's bar. */
   onRecord(): void;
+  /** For sites that don't allow recording from the page: the recorder in its own window. */
+  onRecordInWindow(): void;
+  onCloseRecorder(): void;
   onRemoveRecording(): void;
   /** Issue trackers are on: say that the first line becomes an issue's title. */
   issueTitleHint: boolean;
@@ -176,11 +182,21 @@ export function draftBox(o: DraftBoxOptions): ComponentChild {
               Remove
             </button>
           </p>
+        ) : o.recorderOpen ? (
+          <p className="row muted">
+            Recording controls are at the bottom of the page.{" "}
+            <button type="button" className="link" onClick={o.onRecordInWindow}>
+              Use a separate window
+            </button>
+            <button type="button" className="link" onClick={o.onCloseRecorder}>
+              Cancel
+            </button>
+          </p>
         ) : (
           <button
             type="button"
             className="link"
-            title="Opens a small window to record a tab, up to a minute; it's sent with the comment"
+            title="Record a tab, up to a minute; it's sent with the comment"
             onClick={o.onRecord}
           >
             Record the tab…

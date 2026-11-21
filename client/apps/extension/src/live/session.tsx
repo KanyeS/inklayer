@@ -92,6 +92,8 @@ export class LiveSession {
   #color: string = COLORS[0];
   #scope: Scope = { query: false, hash: false };
   /** Attach a screenshot and page details to new comments (remembered; on unless turned off). */
+  /** The tab is being recorded: the comment tool is paused (see recordingTab). */
+  #recordingTab = false;
   /** The screenshot, page details, full page and recording sent with a new comment. */
   readonly #captures = new Captures(
     () => this.#init.features.bugContext,
@@ -472,8 +474,21 @@ export class LiveSession {
 
   #setTool(tool: Tool): void {
     this.#tool = tool;
-    this.#overlay.handle({ type: "setTool", tool, color: this.#color });
+    // While recording, clicks belong to the page: the tool takes effect when it stops.
+    if (!this.#recordingTab) this.#overlay.handle({ type: "setTool", tool, color: this.#color });
     this.#render();
+  }
+
+  /** The tab is being recorded, or not: while it is, the tool steps aside so clicks don't move the draft. */
+  recordingTab(on: boolean): void {
+    if (on === this.#recordingTab) return;
+    this.#recordingTab = on;
+    this.#overlay.handle({ type: "setTool", tool: on ? "select" : this.#tool, color: this.#color });
+    // Recording from the bar on the page, the panel gets out of the way until it stops.
+    if (this.#captures.recorderOnPage) {
+      this.#open = !on;
+      this.#render();
+    }
   }
 
   /** The scope to save with, limited to the parts this address actually has. */
@@ -485,6 +500,7 @@ export class LiveSession {
   }
 
   #cancelDraft(): void {
+    this.#captures.closeRecorder();
     this.#captures.discardRecording();
     this.#draft = null;
     this.#draftText = EMPTY_DRAFT;

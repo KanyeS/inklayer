@@ -13,10 +13,22 @@ const KEEP_MS = 24 * 60 * 60 * 1000;
 /** The longest recording, in seconds. */
 export const MAX_RECORDING_SECONDS = 60;
 
+/**
+ * What the recorder tells the page while recording, through the background: that it's recording (the page then shows
+ * clicks), and to switch drawing on or off.
+ */
+export interface RecordingSignal {
+  type: "recording.state" | "recording.draw";
+  /** As in RecordingDone. */
+  tabId: number | null;
+  recording?: boolean;
+}
+
 /** What the recording window tells the background when it's done, to pass on to the page. */
 export interface RecordingDone {
   type: "recording.done";
-  tabId: number;
+  /** The tab it's for, from a recording window; null when embedded in the tab's own page. */
+  tabId: number | null;
   recordingId: string;
   seconds: number;
   size: number;

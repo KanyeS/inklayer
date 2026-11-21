@@ -279,7 +279,10 @@ describe("making a comment", () => {
         fullPage: false,
         onFullPage: vi.fn(),
         recording: { seconds: 83 },
+        recorderOpen: false,
         onRecord: vi.fn(),
+        onRecordInWindow: vi.fn(),
+        onCloseRecorder: vi.fn(),
         onRemoveRecording,
         issueTitleHint: true,
         onSave,
@@ -299,6 +302,36 @@ describe("making a comment", () => {
     expect(onAttachContext).toHaveBeenCalledWith(false);
   });
 
+  it("points to the recorder's bar, with a separate window as the fallback", () => {
+    const onRecordInWindow = vi.fn();
+    const onCloseRecorder = vi.fn();
+    const box = mountOne(
+      draftBox({
+        input: h("textarea", null),
+        scope: null,
+        busy: false,
+        attachContext: true,
+        onAttachContext: vi.fn(),
+        fullPage: false,
+        onFullPage: vi.fn(),
+        recording: undefined,
+        recorderOpen: true,
+        onRecord: vi.fn(),
+        onRecordInWindow,
+        onCloseRecorder,
+        onRemoveRecording: vi.fn(),
+        issueTitleHint: false,
+        onSave: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    expect(box.textContent).toContain("Recording controls are at the bottom of the page.");
+    clickButton(box, "Use a separate window");
+    clickButton(box, "Cancel");
+    expect(onRecordInWindow).toHaveBeenCalledOnce();
+    expect(onCloseRecorder).toHaveBeenCalledOnce();
+  });
+
   it("leaves out the attach option without bug context, and says when it's saving", () => {
     const box = mountOne(
       draftBox({
@@ -310,7 +343,10 @@ describe("making a comment", () => {
         fullPage: null,
         onFullPage: vi.fn(),
         recording: null,
+        recorderOpen: false,
         onRecord: vi.fn(),
+        onRecordInWindow: vi.fn(),
+        onCloseRecorder: vi.fn(),
         onRemoveRecording: vi.fn(),
         issueTitleHint: false,
         onSave: vi.fn(),

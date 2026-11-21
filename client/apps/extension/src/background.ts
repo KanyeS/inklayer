@@ -4,7 +4,7 @@ import { handleLive, isLiveRequest, type LiveRequest, openLiveInTab, stopLive, s
 import type { Request, Response, StateResponse } from "./lib/messages";
 import { inbox, markRead, startNotifications } from "./lib/notifications";
 import { acceptPort, forgetTab, isPresenceOn, PRESENCE_PORT, setPresence, stopPresence } from "./lib/presence";
-import type { RecordingDone } from "./lib/recordings";
+import type { RecordingDone, RecordingSignal } from "./lib/recordings";
 import { getSettings } from "./lib/settings";
 
 // The unread count on the toolbar icon.
@@ -27,15 +27,38 @@ chrome.runtime.onMessage.addListener(
   (request: Request | LiveRequest | { type: "presence.status" }, sender, sendResponse) => {
     if (sender.id !== chrome.runtime.id) return false;
 
-    // From the recording window (an extension page in its own window): a recording is ready, for the page it's from.
+    // From the recorder: it's recording or stopped, or drawing was switched; passed on to the page that's recorded.
+    if (sender.url?.startsWith(chrome.runtime.getURL("recorder.html"))) {
+      const signal = request as unknown as RecordingSignal;
+      if (signal.type === "recording.state" || signal.type === "recording.draw") {
+        const tabId = signal.tabId ?? sender.tab?.id;
+        if (tabId === undefined) return false;
+        respond(
+          chrome.tabs
+            .sendMessage(
+              tabId,
+              signal.type === "recording.state"
+                ? { type: "inklayer.recordingState", recording: signal.recording === true }
+                : { type: "inklayer.recordingDraw" },
+            )
+            .then(() => null),
+          sendResponse,
+        );
+        return true;
+      }
+    }
+
+    // From the recorder (an extension page, in a comment box on the page or its own window): a recording is ready.
     if (
       sender.url?.startsWith(chrome.runtime.getURL("recorder.html")) &&
       (request as { type?: string }).type === "recording.done"
     ) {
       const done = request as unknown as RecordingDone;
+      const tabId = done.tabId ?? sender.tab?.id;
+      if (tabId === undefined) return false;
       respond(
         chrome.tabs
-          .sendMessage(done.tabId, {
+          .sendMessage(tabId, {
             type: "inklayer.recording",
             recordingId: done.recordingId,
             seconds: done.seconds,

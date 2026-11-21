@@ -3,22 +3,34 @@ import {
   POSTER_AT_MS,
   posterFrom,
   type RecordingDone,
+  type RecordingSignal,
   recordingType,
   saveRecording,
 } from "../lib/recordings";
 
 /**
- * The recording window: opened from a new comment, it records a tab (the person picks it in the browser's share prompt)
- * for up to a minute, keeps the video for the background to upload with the comment, and tells the page it's there.
- * Recording starts from here, an extension page, so the recorded site's own policies can't block it.
+ * The recorder: shown in a new comment's box on the page (embedded), or in its own window. It records a tab (the person
+ * picks it in the browser's share prompt) for up to a minute, keeps the video for the background to upload with the
+ * comment, and tells the page it's there. Recording starts from here, an extension page, so the browser's prompt names
+ * Inklayer rather than the site.
  */
 
-const tabId = Number(new URLSearchParams(location.search).get("tab"));
+const params = new URLSearchParams(location.search);
+/** In its own window, the tab it's for; embedded, the background knows the tab it's in. */
+const tabId = Number(params.get("tab")) || null;
+const embedded = params.has("embedded");
+if (embedded) document.body.classList.add("embedded");
 const action = document.getElementById("action") as HTMLButtonElement;
+const draw = document.getElementById("draw") as HTMLButtonElement;
 const time = document.getElementById("time") as HTMLSpanElement;
 const status = document.getElementById("status") as HTMLParagraphElement;
 
 let recorder: MediaRecorder | null = null;
+
+/** Tells the page it's being recorded (it shows clicks then), or to switch drawing on or off. */
+function signal(type: RecordingSignal["type"], recording?: boolean): void {
+  void chrome.runtime.sendMessage({ type, tabId, recording } satisfies RecordingSignal).catch(() => undefined);
+}
 let stopSharing: () => void = () => undefined;
 
 function say(text: string, error = false): void {
@@ -61,6 +73,8 @@ async function start(): Promise<void> {
   }, 250);
   recorder.onstop = () => {
     clearInterval(tick);
+    signal("recording.state", false);
+    draw.hidden = true;
     for (const track of stream.getTracks()) track.stop();
     void poster.then((still) =>
       finish(new Blob(chunks, { type: type.split(";")[0] }), still, Math.round((Date.now() - began) / 1000)),
@@ -77,9 +91,11 @@ async function start(): Promise<void> {
   for (const track of stream.getVideoTracks())
     track.addEventListener("ended", () => recorder?.state === "recording" && recorder.stop());
   recorder.start(1000);
+  signal("recording.state", true);
+  draw.hidden = false;
   action.textContent = "Stop";
   action.className = "stop";
-  say("Recording. Switch to the tab and show what's wrong.");
+  say(embedded ? "" : "Recording. Switch to the tab and show what's wrong.");
 }
 
 let done = false;
@@ -102,8 +118,20 @@ async function finish(blob: Blob, poster: Blob | null, seconds: number): Promise
   } catch (e) {
     return say(`The recording couldn't be kept: ${e instanceof Error ? e.message : String(e)}`, true);
   }
-  say("Attached to your comment. Save the comment to send it. You can close this window.");
+  say(
+    embedded
+      ? "Attached to your comment."
+      : "Attached to your comment. Save the comment to send it. You can close this window.",
+  );
 }
+
+// The comment box asks it to stop when the comment is cancelled, so the share ends before the recorder is removed.
+window.addEventListener("message", (e) => {
+  if (e.source === window.parent && (e.data as { type?: string } | null)?.type === "inklayer.recorder.stop")
+    stopSharing();
+});
+
+draw.addEventListener("click", () => signal("recording.draw"));
 
 action.addEventListener("click", () => {
   if (done) window.close();

@@ -3,6 +3,7 @@ import type { LiveInit } from "./lib/live";
 import type { Response } from "./lib/messages";
 import { call, messageOf } from "./live/call";
 import type { View } from "./live/context";
+import { RecordingEffects } from "./live/recording-effects";
 import { LiveSession } from "./live/session";
 import { PresenceClient } from "./presence-page";
 
@@ -69,12 +70,23 @@ function commentFromAddress(): string | null {
   return wanted;
 }
 
-/** A recording made from this page's new comment, ready in the extension to be sent with it (from the recording window). */
+/**
+ * The recorder, recording this tab: clicks and drawing shown on the page while it records, and the recording, once
+ * it's made, attached to the comment being written.
+ */
 function listenForRecordings(): void {
-  chrome.runtime.onMessage.addListener((message: { type?: string; recordingId?: string; seconds?: number }, sender) => {
-    if (!fromUs(sender) || message?.type !== "inklayer.recording" || !message.recordingId) return;
-    session?.recordingReady(message.recordingId, message.seconds ?? 0);
-  });
+  const effects = new RecordingEffects();
+  chrome.runtime.onMessage.addListener(
+    (message: { type?: string; recordingId?: string; seconds?: number; recording?: boolean }, sender) => {
+      if (!fromUs(sender)) return;
+      if (message?.type === "inklayer.recordingState") {
+        effects.setRecording(message.recording === true);
+        session?.recordingTab(message.recording === true);
+      } else if (message?.type === "inklayer.recordingDraw") effects.toggleDrawing();
+      else if (message?.type === "inklayer.recording" && message.recordingId)
+        session?.recordingReady(message.recordingId, message.seconds ?? 0);
+    },
+  );
 }
 
 /** Live cursors: only in tabs where the user turned them on in the toolbar popup. The flag lasts until the tab closes. */

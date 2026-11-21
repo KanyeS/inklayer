@@ -184,12 +184,16 @@ internal sealed partial class IssueService
         return lines;
     }
 
-    /// <summary>The still, as a link to where the recording plays; or just a link, without a still.</summary>
+    /// <summary>
+    /// The still, linked to where the recording plays, and a link saying so: some trackers (Azure DevOps) open a picture
+    /// in their own viewer when it's clicked, whatever it links to. Or just the link, without a still.
+    /// </summary>
     private static void AddPlayable(List<string> lines, string? still, string? play)
     {
         if (still is not null && play is not null)
         {
             lines.Add($"[{still}]({play})");
+            lines.Add($"[▶ Play the recording]({play})");
         }
         else if (play is not null)
         {

@@ -1,6 +1,7 @@
 import type { Draft } from "@inklayer/overlay";
 import { attachFullPage, attachPageDetails } from "./bug-context";
 import { call, messageOf, remember } from "./call";
+import { RecorderDock } from "./recorder-dock";
 import type { DraftBoxOptions } from "./views/composer";
 
 /**
@@ -12,6 +13,8 @@ export class Captures {
   #fullPage = false;
   /** A recording made for the comment being written, kept in the extension until it's saved. */
   #recording: { id: string; seconds: number } | null = null;
+  /** The recorder's bar at the bottom of the page, while it's open. */
+  readonly #dock = new RecorderDock();
   readonly #on: () => boolean;
   readonly #render: () => void;
   readonly #note: (note: string) => void;
@@ -21,6 +24,11 @@ export class Captures {
     this.#on = on;
     this.#render = render;
     this.#note = note;
+  }
+
+  /** The recorder is in its bar on the page (not its own window): the panel gets out of the way while it records. */
+  get recorderOnPage(): boolean {
+    return this.#dock.isOpen;
   }
 
   /** The choices remembered from last time. */
@@ -37,7 +45,16 @@ export class Captures {
     }
     this.discardRecording();
     this.#recording = { id, seconds };
+    // The recorder has ended the share by now: it can go.
+    this.#dock.remove();
     return true;
+  }
+
+  /** Closes the recorder's bar: it ends any share first, and goes a moment later (see RecorderDock.close). */
+  closeRecorder(): void {
+    if (!this.#dock.isOpen) return;
+    this.#dock.close();
+    this.#render();
   }
 
   discardRecording(): void {
@@ -49,7 +66,16 @@ export class Captures {
   /** The comment box's options for these choices. */
   options(): Pick<
     DraftBoxOptions,
-    "attachContext" | "onAttachContext" | "fullPage" | "onFullPage" | "recording" | "onRecord" | "onRemoveRecording"
+    | "attachContext"
+    | "onAttachContext"
+    | "fullPage"
+    | "onFullPage"
+    | "recording"
+    | "recorderOpen"
+    | "onRecord"
+    | "onRecordInWindow"
+    | "onCloseRecorder"
+    | "onRemoveRecording"
   > {
     const on = this.#on();
     return {
@@ -66,9 +92,16 @@ export class Captures {
         this.#render();
       },
       recording: on ? (this.#recording ?? undefined) : null,
+      recorderOpen: this.#dock.isOpen,
       onRecord: () => {
+        this.#dock.open();
+        this.#render();
+      },
+      onRecordInWindow: () => {
+        this.closeRecorder();
         void call({ type: "live.recordStart" }).catch((e: unknown) => this.#note(messageOf(e)));
       },
+      onCloseRecorder: () => this.closeRecorder(),
       onRemoveRecording: () => {
         this.discardRecording();
         this.#render();

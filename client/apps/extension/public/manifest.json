@@ -29,7 +29,7 @@
   "optional_host_permissions": ["<all_urls>", "https://*/*", "http://*/*"],
   "web_accessible_resources": [
     {
-      "resources": ["player.html"],
+      "resources": ["player.html", "recorder.html"],
       "matches": ["https://*/*", "http://*/*"]
     }
   ]
