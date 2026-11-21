@@ -15,6 +15,20 @@ const manifest = JSON.parse(readFileSync("dist/manifest.json", "utf8"));
 const { service_worker: worker, ...background } = manifest.background;
 manifest.background = { ...background, scripts: [worker] };
 delete manifest.minimum_chrome_version;
+// Chrome-only: recording from a hidden page (offscreen documents, and asking what to share with desktopCapture).
+// Firefox records in a small window instead (see src/lib/recorder-session.ts).
+manifest.permissions = manifest.permissions.filter((p) => p !== "offscreen");
+manifest.optional_permissions = (manifest.optional_permissions ?? []).filter((p) => p !== "desktopCapture");
+if (manifest.optional_permissions.length === 0) delete manifest.optional_permissions;
+rmSync("dist-firefox/offscreen.html", { force: true });
+// Firefox records in Inklayer's sidebar instead: it stays while the page changes, and the person starts it with a click
+// there (Firefox only shares from a click in the page that records).
+manifest.sidebar_action = {
+  default_panel: "sidebar.html",
+  default_title: "Inklayer recorder",
+  default_icon: manifest.action.default_icon,
+  open_at_install: false,
+};
 // Chrome-only: the Web Store public key, so unpacked Chrome builds get the store's extension ID.
 delete manifest.key;
 manifest.browser_specific_settings = {

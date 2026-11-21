@@ -4,6 +4,8 @@ import { handleLive, isLiveRequest, type LiveRequest, openLiveInTab, stopLive, s
 import type { Request, Response, StateResponse } from "./lib/messages";
 import { inbox, markRead, startNotifications } from "./lib/notifications";
 import { acceptPort, forgetTab, isPresenceOn, PRESENCE_PORT, setPresence, stopPresence } from "./lib/presence";
+import { isRecorderMessage, type RecorderMessage } from "./lib/recorder-protocol";
+import { handleRecorder, recordingDone, watchRecorderTabs } from "./lib/recorder-session";
 import type { RecordingDone, RecordingSignal } from "./lib/recordings";
 import { getSettings } from "./lib/settings";
 
@@ -22,52 +24,39 @@ chrome.runtime.onConnect.addListener((port) => {
   else port.disconnect();
 });
 chrome.tabs.onRemoved.addListener((tabId) => void forgetTab(tabId));
+// Recordings that carry on across page changes: stopped when their tab closes.
+watchRecorderTabs();
 
 chrome.runtime.onMessage.addListener(
   (request: Request | LiveRequest | { type: "presence.status" }, sender, sendResponse) => {
     if (sender.id !== chrome.runtime.id) return false;
 
-    // From the recorder: it's recording or stopped, or drawing was switched; passed on to the page that's recorded.
-    if (sender.url?.startsWith(chrome.runtime.getURL("recorder.html"))) {
-      const signal = request as unknown as RecordingSignal;
-      if (signal.type === "recording.state" || signal.type === "recording.draw") {
-        const tabId = signal.tabId ?? sender.tab?.id;
+    // From the recorder's pages (extension pages: the bar on the page, the window, the sidebar, the hidden recorder).
+    if (
+      ["recorder.html", "offscreen.html", "sidebar.html"].some((page) =>
+        sender.url?.startsWith(chrome.runtime.getURL(page)),
+      )
+    ) {
+      const message = request as unknown as RecorderMessage | RecordingSignal | RecordingDone;
+      if (message.type === "recording.draw") {
+        const tabId = message.tabId ?? sender.tab?.id;
+        if (tabId !== undefined)
+          void chrome.tabs.sendMessage(tabId, { type: "inklayer.recordingDraw" }).catch(() => undefined);
+        return false;
+      }
+      if (message.type === "recording.done") {
+        const tabId = message.tabId ?? sender.tab?.id;
         if (tabId === undefined) return false;
         respond(
-          chrome.tabs
-            .sendMessage(
-              tabId,
-              signal.type === "recording.state"
-                ? { type: "inklayer.recordingState", recording: signal.recording === true }
-                : { type: "inklayer.recordingDraw" },
-            )
-            .then(() => null),
+          recordingDone(tabId, message.recordingId, message.seconds).then(() => null),
           sendResponse,
         );
         return true;
       }
-    }
-
-    // From the recorder (an extension page, in a comment box on the page or its own window): a recording is ready.
-    if (
-      sender.url?.startsWith(chrome.runtime.getURL("recorder.html")) &&
-      (request as { type?: string }).type === "recording.done"
-    ) {
-      const done = request as unknown as RecordingDone;
-      const tabId = done.tabId ?? sender.tab?.id;
-      if (tabId === undefined) return false;
-      respond(
-        chrome.tabs
-          .sendMessage(tabId, {
-            type: "inklayer.recording",
-            recordingId: done.recordingId,
-            seconds: done.seconds,
-            size: done.size,
-          })
-          .then(() => null),
-        sendResponse,
-      );
-      return true;
+      if (isRecorderMessage(message)) {
+        respond(handleRecorder(message, sender.tab?.id, sender.tab?.windowId), sendResponse);
+        return true;
+      }
     }
 
     // From the live content script on a web page: only live requests, checked against the page's real origin.

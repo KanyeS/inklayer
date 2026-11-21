@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inklayer recorder</title>
+    <style>
+      body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; color: #1f1f23; background: #fff; }
+      @media (prefers-color-scheme: dark) { body { color: #eee; background: #18181b; } }
+      h1 { font-size: 15px; margin: 0 0 8px; }
+      p { margin: 0 0 12px; color: #71717a; }
+      button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid #7c3aed; background: #7c3aed; color: #fff; cursor: pointer; }
+      button.stop { background: #dc2626; border-color: #dc2626; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .time { font-variant-numeric: tabular-nums; margin-left: 8px; }
+      .error { color: #dc2626; }
+    </style>
+  </head>
+  <body>
+    <h1>Inklayer recorder</h1>
+    <p id="hint">Records the tab while you move between pages. Keep this sidebar open until you stop; the controls are at the bottom of the page.</p>
+    <button id="action" type="button" hidden>Start recording</button>
+    <button id="draw" type="button" hidden></button>
+    <span class="time" id="time"></span>
+    <p id="status" role="status"></p>
+    <script type="module" src="./src/recorder/sidebar.ts"></script>
+  </body>
+</html>

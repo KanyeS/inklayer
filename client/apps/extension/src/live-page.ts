@@ -1,6 +1,7 @@
 import { commentToOpen } from "@inklayer/overlay";
 import type { LiveInit } from "./lib/live";
 import type { Response } from "./lib/messages";
+import type { RecorderState } from "./lib/recorder-protocol";
 import { call, messageOf } from "./live/call";
 import type { View } from "./live/context";
 import { RecordingEffects } from "./live/recording-effects";
@@ -72,10 +73,28 @@ function commentFromAddress(): string | null {
 
 /**
  * The recorder, recording this tab: clicks and drawing shown on the page while it records, and the recording, once
- * it's made, attached to the comment being written.
+ * it's made, attached to the comment being written. The recording carries on across page changes (it's made outside
+ * the page): each page picks it up as it loads, with the comment it's for, and again when it's shown from the
+ * browser's back/forward cache.
  */
 function listenForRecordings(): void {
   const effects = new RecordingEffects();
+  const pickUp = async (restored: boolean) => {
+    const state = await call<RecorderState | null>({ type: "live.recorder" });
+    effects.setRecording(state?.phase === "recording");
+    if (!state) {
+      if (restored) session?.recorderGone();
+      return;
+    }
+    await startSession(openPage, false);
+    // A quiet check that was already under way (and found nothing to show) doesn't start one: start it now.
+    if (!session) await startSession(openPage, false);
+    session?.resumeRecording(state);
+  };
+  void pickUp(false).catch(() => undefined);
+  addEventListener("pageshow", (e) => {
+    if (e.persisted) void pickUp(true).catch(() => undefined);
+  });
   chrome.runtime.onMessage.addListener(
     (message: { type?: string; recordingId?: string; seconds?: number; recording?: boolean }, sender) => {
       if (!fromUs(sender)) return;

@@ -8,6 +8,7 @@ import type {
 } from "@inklayer/api";
 import type { AnnotationKind, Rect } from "@inklayer/overlay";
 import type { Features } from "./api";
+import type { CarriedDraft } from "./recorder-protocol";
 
 /**
  * The data live mode passes between the background, the server and the content script on web pages, and the requests
@@ -78,6 +79,11 @@ export type LiveRequest =
   | { type: "live.fullPageEnd"; annotationId: string }
   | { type: "live.fullPageCancel"; annotationId: string }
   | { type: "live.recordStart" }
+  | { type: "live.recordInWindow" }
+  | { type: "live.recorder" }
+  | { type: "live.recorderDraft"; draft: CarriedDraft | null }
+  | { type: "live.recorderStop" }
+  | { type: "live.recorderClear" }
   | { type: "live.recordingUpload"; annotationId: string; recordingId: string }
   | { type: "live.recordingDiscard"; recordingId: string }
   | { type: "live.screenshot"; annotationId: string }

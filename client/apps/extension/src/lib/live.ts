@@ -4,6 +4,16 @@ import { NotSignedInError } from "./auth";
 import { bytesToBase64 } from "./base64";
 import type { LiveInit, LiveRequest, PullRequestPage } from "./live-types";
 import { inbox, markRead } from "./notifications";
+import {
+  canRecordHidden,
+  canRecordInSidebar,
+  clearRecorder,
+  isCarriedPage,
+  keepDraft,
+  recorderState,
+  startWindow,
+  stopTab,
+} from "./recorder-session";
 import { discardRecording, uploadRecording } from "./recordings";
 import {
   cancelFullPage,
@@ -180,9 +190,18 @@ export async function handleLive(
 ): Promise<unknown> {
   const origin = senderUrl ? safeOrigin(senderUrl) : null;
   if (!origin) throw new Error("Unknown page.");
-  if ("url" in request && safeOrigin(request.url) !== origin) throw new Error("Wrong page.");
+  if ("url" in request && safeOrigin(request.url) !== origin && !(await carriedElsewhere(request, senderTabId)))
+    throw new Error("Wrong page.");
   const handler = HANDLERS[request.type] as Handler<typeof request.type>;
   return handler(request as never, { origin, windowId: senderWindowId, tabId: senderTabId });
+}
+
+/**
+ * A comment carried across pages with its recording is saved on the page it was started on, which may be on another
+ * site than the page the tab is on now: allowed only for that page, which the extension kept itself.
+ */
+async function carriedElsewhere(request: LiveRequest, tabId: number | undefined): Promise<boolean> {
+  return request.type === "live.create" && tabId !== undefined && (await isCarriedPage(tabId, request.url));
 }
 
 function windowOf(sender: Sender): number {
@@ -223,7 +242,7 @@ const HANDLERS: Handlers = {
       params: { path: { projectId } },
       body,
     });
-    origins.peek()?.add(origin);
+    origins.peek()?.add(safeOrigin(r.url) ?? origin);
     await chrome.storage.local.set({ lastLiveProjectId: projectId });
     return created;
   },
@@ -282,14 +301,29 @@ const HANDLERS: Handlers = {
     cancelFullPage(r.annotationId);
     return null;
   },
-  // A recording of the tab: made in its own window, kept until the comment is saved, then uploaded with it.
+  // A recording of the tab, made outside the page so it carries on across page changes (see recorder-session.ts): kept
+  // until the comment is saved, then uploaded with it. It starts from the bar on the page: Chrome records hidden,
+  // Firefox in Inklayer's sidebar. Elsewhere, a small window.
   "live.recordStart": async (_, sender) => {
-    await chrome.windows.create({
-      url: chrome.runtime.getURL(`recorder.html?tab=${tabOf(sender)}`),
-      type: "popup",
-      width: 400,
-      height: 280,
-    });
+    if (canRecordHidden() || canRecordInSidebar()) return "bar";
+    await startWindow(tabOf(sender));
+    return "window";
+  },
+  "live.recordInWindow": async (_, sender) => {
+    await startWindow(tabOf(sender));
+    return null;
+  },
+  "live.recorder": (_, sender) => recorderState(tabOf(sender)),
+  "live.recorderDraft": async (r, sender) => {
+    await keepDraft(tabOf(sender), r.draft);
+    return null;
+  },
+  "live.recorderStop": async (_, sender) => {
+    await stopTab(tabOf(sender));
+    return null;
+  },
+  "live.recorderClear": async (_, sender) => {
+    await clearRecorder(tabOf(sender));
     return null;
   },
   "live.recordingUpload": async (r) => {

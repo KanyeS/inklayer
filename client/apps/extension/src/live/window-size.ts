@@ -6,8 +6,9 @@ import {
   type WindowMeasure,
   windowSizeFor,
 } from "../lib/viewportMatch";
-import { call } from "./call";
+import { call, messageOf } from "./call";
 import { percent } from "./format";
+import type { SizeMatch } from "./views/chrome";
 
 /**
  * "Match their size": resizes this browser window so the page is laid out at the size a comment was made at.
@@ -103,4 +104,50 @@ async function zoomToWidth(width: number, theirZoom: number | null): Promise<str
     return `Your window can't be ${width}px wide, so the page is zoomed to ${percent(set)} to lay out at their width${theirs}.`;
   }
   return `This is as close as your browser gets: ${innerWidth}px wide at ${percent(set)} zoom. For phone sizes, DevTools' device mode (Ctrl+Shift+M) goes further.`;
+}
+
+/**
+ * The panel's side of it: "See it at their size" on a comment, the bar that shows it was done, and "Back to my size".
+ */
+export class SizeMatcher {
+  /** This window was resized to a commenter's size: the size, or "unknown" after a reload. */
+  matched: SizeMatch | null = null;
+  readonly #note: (text: string) => void;
+  readonly #render: () => void;
+
+  constructor(note: (text: string) => void, render: () => void) {
+    this.#note = note;
+    this.#render = render;
+    // After a reload: was this window resized to someone's size?
+    void call<boolean>({ type: "live.sizeSaved" })
+      .then((saved) => {
+        if (!saved) return;
+        this.matched = "unknown";
+        this.#render();
+      })
+      .catch(() => undefined);
+  }
+
+  /** Resizes to `target`, then `done` (once the page has laid out again, it shows the comment). */
+  async match(target: TargetSize, zoom: number | null, done: () => void, settle: number): Promise<void> {
+    try {
+      const note = await matchWindowSize(target, zoom);
+      this.matched = target;
+      if (note) this.#note(note);
+      else this.#render();
+      window.setTimeout(done, settle);
+    } catch (e) {
+      this.#note(`Couldn't resize the window: ${messageOf(e)}`);
+    }
+  }
+
+  async restore(): Promise<void> {
+    try {
+      await call({ type: "live.restoreSize" });
+    } catch (e) {
+      this.#note(`Couldn't restore the window: ${messageOf(e)}`);
+    }
+    this.matched = null;
+    this.#render();
+  }
 }

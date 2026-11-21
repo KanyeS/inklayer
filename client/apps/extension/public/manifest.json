@@ -25,7 +25,8 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "scripting", "storage", "identity", "alarms"],
+  "permissions": ["activeTab", "scripting", "storage", "identity", "alarms", "offscreen"],
+  "optional_permissions": ["desktopCapture"],
   "optional_host_permissions": ["<all_urls>", "https://*/*", "http://*/*"],
   "web_accessible_resources": [
     {

@@ -46,6 +46,8 @@ export default defineConfig(({ mode }) =>
               background: "src/background.ts",
               popup: "popup.html",
               recorder: "recorder.html",
+              offscreen: "offscreen.html",
+              sidebar: "sidebar.html",
               player: "player.html",
             },
             output: {

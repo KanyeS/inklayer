@@ -1,13 +1,13 @@
 import dockCss from "./styles/recorder-dock.css?inline";
 
 /**
- * The recorder (recorder.html, an extension page) as a small bar at the bottom of the page: Start, then Stop, Draw and
- * the time. It's kept apart from the panel, so the panel can get out of the way while the tab is recorded without
- * disturbing the recording.
+ * The recorder's bar at the bottom of the page (recorder.html, an extension page): Start, then Stop, Draw and the time.
+ * It's only a remote control: the recording is made outside the page (see lib/recorder-session.ts), so the bar can go
+ * at any time, and each page the tab goes to shows a new one. It's kept apart from the panel, so the panel can get out
+ * of the way while the tab is recorded.
  */
 export class RecorderDock {
   #host: HTMLElement | null = null;
-  #frame: HTMLIFrameElement | null = null;
 
   get isOpen(): boolean {
     return this.#host !== null;
@@ -30,23 +30,10 @@ export class RecorderDock {
     root.append(style, frame);
     document.documentElement.append(host);
     this.#host = host;
-    this.#frame = frame;
   }
 
-  /** Removes it now: only once it isn't sharing (removing a page that's sharing crashes the Firefox snap). */
   remove(): void {
     this.#host?.remove();
     this.#host = null;
-    this.#frame = null;
-  }
-
-  /** Closes it, telling it to end any share first and removing it a moment later. */
-  close(): void {
-    const host = this.#host;
-    if (!host) return;
-    this.#frame?.contentWindow?.postMessage({ type: "inklayer.recorder.stop" }, "*");
-    this.#host = null;
-    this.#frame = null;
-    setTimeout(() => host.remove(), 1500);
   }
 }

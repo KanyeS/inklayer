@@ -5,38 +5,37 @@ import {
   type AnnotationKind,
   copyText,
   type Draft,
-  followColorScheme,
   type Geometry,
-  keepTyping,
   Overlay,
   type OverlayAnnotation,
   type OverlayMessage,
   shadowTokens,
-  stopPropagation,
   type Tool,
 } from "@inklayer/overlay";
 import themeTokens from "@inklayer/ui/tokens.css?inline";
 import { type ComponentChild, render } from "preact";
 import type { LiveAnnotation, LiveInit, LivePage, LiveProject, PullRequestPage } from "../lib/live";
+import type { RecorderState } from "../lib/recorder-protocol";
 import { call, messageOf, remember } from "./call";
 import { Captures } from "./captures";
+import { Carry, scopeFor } from "./carry";
 import type { PageAnnotation, PanelContext, View } from "./context";
 import type { Scope } from "./format";
 import { HoverBubbles } from "./hover-bubbles";
 import { COLORS } from "./labels";
 import { NextFrame } from "./next-frame";
-import { loadPanelFont } from "./page-io";
+import { panelHost } from "./page-io";
 import { PanelMover } from "./panel-mover";
 import panelCss from "./styles/panel.css?inline";
 import { draftBody, draftOf, EMPTY_DRAFT, type TextDraft } from "./suggestions";
 import { ActivityView } from "./views/activity";
-import { cornerPin, header, launcher, type SharedLink, type SizeMatch, sharedBox, sizeBar } from "./views/chrome";
+import { cornerPin, header, launcher, type SharedLink, sharedBox, sizeBar } from "./views/chrome";
 import { bubbleContent, type CommentActions, listEntry } from "./views/comment";
 import { CommentParts } from "./views/comment-parts";
 import { cannotComment, draftBox, draftInput, scopeChooser, toolbar } from "./views/composer";
 import { InboxView } from "./views/inbox";
 import { pullRequestBox } from "./views/pull-request";
-import { matchWindowSize } from "./window-size";
+import { SizeMatcher } from "./window-size";
 
 /** The panel's and bubbles' styles: the theme's tokens scoped to the shadow root, then the panel's own CSS. */
 export const PANEL_STYLES = `${shadowTokens(themeTokens)}\n${panelCss}`;
@@ -50,8 +49,6 @@ const RESIZE_REDRAW_MS = 200;
 
 /** Settings remembered in the extension's storage, the same on every site. */
 const STORED_KEYS = ["bubblesOpen", "attachContext", "panelPosition", "panelPinned", "unreadCount", "fullPage"];
-
-type ChosenScope = { includeQuery: boolean; includeHash: boolean };
 
 /**
  * Live mode on a real page.
@@ -105,7 +102,11 @@ export class LiveSession {
     () => this.#init.features.bugContext,
     () => this.#render(),
     (note) => this.#flashNote(note),
+    () => this.#carry.start(),
   );
+  /** The comment being written, kept with the tab's recording so it can be picked up on the next page. */
+  /** The comment being written, kept with the tab's recording so it can be picked up on the next page. */
+  readonly #carry = new Carry(() => this.#draft && this.#target && { draft: this.#draft, ...this.#writing() });
 
   // What's shown
   #open = false;
@@ -121,8 +122,11 @@ export class LiveSession {
   #note = "";
   /** The last "Share this page" link, shown until closed. */
   #shared: SharedLink | null = null;
-  /** This window was resized to a commenter's size; "Back to my size" puts it back. The size shown, if known. */
-  #sizeMatched: SizeMatch | null = null;
+  /** This window resized to a commenter's size; "Back to my size" puts it back. */
+  readonly #size = new SizeMatcher(
+    (text) => this.#flashNote(text),
+    () => this.#render(),
+  );
 
   // Following the page
   #href = location.href;
@@ -137,20 +141,7 @@ export class LiveSession {
     this.#target = commentable.find((p) => p.id === init.lastProjectId) ?? commentable[0] ?? null;
     this.#setPages(init.pages);
 
-    this.#host = document.createElement("inklayer-live");
-    this.#host.setAttribute("style", "all:initial;position:fixed;right:16px;bottom:16px;z-index:2147483647;");
-    this.#shadow = this.#host.attachShadow({ mode: "closed" });
-    const style = document.createElement("style");
-    style.textContent = PANEL_STYLES;
-    this.#shadow.append(style);
-    followColorScheme(this.#host);
-    void loadPanelFont();
-    this.#root = document.createElement("div");
-    this.#root.className = "root";
-    this.#shadow.append(this.#root);
-    // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
-    for (const type of ["keydown", "keyup", "keypress"] as const) this.#root.addEventListener(type, stopPropagation);
-    keepTyping(this.#root);
+    [this.#host, this.#shadow, this.#root] = panelHost(PANEL_STYLES);
 
     this.#ctx = this.#panelContext();
     this.#mover = new PanelMover(
@@ -162,7 +153,13 @@ export class LiveSession {
       canCommentIn: (projectId) => this.#canCommentIn(projectId),
       organizationOf: (projectId) => this.#organizationOf(projectId),
       lightboxParent: this.#shadow,
-      matchSize: (id, width, height, zoom) => void this.#matchSize(id, { width, height }, zoom),
+      matchSize: (id, width, height, zoom) =>
+        void this.#size.match(
+          { width, height },
+          zoom,
+          () => this.#overlay.handle({ type: "select", id, scroll: true }),
+          REANCHOR_MAX_WAIT_MS,
+        ),
     });
     this.#bubbles = new HoverBubbles(PANEL_STYLES, {
       visible: () => this.#visible(),
@@ -189,14 +186,6 @@ export class LiveSession {
     this.#restoreSettings();
     this.#followSettings();
     this.#followWindowSize();
-    // After a reload: was this window resized to someone's size?
-    void call<boolean>({ type: "live.sizeSaved" })
-      .then((saved) => {
-        if (!saved) return;
-        this.#sizeMatched = "unknown";
-        this.#render();
-      })
-      .catch(() => undefined);
   }
 
   /** What the views in views/ may see and do. */
@@ -221,14 +210,48 @@ export class LiveSession {
 
   /* ------------------------------------------------------------------ public */
 
-  /** Opens the panel on one comment, e.g. from "Open on the page" in the web viewer. */
-  /** A recording made from the recording window is ready: attach it to the comment being written (or drop it). */
+  /** A recording is ready: attach it, or (made away from the comment's page) go back there, where it's picked up. */
   recordingReady(id: string, seconds: number): void {
-    if (!this.#captures.recordingReady(id, seconds, this.#draft !== null)) return;
-    this.#open = true;
+    if (this.#carry.from) this.#carry.goBack();
+    else if (this.#captures.recordingReady(id, seconds, this.#draft !== null)) {
+      this.#open = true;
+      this.#render();
+    }
+  }
+
+  /** The tab's recording, picked up on this page: its bar, and the comment it's for (maybe from another page). */
+  resumeRecording(state: RecorderState): void {
+    const kept = state.draft;
+    if (kept && (!this.#draft || this.#carry.active)) {
+      ({
+        draft: this.#draft,
+        text: this.#draftText,
+        color: this.#color,
+        scope: this.#scope,
+      } = this.#carry.pickUp(kept));
+      this.#draftNumber++;
+      this.#target = this.#projects.get(kept.projectId) ?? this.#target;
+    }
+    this.#carry.active = true;
+    this.#captures.resume(state);
+    this.recordingTab(state.phase === "recording");
+    this.#open = state.phase !== "recording";
     this.#render();
   }
 
+  /** Back to a page whose comment was since saved or cancelled on another page of the tab: it's gone here too. */
+  recorderGone(): void {
+    if (!this.#carry.active) return;
+    this.#carry.drop();
+    this.#captures.forget();
+    this.#draft = null;
+    this.#draftText = EMPTY_DRAFT;
+    this.#overlay.handle({ type: "clearDraft" });
+    this.recordingTab(false);
+    this.#render();
+  }
+
+  /** Opens the panel on one comment, e.g. from "Open on the page" in the web viewer. */
   focusComment(id: string): void {
     this.#open = true;
     this.#view = "comments";
@@ -336,9 +359,11 @@ export class LiveSession {
     if (this.#overlay.ensureAttached() || !this.#host.isConnected) document.documentElement.append(this.#host);
     this.#bubbles.ensureAttached();
     if (location.href === this.#href) return;
+    if (!this.#carry.moved(this.#href, this.#target?.id ?? "", this.#draft !== null)) {
+      this.#draft = null;
+      this.#scope = { query: false, hash: false };
+    }
     this.#href = location.href;
-    this.#draft = null;
-    this.#scope = { query: false, hash: false };
     void this.#load();
   }
 
@@ -498,17 +523,14 @@ export class LiveSession {
     }
   }
 
-  /** The scope to save with, limited to the parts this address actually has. */
-  #chosenScope(): ChosenScope {
-    return {
-      includeQuery: this.#scope.query && location.search.length > 1,
-      includeHash: this.#scope.hash && location.hash.length > 1,
-    };
+  #writing() {
+    return { text: this.#draftText, color: this.#color, scope: this.#scope, projectId: this.#target?.id ?? "" };
   }
 
   #cancelDraft(): void {
     this.#captures.closeRecorder();
     this.#captures.discardRecording();
+    this.#carry.clear();
     this.#draft = null;
     this.#draftText = EMPTY_DRAFT;
     this.#overlay.handle({ type: "clearDraft" });
@@ -521,11 +543,12 @@ export class LiveSession {
     const target = this.#target;
     if (!draft || !target || this.#busy) return;
     await this.#mutate(async () => {
+      const from = this.#carry.from;
       const created = await call<LiveAnnotation>({
         type: "live.create",
-        projectId: target.id,
-        url: location.href,
-        ...this.#chosenScope(),
+        projectId: from?.projectId ?? target.id,
+        url: this.#carry.url,
+        ...scopeFor(this.#carry.url, this.#scope),
         kind: draft.kind,
         body,
         color: this.#color,
@@ -533,7 +556,8 @@ export class LiveSession {
         geometry: draft.geometry,
         viewportWidth: draft.viewportWidth,
       });
-      const note = await this.#captures.attach(created.id, draft, [this.#host, this.#bubbles.host]);
+      const note = await this.#captures.attach(created.id, draft, [this.#host, this.#bubbles.host], !from);
+      this.#carry.clear();
       if (note) this.#flashNote(note);
       else await this.#load(); // the screenshot and recording are there: show them
       this.#draft = null;
@@ -560,30 +584,6 @@ export class LiveSession {
     } catch (e) {
       this.#flashNote(`Couldn't share: ${messageOf(e)}`);
     }
-  }
-
-  /* ------------------------------------------------------------------ seeing it at their size */
-
-  async #matchSize(id: string, target: { width: number; height: number | null }, zoom: number | null): Promise<void> {
-    try {
-      const note = await matchWindowSize(target, zoom);
-      this.#sizeMatched = target;
-      if (note) this.#flashNote(note);
-      else this.#render();
-      window.setTimeout(() => this.#overlay.handle({ type: "select", id, scroll: true }), REANCHOR_MAX_WAIT_MS);
-    } catch (e) {
-      this.#flashNote(`Couldn't resize the window: ${messageOf(e)}`);
-    }
-  }
-
-  async #restoreSize(): Promise<void> {
-    try {
-      await call({ type: "live.restoreSize" });
-    } catch (e) {
-      this.#flashNote(`Couldn't restore the window: ${messageOf(e)}`);
-    }
-    this.#sizeMatched = null;
-    this.#render();
   }
 
   /* ------------------------------------------------------------------ views */
@@ -670,7 +670,7 @@ export class LiveSession {
         onDragStart: (e) => this.#mover.startDrag(e),
         onResetPosition: () => this.#mover.reset(),
       }),
-      this.#sizeMatched && sizeBar(this.#sizeMatched, () => void this.#restoreSize()),
+      this.#size.matched && sizeBar(this.#size.matched, () => void this.#size.restore()),
       this.#shared &&
         sharedBox(this.#shared, () => {
           this.#shared = null;
@@ -690,6 +690,7 @@ export class LiveSession {
   #commentsView(): ComponentChild[] {
     return [
       this.#target ? this.#toolbar(this.#target) : cannotComment(this.#init.projects.length > 0),
+      this.#draft && this.#carry.from && <p className="hint">On {this.#carry.from.url}: it's saved there.</p>,
       this.#draft && this.#draftBox(),
       this.#error && <p className="error">{this.#error}</p>,
       this.#pullRequest && pullRequestBox(this.#pullRequest, this.#init.serverUrl),
@@ -722,6 +723,7 @@ export class LiveSession {
       draft: this.#draftText,
       onChange: (draft) => {
         this.#draftText = draft;
+        this.#carry.keepSoon();
         this.#render(false);
       },
       organizationId: () => this.#target?.organizationId ?? null,
@@ -731,7 +733,7 @@ export class LiveSession {
     });
     return draftBox({
       input,
-      scope: scopeChooser(location.href, this.#chosenScope(), (scope) => {
+      scope: scopeChooser(this.#carry.url, scopeFor(this.#carry.url, this.#scope), (scope) => {
         this.#scope = scope;
         this.#render();
       }),

@@ -1,7 +1,7 @@
 import { putBytes } from "./api";
 
 /**
- * Tab recordings, between the recording window (recorder.html) and the comment they go with. The window keeps the video
+ * Tab recordings, between the recorder (see recorder-session.ts) and the comment they go with. The recorder keeps the video
  * in IndexedDB, which the background can read too (messages can't carry large files); the background uploads it once
  * the comment is saved, then forgets it. Recordings not used within a day are dropped.
  */
@@ -13,21 +13,17 @@ const KEEP_MS = 24 * 60 * 60 * 1000;
 /** The longest recording, in seconds. */
 export const MAX_RECORDING_SECONDS = 60;
 
-/**
- * What the recorder tells the page while recording, through the background: that it's recording (the page then shows
- * clicks), and to switch drawing on or off.
- */
+/** The bar on the page asks the background to switch drawing on or off on the page. */
 export interface RecordingSignal {
-  type: "recording.state" | "recording.draw";
+  type: "recording.draw";
   /** As in RecordingDone. */
   tabId: number | null;
-  recording?: boolean;
 }
 
-/** What the recording window tells the background when it's done, to pass on to the page. */
+/** What the recorder tells the background when the video is kept, to pass on to the tab's page. */
 export interface RecordingDone {
   type: "recording.done";
-  /** The tab it's for, from a recording window; null when embedded in the tab's own page. */
+  /** The tab it's for; null from the bar, which is in the tab's own page. */
   tabId: number | null;
   recordingId: string;
   seconds: number;

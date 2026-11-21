@@ -1,3 +1,4 @@
+import { followColorScheme, keepTyping, stopPropagation } from "@inklayer/overlay";
 import type { PageContext } from "../lib/live";
 import { call } from "./call";
 
@@ -84,4 +85,22 @@ export function pageLogs(): Promise<PageLogs> {
 /** Waits two frames, so a style change (e.g. hiding the panel before a screenshot) has been painted. */
 export function nextPaint(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+}
+
+/** The panel's element on the page, its closed shadow root (with `styles`), and the root the panel is drawn in. */
+export function panelHost(styles: string): [HTMLElement, ShadowRoot, HTMLDivElement] {
+  const host = document.createElement("inklayer-live");
+  host.setAttribute("style", "all:initial;position:fixed;right:16px;bottom:16px;z-index:2147483647;");
+  const shadow = host.attachShadow({ mode: "closed" });
+  const style = document.createElement("style");
+  style.textContent = styles;
+  followColorScheme(host);
+  void loadPanelFont();
+  const root = document.createElement("div");
+  root.className = "root";
+  shadow.append(style, root);
+  // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
+  for (const type of ["keydown", "keyup", "keypress"] as const) root.addEventListener(type, stopPropagation);
+  keepTyping(root);
+  return [host, shadow, root];
 }
