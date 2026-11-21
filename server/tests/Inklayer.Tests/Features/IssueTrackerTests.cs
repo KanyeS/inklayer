@@ -103,7 +103,7 @@ public sealed partial class IssueTrackerTests(InklayerApiFactory factory)
         var markdown = sent.RootElement.GetProperty("body").GetString()!;
         Assert.Contains("**Page:** [https://shop.example/checkout](https://shop.example/checkout)", markdown, StringComparison.Ordinal);
         Assert.Contains($"/comments/{commentId}", markdown, StringComparison.Ordinal);
-        Assert.Contains(": Happens on Safari too", markdown, StringComparison.Ordinal);
+        Assert.Contains(":** Happens on Safari too", markdown, StringComparison.Ordinal);
 
         var comment = await CommentJsonAsync(ana, commentId);
         var chip = Assert.Single(comment.GetProperty("issues").EnumerateArray());

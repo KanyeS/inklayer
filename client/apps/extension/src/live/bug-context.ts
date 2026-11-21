@@ -46,14 +46,14 @@ async function pageContext(draft: Draft, element: Element | null): Promise<PageC
   };
 }
 
-/** Most script names sent: the site's own built files are usually a handful. */
-const MAX_SCRIPTS = 12;
-/** A built file's name: it has a content hash in it, like main.3f2a9c1e.js or chunk-AB12CD34.js. */
-const HASHED = /[.\-_~]([0-9a-f]{6,}|[A-Za-z0-9]{8,})\.m?js$/;
+/** Most build names sent. */
+const MAX_SCRIPTS = 4;
+/** A built file's name: it has a content hash in it, like main.3f2a9c1e.js or chunk-AB12CD34.js (with a digit). */
+const HASHED = /[.\-_~](?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,}\.m?js$/;
 
 /**
- * The page's script file names (no addresses or queries), its own built files first: the same for everyone until the
- * site deploys a new build. Next.js sites also say their build id.
+ * The page's build: the names of its built script files (no addresses or queries), which are the same for everyone until
+ * the site deploys a new build, and a Next.js site's build id. Other scripts say nothing about the build and are left out.
  */
 export function pageScripts(doc: Document = document): string[] {
   const names = [...doc.scripts]
@@ -65,8 +65,7 @@ export function pageScripts(doc: Document = document): string[] {
       }
     })
     .filter((name) => name.length > 0);
-  const unique = [...new Set(names)];
-  const built = [...unique.filter((n) => HASHED.test(n)), ...unique.filter((n) => !HASHED.test(n))];
+  const built = [...new Set(names)].filter((n) => HASHED.test(n));
   try {
     const next = JSON.parse(doc.getElementById("__NEXT_DATA__")?.textContent ?? "null") as { buildId?: unknown } | null;
     if (typeof next?.buildId === "string") built.unshift(`next build ${next.buildId}`);

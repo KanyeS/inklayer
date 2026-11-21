@@ -414,15 +414,14 @@ internal sealed partial class IssueService(
         body.AppendLine(Mentions.ToNames(comment.Body, names).Trim());
         body.AppendLine();
         body.AppendLine($"**Page:** {Link(comment.PageUrl)}");
-        body.AppendLine($"**Reported by:** {names.GetValueOrDefault(comment.AuthorUserId, "someone")} in Inklayer: {Link($"{origin}/comments/{comment.Id}")}");
-        body.AppendLine($"**Commented:** {When(comment.CreatedAt, context)}");
+        body.AppendLine($"**Reported by** {names.GetValueOrDefault(comment.AuthorUserId, "someone")} · {When(comment.CreatedAt, context)} · [View in Inklayer]({origin}/comments/{comment.Id})");
         if (replies.Count > 0)
         {
             body.AppendLine();
-            body.AppendLine("**Replies:**");
+            body.AppendLine($"**Replies ({replies.Count})**");
             foreach (var reply in replies)
             {
-                body.AppendLine($"- {names.GetValueOrDefault(reply.AuthorUserId, "someone")}: {Mentions.ToNames(reply.Body, names).Replace('\n', ' ')}");
+                body.AppendLine($"- **{names.GetValueOrDefault(reply.AuthorUserId, "someone")}:** {Mentions.ToNames(reply.Body, names).Replace('\n', ' ')}");
             }
         }
 
@@ -430,36 +429,43 @@ internal sealed partial class IssueService(
         {
             var c = ContextEndpoints.ToResponse(context);
             body.AppendLine();
-            body.AppendLine($"**Browser:** {c.Browser} on {c.Os}, {c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x{(c.Zoom is { } z && Math.Abs(z - 1) > 0.01 ? $", zoomed to {Math.Round(z * 100)}%" : "")}");
+            body.AppendLine("**Environment**");
+            body.AppendLine($"- **Browser:** {c.Browser} on {c.Os}, {c.ViewportWidth}×{c.ViewportHeight} @{c.DevicePixelRatio}x{(c.Zoom is { } z && Math.Abs(z - 1) > 0.01 ? $", zoomed to {Math.Round(z * 100)}%" : "")}");
+            if (NetworkLine(c) is { } network)
+            {
+                body.AppendLine($"- **Network:** {network}");
+            }
+
+            if (BuildNames(c.Scripts) is { Count: > 0 } builds)
+            {
+                body.AppendLine($"- **Page build:** {string.Join(", ", builds.Select(name => $"`{name.Replace("`", "", StringComparison.Ordinal)}`"))}");
+            }
+
             if (c.Selector.Length > 0)
             {
-                body.AppendLine($"**Element:** `{c.Selector}`");
+                body.AppendLine($"- **Element:** `{ShortSelector(c.Selector).Replace("`", "", StringComparison.Ordinal)}`");
             }
 
-            if (c.Scripts is { Count: > 0 } scripts)
+            var failed = c.Network.Take(20).GroupBy(n => (n.Method, n.Url, n.Status)).Take(10).ToList();
+            if (failed.Count > 0)
             {
-                body.AppendLine($"**Page build:** {string.Join(", ", scripts.Select(name => $"`{name.Replace("`", "", StringComparison.Ordinal)}`"))}");
-            }
-
-            if (c.IpNetwork.Length > 0 || c.IpCountry.Length > 0)
-            {
-                var place = c.IpNetwork.Length > 0 && c.IpCountry.Length > 0 ? $"{c.IpNetwork} ({c.IpCountry})" : c.IpNetwork + c.IpCountry;
-                body.AppendLine($"**Network:** {place}{c.IpNetworkKind switch
+                body.AppendLine();
+                body.AppendLine($"**Failed requests ({c.Network.Count})**");
+                foreach (var n in failed)
                 {
-                    "vpn" => ", likely a VPN",
-                    "hosting" => ", a hosting provider (likely a VPN or proxy)",
-                    _ => "",
-                }}");
+                    body.AppendLine($"- `{n.Key.Method}` {n.Key.Url} → {(n.Key.Status == 0 ? "failed" : n.Key.Status)}{(n.Count() > 1 ? $" ×{n.Count()}" : "")}");
+                }
             }
 
-            foreach (var e in c.Console.Take(10))
+            var logged = c.Console.Take(20).GroupBy(e => (e.Level, e.Message)).Take(10).ToList();
+            if (logged.Count > 0)
             {
-                body.AppendLine($"- console.{e.Level}: {e.Message}");
-            }
-
-            foreach (var n in c.Network.Take(10))
-            {
-                body.AppendLine($"- {n.Method} {n.Url} → {(n.Status == 0 ? "failed" : n.Status)}");
+                body.AppendLine();
+                body.AppendLine($"**Console ({c.Console.Count})**");
+                foreach (var e in logged)
+                {
+                    body.AppendLine($"- `{e.Key.Level}` {e.Key.Message.Replace('\n', ' ')}{(e.Count() > 1 ? $" ×{e.Count()}" : "")}");
+                }
             }
         }
 
@@ -474,6 +480,44 @@ internal sealed partial class IssueService(
         }
 
         return body.ToString().TrimEnd();
+    }
+
+    /// <summary>The network, without saying the country twice ("Superloop (Australia) Pty Ltd", not "… (Australia)" again), and if it's a VPN.</summary>
+    private static string? NetworkLine(Annotations.AnnotationContextResponse c)
+    {
+        if (c.IpNetwork.Length == 0 && c.IpCountry.Length == 0)
+        {
+            return null;
+        }
+
+        var place = c.IpNetwork.Length == 0 ? c.IpCountry
+            : c.IpCountry.Length == 0 || c.IpNetwork.Contains(c.IpCountry, StringComparison.OrdinalIgnoreCase) ? c.IpNetwork
+            : $"{c.IpNetwork} ({c.IpCountry})";
+        return place + c.IpNetworkKind switch
+        {
+            "vpn" => ", likely a VPN",
+            "hosting" => ", a hosting provider (likely a VPN or proxy)",
+            _ => "",
+        };
+    }
+
+    /// <summary>A built file's name has a content hash in it (main.3f2a9c1e.js, chunk-AB12CD34.js); others don't say which build it was.</summary>
+    private static readonly System.Text.RegularExpressions.Regex Hashed = new(@"[.\-_~](?=[A-Za-z0-9]*\d)[A-Za-z0-9]{6,}\.m?js$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>The page's build: a Next.js build id and up to four built files; none when the page has no such files.</summary>
+    internal static List<string> BuildNames(IReadOnlyList<string>? scripts) =>
+        [.. (scripts ?? []).Where(n => n.StartsWith("next build ", StringComparison.Ordinal) || Hashed.IsMatch(n)).Take(4)];
+
+    /// <summary>A long selector's last few steps: "… > section > div > img".</summary>
+    internal static string ShortSelector(string selector)
+    {
+        if (selector.Length <= 100)
+        {
+            return selector;
+        }
+
+        var steps = selector.Split(" > ");
+        return steps.Length > 3 ? $"… > {string.Join(" > ", steps[^3..])}" : selector;
     }
 
     /// <summary>An address as a Markdown link to itself, with the characters that would end the link escaped.</summary>

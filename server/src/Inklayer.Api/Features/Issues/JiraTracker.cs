@@ -121,10 +121,36 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIss
         type = "doc",
         version = 1,
         // Markdown images become their address: Jira can't show an image from elsewhere in an API-made issue.
-        content = text.Split('\n').Select(line => Regex.Replace(line, @"^!\[([^\]]*)\]\((https?://[^)\s]+)\)$", "$1: $2")).Select(line => line.Length == 0
-            ? (object)new { type = "paragraph", content = Array.Empty<object>() }
-            : new { type = "paragraph", content = Inline(line) }).ToArray(),
+        content = Blocks(text.Split('\n').Select(line => Regex.Replace(line, @"^!\[([^\]]*)\]\((https?://[^)\s]+)\)$", "$1: $2"))),
     };
+
+    /// <summary>Paragraphs, with runs of "- " lines as bullet lists.</summary>
+    private static object[] Blocks(IEnumerable<string> lines)
+    {
+        var blocks = new List<object>();
+        List<object>? items = null;
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("- ", StringComparison.Ordinal))
+            {
+                if (items is null)
+                {
+                    items = [];
+                    blocks.Add(new { type = "bulletList", content = items });
+                }
+
+                items.Add(new { type = "listItem", content = new object[] { new { type = "paragraph", content = Inline(line[2..]) } } });
+                continue;
+            }
+
+            items = null;
+            blocks.Add(line.Length == 0
+                ? new { type = "paragraph", content = Array.Empty<object>() }
+                : new { type = "paragraph", content = Inline(line) });
+        }
+
+        return [.. blocks];
+    }
 
     private static readonly Regex Marked = new(@"\*\*(.+?)\*\*|\[([^\]]+)\]\((https?://[^)\s]+)\)|`([^`]+)`|(https?://\S*[^\s.,;:!?)])", RegexOptions.Compiled);
 

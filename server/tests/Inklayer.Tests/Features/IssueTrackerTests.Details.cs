@@ -15,7 +15,15 @@ public sealed partial class IssueTrackerTests
             Content = System.Net.Http.Json.JsonContent.Create(new
             {
                 browser = "Firefox 158", os = "Linux", userAgent = "Mozilla/5.0", viewportWidth = 1835, viewportHeight = 995, devicePixelRatio = 1,
-                selector = "#app > main", elementHtml = "<main></main>", console = Array.Empty<object>(), network = Array.Empty<object>(),
+                selector = "#app > main", elementHtml = "<main></main>", console = Array.Empty<object>(),
+                network = new object[]
+                {
+                    new { method = "GET", url = "https://ads.example/pagead/id", status = 0, ms = 10, at = "2026-11-21T00:00:00Z" },
+                    new { method = "POST", url = "https://shop.example/log_event", status = 0, ms = 10, at = "2026-11-21T00:00:01Z" },
+                    new { method = "POST", url = "https://shop.example/log_event", status = 0, ms = 10, at = "2026-11-21T00:00:02Z" },
+                    new { method = "POST", url = "https://shop.example/log_event", status = 0, ms = 10, at = "2026-11-21T00:00:03Z" },
+                    new { method = "POST", url = "https://shop.example/log_event", status = 0, ms = 10, at = "2026-11-21T00:00:04Z" },
+                },
                 timeZone = "Australia/Brisbane", utcOffsetMinutes = 600,
                 scripts = new[] { "main.3f2a9c1e.js", "vendor.ab12cd.js?v=2", "main.3f2a9c1e.js" },
             }),
@@ -49,10 +57,11 @@ public sealed partial class IssueTrackerTests
         await ana.PostJsonAsync($"/api/annotations/{comment}/issues", new { connectionId = tracker.Id }).ExpectAsync(HttpStatusCode.Created);
         var body = JsonDocument.Parse(factory.Outbound.To($"{Repo}/issues").Single(x => x.Request.Method == HttpMethod.Post).Body).RootElement.GetProperty("body").GetString()!;
         Assert.Contains("**Page:** [https://shop.example/checkout](https://shop.example/checkout)", body, StringComparison.Ordinal);
-        Assert.Contains($"in Inklayer: [http://localhost/comments/{comment}](http://localhost/comments/{comment})", body, StringComparison.Ordinal);
-        Assert.Matches(@"\*\*Commented:\*\* \d{1,2} \w{3} \d{4}, \d{2}:\d{2} \(Australia/Brisbane, UTC\+10:00\)", body);
-        Assert.Contains("**Page build:** `main.3f2a9c1e.js`, `vendor.ab12cd.js`", body, StringComparison.Ordinal);
-        Assert.Contains("**Network:** NordVPN S.A. (Netherlands), likely a VPN", body, StringComparison.Ordinal);
+        Assert.Matches(
+            $@"\*\*Reported by\*\* Test User · \d{{1,2}} \w{{3}} \d{{4}}, \d{{2}}:\d{{2}} \(Australia/Brisbane, UTC\+10:00\) · \[View in Inklayer\]\(http://localhost/comments/{comment}\)", body);
+        Assert.Contains("**Environment**\n- **Browser:** Firefox 158 on Linux, 1835×995 @1x\n- **Network:** NordVPN S.A. (Netherlands), likely a VPN\n", body, StringComparison.Ordinal);
+        Assert.Contains("- **Page build:** `main.3f2a9c1e.js`, `vendor.ab12cd.js`", body, StringComparison.Ordinal);
+        Assert.Contains("**Failed requests (5)**\n- `GET` https://ads.example/pagead/id → failed\n- `POST` https://shop.example/log_event → failed ×4", body, StringComparison.Ordinal);
         Assert.Contains("https://status.example/incident/12", body, StringComparison.Ordinal);
     }
 
@@ -73,5 +82,24 @@ public sealed partial class IssueTrackerTests
             Inklayer.Api.Features.Issues.IssueService.When(at, new() { AnnotationId = Guid.Empty, TimeZone = "Australia/Brisbane" }));
         Assert.Equal("21 Nov 2026, 06:32 (UTC-05:00)", Inklayer.Api.Features.Issues.IssueService.When(at, new() { AnnotationId = Guid.Empty, UtcOffsetMinutes = -300 }));
         Assert.Equal("21 Nov 2026, 11:32 (UTC)", Inklayer.Api.Features.Issues.IssueService.When(at, null));
+    }
+
+    [Fact]
+    public void Only_built_files_say_which_build_and_long_elements_are_shortened()
+    {
+        Assert.Equal(["next build Xy12", "main.3f2a9c1e.js", "chunk-AB12CD34.js"],
+            Inklayer.Api.Features.Issues.IssueService.BuildNames(["next build Xy12", "ad_status.js", "main.3f2a9c1e.js", "web-animations-next-lite.min.js", "chunk-AB12CD34.js", "analytics.js", "rs=ADGLRXJu094-6tQ"]));
+        Assert.Empty(Inklayer.Api.Features.Issues.IssueService.BuildNames(["remote.js", "lottie-light.js", "custom-elements-es5-adapter.js"]));
+
+        const string Long = "#primary > ytmusic-section-list-renderer > div:nth-of-type(2) > ytmusic-editable-playlist-detail-header-renderer > ytmusic-thumbnail-renderer > yt-img-shadow > img";
+        Assert.Equal("… > ytmusic-thumbnail-renderer > yt-img-shadow > img", Inklayer.Api.Features.Issues.IssueService.ShortSelector(Long));
+        Assert.Equal("#app > main", Inklayer.Api.Features.Issues.IssueService.ShortSelector("#app > main"));
+    }
+
+    [Fact]
+    public void Azure_DevOps_gets_lists_as_lists()
+    {
+        var html = Inklayer.Api.Features.Issues.Trackers.HtmlFromText("**Environment**\n- **Browser:** Firefox\n- **Network:** Telstra\n\nAfter");
+        Assert.Equal("<b>Environment</b><br><ul><li><b>Browser:</b> Firefox</li><li><b>Network:</b> Telstra</li></ul><br>After", html);
     }
 }

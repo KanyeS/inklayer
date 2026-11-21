@@ -240,7 +240,28 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
     /// <summary>Markdown-ish text as simple HTML, for trackers that take HTML: escaped, one line per <c>&lt;br&gt;</c>, with bold and links kept.</summary>
     internal static string HtmlFromText(string text)
     {
-        var html = string.Join("<br>", text.Split('\n').Select(WebUtility.HtmlEncode));
+        // Lines, with runs of "- " lines as lists.
+        var lines = new StringBuilder();
+        var inList = false;
+        foreach (var line in text.Split('\n'))
+        {
+            var item = line.StartsWith("- ", StringComparison.Ordinal);
+            if (item != inList)
+            {
+                lines.Append(item ? "<ul>" : "</ul>");
+                inList = item;
+            }
+
+            lines.Append(item ? $"<li>{WebUtility.HtmlEncode(line[2..])}</li>" : $"{WebUtility.HtmlEncode(line)}<br>");
+        }
+
+        if (inList)
+        {
+            lines.Append("</ul>");
+        }
+
+        var html = lines.ToString();
+        html = html.EndsWith("<br>", StringComparison.Ordinal) ? html[..^4] : html;
         html = Regex.Replace(html, @"\*\*(.+?)\*\*", "<b>$1</b>");
         html = Regex.Replace(html, "`([^`]+)`", "<code>$1</code>");
 

@@ -4,14 +4,14 @@ import { pageScripts } from "../src/live/bug-context";
 describe("page build", () => {
   const page = (html: string) => new DOMParser().parseFromString(html, "text/html");
 
-  it("names the page's scripts, built files first, without addresses or queries", () => {
+  it("names the page's built scripts, without addresses or queries, leaving out the rest", () => {
     const doc = page(`
       <script src="https://cdn.example/js/analytics.js?id=UA-1"></script>
       <script src="/assets/main.3f2a9c1e.js"></script>
       <script src="/assets/vendor-ab12cd34.js?v=2"></script>
       <script src="/assets/main.3f2a9c1e.js"></script>
       <script>inline()</script>`);
-    expect(pageScripts(doc)).toEqual(["main.3f2a9c1e.js", "vendor-ab12cd34.js", "analytics.js"]);
+    expect(pageScripts(doc)).toEqual(["main.3f2a9c1e.js", "vendor-ab12cd34.js"]);
   });
 
   it("puts a Next.js build id first", () => {
