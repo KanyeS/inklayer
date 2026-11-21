@@ -1,0 +1,21 @@
+# Arms GitHub auto-merge on every Dependabot PR (majors included). The PR merges itself once the checks required by the
+# dev ruleset (CI server/client/docker jobs and CodeQL) pass; if any fail it stays open for a human.
+# Note: merges made with GITHUB_TOKEN do not trigger push workflows on dev.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge (squash)
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
