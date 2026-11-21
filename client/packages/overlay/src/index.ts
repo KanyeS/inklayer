@@ -37,6 +37,7 @@ export {
   copyText,
   followColorScheme,
   h,
+  keepTyping,
   lineIcon,
   nothing,
   type Props,

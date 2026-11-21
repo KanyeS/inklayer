@@ -38,6 +38,31 @@ export function stopPropagation(e: Event): void {
   e.stopPropagation();
 }
 
+const TEXT_INPUTS = new Set(["text", "search", "url", "email", ""]);
+
+/**
+ * Lets people type in Inklayer's boxes on sites whose keyboard shortcuts cancel keys before they arrive (YouTube cancels
+ * the space bar for play/pause, others "k", "f" or "/"): a character key the page cancelled in one of our text boxes is
+ * typed here instead. Listens on a root inside our shadow DOM, after the page's own listeners have run.
+ */
+export function keepTyping(root: Node): void {
+  root.addEventListener("keydown", (event) => {
+    const e = event as KeyboardEvent;
+    if (!e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+    const field = e.composedPath()[0] as HTMLTextAreaElement | HTMLInputElement | undefined;
+    const tag = field?.tagName;
+    if (
+      !field ||
+      !(tag === "TEXTAREA" || (tag === "INPUT" && TEXT_INPUTS.has((field as HTMLInputElement).type))) ||
+      field.readOnly
+    )
+      return;
+    const start = field.selectionStart ?? field.value.length;
+    field.setRangeText(e.key, start, field.selectionEnd ?? start, "end");
+    field.dispatchEvent(new InputEvent("input", { bubbles: true, data: e.key, inputType: "insertText" }));
+  });
+}
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** A line icon from SVG path data (Lucide's 24×24 grid), drawn in the current text colour. */

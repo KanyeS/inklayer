@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { copyText, followColorScheme, h, lineIcon, nothing, shadowTokens, stopPropagation } from "../src/dom";
+import {
+  copyText,
+  followColorScheme,
+  h,
+  keepTyping,
+  lineIcon,
+  nothing,
+  shadowTokens,
+  stopPropagation,
+} from "../src/dom";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -90,5 +99,53 @@ describe("copying", () => {
     expect(await copyText("hello")).toBe(true);
     expect(execCommand).toHaveBeenCalledWith("copy");
     expect(document.querySelector("textarea")).toBeNull(); // cleaned up
+  });
+});
+
+describe("keepTyping", () => {
+  /** A text box in a closed shadow root, as Inklayer's panel has, on a page that cancels some keys on the way in. */
+  function setUp(cancels: (e: KeyboardEvent) => boolean) {
+    const host = document.createElement("div");
+    const root = document.createElement("div");
+    host.attachShadow({ mode: "closed" }).append(root);
+    const box = document.createElement("textarea");
+    root.append(box);
+    document.body.append(host);
+    keepTyping(root);
+    const pageShortcut = (e: KeyboardEvent) => {
+      if (cancels(e)) e.preventDefault();
+    };
+    window.addEventListener("keydown", pageShortcut, true);
+    const inputs: string[] = [];
+    box.addEventListener("input", (e) => inputs.push((e as InputEvent).data ?? ""));
+    const press = (key: string, init: KeyboardEventInit = {}) =>
+      box.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true, ...init }),
+      );
+    const done = () => {
+      window.removeEventListener("keydown", pageShortcut, true);
+      host.remove();
+    };
+    return { box, inputs, press, done };
+  }
+
+  it("types a key the page cancelled (YouTube's space for play/pause)", () => {
+    const { box, inputs, press, done } = setUp((e) => e.key === " ");
+    box.value = "ab";
+    box.setSelectionRange(1, 1);
+    press(" ");
+    expect(box.value).toBe("a b");
+    expect(box.selectionStart).toBe(2);
+    expect(inputs).toEqual([" "]);
+    done();
+  });
+
+  it("leaves keys the page didn't cancel, and shortcuts with modifiers, to the browser", () => {
+    const { box, press, done } = setUp((e) => e.key === "k");
+    press("j");
+    press("k", { ctrlKey: true });
+    press("Enter");
+    expect(box.value).toBe("");
+    done();
   });
 });

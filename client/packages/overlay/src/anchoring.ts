@@ -55,6 +55,11 @@ function matchesTag(el: Element, anchor: ElementAnchor): boolean {
   return el.localName === anchor.tag;
 }
 
+/** Whether a mark's element, still on the page, still is what was commented on: its tag, and its text if it had any. */
+export function stillMatches(el: Element, anchor: ElementAnchor): boolean {
+  return el.isConnected && matchesTag(el, anchor) && textSimilar(el, anchor);
+}
+
 function textSimilar(el: Element, anchor: ElementAnchor): boolean {
   if (!anchor.text) return true;
   const text = normaliseText(el.textContent ?? "").slice(0, 120);

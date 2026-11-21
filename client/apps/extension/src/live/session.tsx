@@ -7,6 +7,7 @@ import {
   type Draft,
   followColorScheme,
   type Geometry,
+  keepTyping,
   Overlay,
   type OverlayAnnotation,
   type OverlayMessage,
@@ -23,15 +24,16 @@ import type { PageAnnotation, PanelContext, View } from "./context";
 import type { Scope } from "./format";
 import { HoverBubbles } from "./hover-bubbles";
 import { COLORS } from "./labels";
+import { NextFrame } from "./next-frame";
 import { loadPanelFont } from "./page-io";
 import { PanelMover } from "./panel-mover";
 import panelCss from "./styles/panel.css?inline";
-import { draftBody, draftOf, EMPTY_DRAFT, SuggestBox, type TextDraft } from "./suggestions";
+import { draftBody, draftOf, EMPTY_DRAFT, type TextDraft } from "./suggestions";
 import { ActivityView } from "./views/activity";
 import { cornerPin, header, launcher, type SharedLink, type SizeMatch, sharedBox, sizeBar } from "./views/chrome";
 import { bubbleContent, type CommentActions, listEntry } from "./views/comment";
 import { CommentParts } from "./views/comment-parts";
-import { cannotComment, draftBox, scopeChooser, toolbar } from "./views/composer";
+import { cannotComment, draftBox, draftInput, scopeChooser, toolbar } from "./views/composer";
 import { InboxView } from "./views/inbox";
 import { pullRequestBox } from "./views/pull-request";
 import { matchWindowSize } from "./window-size";
@@ -92,6 +94,10 @@ export class LiveSession {
   #color: string = COLORS[0];
   #scope: Scope = { query: false, hash: false };
   /** Attach a screenshot and page details to new comments (remembered; on unless turned off). */
+  readonly #nextFrame = new NextFrame((bubbles) => {
+    this.#mover.place();
+    if (bubbles) this.#bubbles.render();
+  });
   /** The tab is being recorded: the comment tool is paused (see recordingTab). */
   #recordingTab = false;
   /** The screenshot, page details, full page and recording sent with a new comment. */
@@ -144,6 +150,7 @@ export class LiveSession {
     this.#shadow.append(this.#root);
     // Typing in the panel shouldn't trigger the page's keyboard shortcuts.
     for (const type of ["keydown", "keyup", "keypress"] as const) this.#root.addEventListener(type, stopPropagation);
+    keepTyping(this.#root);
 
     this.#ctx = this.#panelContext();
     this.#mover = new PanelMover(
@@ -603,10 +610,10 @@ export class LiveSession {
   /* ------------------------------------------------------------------ rendering */
 
   /** Redraws the panel and bubbles. Preact updates what changed, so boxes being typed in keep their text and focus. */
-  #render(): void {
+  /** Draws the panel; places it and (unless only it changed, as when typing) the bubbles in the next frame. */
+  #render(bubbles = true): void {
     render(this.#draw(), this.#root);
-    this.#mover.place();
-    this.#bubbles.render();
+    this.#nextFrame.request(bubbles);
   }
 
   #draw(): ComponentChild {
@@ -710,26 +717,18 @@ export class LiveSession {
   }
 
   #draftBox(): ComponentChild {
-    const keys = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void this.#saveDraft();
-      if (e.key === "Escape") this.#cancelDraft();
-    };
-    const input = (
-      <SuggestBox
-        key={this.#draftNumber}
-        draft={this.#draftText}
-        onChange={(draft) => {
-          this.#draftText = draft;
-          this.#render();
-        }}
-        organizationId={() => this.#target?.organizationId ?? null}
-        docsOn={this.#init.features.docs}
-        placeholder="Add a comment (optional). Ctrl+Enter to save."
-        rows={3}
-        autoFocus
-        onKeyDown={keys}
-      />
-    );
+    const input = draftInput({
+      number: this.#draftNumber,
+      draft: this.#draftText,
+      onChange: (draft) => {
+        this.#draftText = draft;
+        this.#render(false);
+      },
+      organizationId: () => this.#target?.organizationId ?? null,
+      docsOn: this.#init.features.docs,
+      onSave: () => void this.#saveDraft(),
+      onCancel: () => this.#cancelDraft(),
+    });
     return draftBox({
       input,
       scope: scopeChooser(location.href, this.#chosenScope(), (scope) => {

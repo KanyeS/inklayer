@@ -29,8 +29,34 @@ interface NetworkEntry {
 const KEEP = 20;
 const MAX_MESSAGE = 500;
 
+/** Inklayer's panel and hover bubbles, as the page sees them (their insides are in closed shadow roots). */
+const OUR_HOSTS = new Set(["INKLAYER-LIVE", "INKLAYER-BUBBLES"]);
+
+/**
+ * Whether a key press is someone typing in Inklayer's panel or bubbles: a plain character (a letter, a space) with no
+ * Ctrl, Cmd or Alt. Exported for tests.
+ */
+export function isTypingInInklayer(e: KeyboardEvent): boolean {
+  const target = e.composedPath()[0] as Element | undefined;
+  return !!target && OUR_HOSTS.has(target.tagName) && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+}
+
 if (!globalThis.__inklayerCapture) {
   globalThis.__inklayerCapture = true;
+
+  // Sites' keyboard shortcuts (YouTube's space for play/pause) catch keys on the way in and stop them, so typing in
+  // Inklayer's boxes would play and pause instead. This runs before the page's own scripts, so it listens first: plain
+  // characters typed in Inklayer go no further into the page, and are typed as usual. Other keys pass as normal.
+  for (const type of ["keydown", "keypress", "keyup"] as const) {
+    window.addEventListener(
+      type,
+      (e) => {
+        if (isTypingInInklayer(e)) e.stopImmediatePropagation();
+      },
+      true,
+    );
+  }
+
   const consoleEntries: ConsoleEntry[] = [];
   const networkEntries: NetworkEntry[] = [];
   const now = () => new Date().toISOString();
@@ -146,5 +172,3 @@ if (!globalThis.__inklayerCapture) {
     );
   });
 }
-
-export {};

@@ -1,3 +1,4 @@
+import { keepTyping } from "./dom";
 /**
  * Comment bubbles next to marks on the page: a card beside each mark's number badge, showing the comment and its replies.
  * The layer only places cards; LiveSession decides which are open and builds their content.
@@ -47,6 +48,7 @@ export class BubbleLayer {
     // Typing in a bubble shouldn't trigger the page's keyboard shortcuts.
     for (const type of ["keydown", "keyup", "keypress"] as const)
       this.#root.addEventListener(type, (e) => e.stopPropagation());
+    keepTyping(this.#root);
     shadow.append(this.#root);
     this.#parent.append(this.host);
   }

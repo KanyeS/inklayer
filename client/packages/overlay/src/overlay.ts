@@ -1,4 +1,4 @@
-import { anchorFor, documentBox, innerOrigin, resolveElement, resolveRange } from "./anchoring";
+import { anchorFor, documentBox, innerOrigin, resolveElement, resolveRange, stillMatches } from "./anchoring";
 import { contains, normaliseRect, toFraction } from "./geometry";
 import { arrow, badgeAnchor, INK_SIZE, ink, markShapes, rangeBoxes, rect, SVG_NS } from "./shapes";
 import { DRAWING_TOOLS, pressure, round, type Stroke, strokeBounds, strokeGeometry } from "./stroke";
@@ -7,6 +7,10 @@ import type { AnchorQuality, Box, Draft, HostMessage, OverlayAnnotation, Overlay
 
 /** How deep to look through nested shadow roots for the element under the pointer. */
 const MAX_SHADOW_DEPTH = 32;
+
+/** How soon a mark that isn't on the page is looked for again, and the longest it waits between looks. */
+const RETRY_FIRST_MS = 2000;
+const RETRY_MAX_MS = 30_000;
 
 interface Resolved {
   key: string;
@@ -39,6 +43,8 @@ export class Overlay {
   readonly #hover: HTMLDivElement;
   readonly #surface: HTMLDivElement;
   readonly #resolved = new Map<string, Resolved>();
+  /** Marks not found on the page: when to look again, and how long to wait after that (doubling, up to RETRY_MAX_MS). */
+  readonly #retries = new Map<string, { at: number; wait: number }>();
   readonly #cleanup: (() => void)[] = [];
   readonly #ignored: Element[];
   readonly #within: HTMLElement | null;
@@ -88,6 +94,7 @@ export class Overlay {
       case "setAnnotations":
         this.#annotations = message.annotations;
         this.#draft = null;
+        this.#retries.clear();
         this.#resolveAll();
         break;
       case "setTool":
@@ -116,8 +123,30 @@ export class Overlay {
   }
 
   /** Finds every annotation's element again, after the page has changed its DOM. */
+  /**
+   * The page changed: finds again the marks whose element or text is gone from it. Marks still in place are kept (on
+   * pages that change all the time, such as a music player's, finding every mark again each time made the page slow),
+   * and marks that can't be found are looked for less and less often.
+   */
   reanchor(): void {
-    this.#resolved.clear();
+    const now = performance.now();
+    const anchors = new Map(this.#annotations.map((a) => [a.id, a.anchor.element]));
+    for (const [id, entry] of this.#resolved) {
+      const anchor = anchors.get(id);
+      const inPlace =
+        !!entry.element &&
+        !!anchor &&
+        stillMatches(entry.element, anchor) &&
+        (!entry.range || entry.range.startContainer.isConnected);
+      if (inPlace && entry.quality !== "orphaned") {
+        this.#retries.delete(id);
+        continue;
+      }
+      const retry = this.#retries.get(id) ?? { at: 0, wait: RETRY_FIRST_MS };
+      if (now < retry.at) continue;
+      this.#resolved.delete(id);
+      this.#retries.set(id, { at: now + retry.wait, wait: Math.min(retry.wait * 2, RETRY_MAX_MS) });
+    }
     this.#resolveAll();
     this.render();
   }

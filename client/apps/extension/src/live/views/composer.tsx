@@ -4,6 +4,7 @@ import type { ComponentChild } from "preact";
 import type { LiveProject } from "../../lib/live";
 import { type Scope, type ScopeOption, scopeOptions } from "../format";
 import { COLORS, TOOLS, toolHint } from "../labels";
+import { SuggestBox, type TextDraft } from "../suggestions";
 
 /** Making a new comment: where it goes, the drawing tools and colours, and the box to write it in. */
 
@@ -211,5 +212,35 @@ export function draftBox(o: DraftBoxOptions): ComponentChild {
         </button>
       </div>
     </div>
+  );
+}
+
+/** The new comment's text box: [[doc]] and @person suggestions, Ctrl+Enter to save, Escape to cancel. */
+export function draftInput(o: {
+  /** Changes for each new comment, so the box starts afresh. */
+  number: number;
+  draft: TextDraft;
+  onChange(draft: TextDraft): void;
+  organizationId(): string | null;
+  docsOn: boolean;
+  onSave(): void;
+  onCancel(): void;
+}): ComponentChild {
+  const keys = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) o.onSave();
+    if (e.key === "Escape") o.onCancel();
+  };
+  return (
+    <SuggestBox
+      key={o.number}
+      draft={o.draft}
+      onChange={o.onChange}
+      organizationId={o.organizationId}
+      docsOn={o.docsOn}
+      placeholder="Add a comment (optional). Ctrl+Enter to save."
+      rows={3}
+      autoFocus
+      onKeyDown={keys}
+    />
   );
 }

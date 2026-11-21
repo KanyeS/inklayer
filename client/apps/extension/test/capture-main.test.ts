@@ -29,3 +29,35 @@ describe("page logs (capture.js)", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("typing in Inklayer on sites with keyboard shortcuts (capture.js)", () => {
+  it("keeps plain characters typed in Inklayer from the page's shortcuts, and nothing else", async () => {
+    await import("../src/capture-main");
+    // The site's shortcut (YouTube's space for play/pause), listening on the way in, registered after capture.js.
+    const shortcut = vi.fn();
+    window.addEventListener("keydown", shortcut, true);
+
+    const panel = document.createElement("inklayer-live");
+    const box = document.createElement("textarea");
+    panel.attachShadow({ mode: "closed" }).append(box);
+    const pageInput = document.createElement("input");
+    document.body.append(panel, pageInput);
+    const press = (target: Element, key: string, init: KeyboardEventInit = {}) =>
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true, ...init }),
+      );
+
+    press(box, " ");
+    press(box, "k");
+    expect(shortcut).not.toHaveBeenCalled();
+
+    press(box, "Enter", { ctrlKey: true });
+    press(box, "k", { ctrlKey: true });
+    press(pageInput, " ");
+    expect(shortcut).toHaveBeenCalledTimes(3);
+
+    window.removeEventListener("keydown", shortcut, true);
+    panel.remove();
+    pageInput.remove();
+  });
+});
