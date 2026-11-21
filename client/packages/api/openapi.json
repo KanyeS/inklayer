@@ -1571,7 +1571,7 @@
         "tags": [
           "Annotations"
         ],
-        "summary": "Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB) or video (WebM or MP4, at most 40 MB)",
+        "summary": "Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB), video (WebM or MP4, at most 40 MB), or thumbnail (the video\u0027s still, at most 2 MB)",
         "parameters": [
           {
             "name": "annotationId",

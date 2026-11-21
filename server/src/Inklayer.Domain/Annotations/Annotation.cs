@@ -202,6 +202,9 @@ public static class MediaKinds
 
     /// <summary>A recording of the tab.</summary>
     public const string Video = "video";
+
+    /// <summary>A still from the recording with a play symbol, shown in issues where the video can't play.</summary>
+    public const string Thumbnail = "thumbnail";
 }
 
 /// <summary>
@@ -211,6 +214,8 @@ public static class MediaKinds
 public sealed class AnnotationMedia
 {
     public const long MaxImageBytes = 15 * 1024 * 1024;
+
+    public const long MaxThumbnailBytes = 2 * 1024 * 1024;
 
     /// <summary>A minute's recording, with room to spare.</summary>
     public const long MaxVideoBytes = 40 * 1024 * 1024;

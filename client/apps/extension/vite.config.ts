@@ -46,6 +46,7 @@ export default defineConfig(({ mode }) =>
               background: "src/background.ts",
               popup: "popup.html",
               recorder: "recorder.html",
+              player: "player.html",
             },
             output: {
               entryFileNames: "[name].js",

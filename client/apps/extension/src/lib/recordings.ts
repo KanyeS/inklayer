@@ -25,6 +25,8 @@ export interface RecordingDone {
 interface Stored {
   id: string;
   blob: Blob;
+  /** A still from early in the recording, with a play symbol: shown in issues where the video can't play. */
+  poster?: Blob;
   at: number;
 }
 
@@ -50,8 +52,10 @@ async function run<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) =>
   }
 }
 
-export async function saveRecording(id: string, blob: Blob): Promise<void> {
-  await run("readwrite", (store) => store.put({ id, blob, at: Date.now() } satisfies Stored));
+export async function saveRecording(id: string, blob: Blob, poster: Blob | null): Promise<void> {
+  await run("readwrite", (store) =>
+    store.put({ id, blob, poster: poster ?? undefined, at: Date.now() } satisfies Stored),
+  );
   void pruneRecordings();
 }
 
@@ -74,7 +78,41 @@ export async function uploadRecording(annotationId: string, recordingId: string)
   if (!stored) throw new Error("the recording is gone (recordings are kept for a day).");
   const type = stored.blob.type.split(";")[0] || "video/webm";
   await putBytes(`/api/annotations/${encodeURIComponent(annotationId)}/media/video`, new Blob([stored.blob], { type }));
+  if (stored.poster) {
+    await putBytes(`/api/annotations/${encodeURIComponent(annotationId)}/media/thumbnail`, stored.poster).catch(
+      () => undefined,
+    );
+  }
   await discardRecording(recordingId);
+}
+
+/** The still's size, and how far into the recording it's taken. */
+const POSTER_WIDTH = 640;
+export const POSTER_AT_MS = 800;
+
+/** Draws a still from `video` with a play symbol over it, as a JPEG; null if there's no picture yet. */
+export async function posterFrom(video: HTMLVideoElement): Promise<Blob | null> {
+  if (!video.videoWidth || !video.videoHeight) return null;
+  const width = Math.min(POSTER_WIDTH, video.videoWidth);
+  const height = Math.round(video.videoHeight * (width / video.videoWidth));
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, width, height);
+  const r = Math.round(Math.min(width, height) * 0.12);
+  const [x, y] = [width / 2, height / 2];
+  ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.35, y - r * 0.5);
+  ctx.lineTo(x + r * 0.55, y);
+  ctx.lineTo(x - r * 0.35, y + r * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  return canvas.convertToBlob({ type: "image/jpeg", quality: 0.8 });
 }
 
 /** The best format this browser can record: WebM (VP9, then VP8), else MP4. Exported for tests. */

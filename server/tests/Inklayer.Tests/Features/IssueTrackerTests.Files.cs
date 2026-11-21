@@ -314,7 +314,10 @@ public sealed partial class IssueTrackerTests
             Assert.Equal(HttpStatusCode.RequestedRangeNotSatisfiable, past.StatusCode);
         }
 
-        // In a GitHub issue: a link to Inklayer's copy, which plays from the public address.
+        // Its still, with a play symbol, for issues where it can't play.
+        await PutImageAsync(ana, $"/api/annotations/{comment}/media/thumbnail", Png);
+
+        // In a GitHub issue: the still, opening Inklayer's copy, which plays from the public address.
         const string Repo = "https://api.github.com/repos/acme/recordings";
         factory.Outbound.Responders[Repo] = (_, _) => Json(new { has_issues = true, permissions = new { push = true } });
         factory.Outbound.Responders[$"{Repo}/issues"] = (_, _) => Json(new { number = 2, html_url = "https://github.com/acme/recordings/issues/2" }, HttpStatusCode.Created);
@@ -322,10 +325,35 @@ public sealed partial class IssueTrackerTests
         var tracker = await connected.ReadAsync<TrackerDto>(HttpStatusCode.Created);
         await ana.PostJsonAsync($"/api/annotations/{comment}/issues", new { connectionId = tracker.Id }).ExpectAsync(HttpStatusCode.Created);
         var body = JsonDocument.Parse(factory.Outbound.To($"{Repo}/issues").Single(x => x.Request.Method == HttpMethod.Post).Body).RootElement.GetProperty("body").GetString()!;
-        var link = Regex.Match(body, @"(?<!!)\[Recording\]\(http://localhost(/media/[A-Za-z0-9_-]{43}\.webm)\)");
+        var link = Regex.Match(body, @"\[!\[Recording\]\(http://localhost/media/[A-Za-z0-9_-]{43}\.png\)\]\(http://localhost(/media/[A-Za-z0-9_-]{43}\.webm)\)");
         Assert.True(link.Success, body);
         using var anyone = factory.CreateClient();
         using var played = await anyone.GetAsync(new Uri(link.Groups[1].Value, UriKind.Relative));
         Assert.Equal(webm, await played.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task Where_a_recording_cant_play_its_still_opens_the_comment_in_Inklayer_and_the_video_is_attached()
+    {
+        var (admin, projectId, ana, _, viewer) = await ProjectAsync();
+        using var _a = admin;
+        using var _b = ana;
+        using var _c = viewer;
+        using var connected = await admin.PostJsonAsync($"/api/projects/{projectId}/issue-trackers", new { kind = "azuredevops", token = "pat", settings = InstallFileTracker("azuredevops") });
+        var tracker = await connected.ReadAsync<TrackerDto>(HttpStatusCode.Created);
+        var comment = await CommentAsync(ana, projectId, "Dropdown flickers");
+        await PutImageAsync(ana, $"/api/annotations/{comment}/media/video", [0x1A, 0x45, 0xDF, 0xA3, 1, 2, 3, 4], "video/webm");
+        await PutImageAsync(ana, $"/api/annotations/{comment}/media/thumbnail", Png);
+        var before = factory.Outbound.Requests.Count;
+
+        await ana.PostJsonAsync($"/api/annotations/{comment}/issues", new { connectionId = tracker.Id }).ExpectAsync(HttpStatusCode.Created);
+        var sent = factory.Outbound.Requests.Skip(before).ToList();
+        var uploads = sent.Where(x => x.Request.RequestUri!.AbsolutePath.EndsWith("/_apis/wit/attachments", StringComparison.Ordinal)).ToList();
+        Assert.Equal(["recording.png", "recording.webm"], uploads.Select(u => System.Web.HttpUtility.ParseQueryString(u.Request.RequestUri!.Query)["fileName"]));
+        var ops = JsonDocument.Parse(sent.Single(x => x.Request.RequestUri!.AbsolutePath.EndsWith("/workitems/$Bug", StringComparison.Ordinal)).Body).RootElement.EnumerateArray().ToList();
+        var html = ops.Single(o => o.GetProperty("path").GetString() == "/fields/Microsoft.VSTS.TCM.ReproSteps").GetProperty("value").GetString()!;
+        Assert.Contains($"<a href=\"http://localhost/comments/{comment}\"><img src=\"https://dev.azure.com/files/_apis/wit/attachments/att-1\"", html, StringComparison.Ordinal);
+        Assert.Contains("<a href=\"https://dev.azure.com/files/_apis/wit/attachments/att-2\">Download the recording</a>", html, StringComparison.Ordinal);
+        Assert.Equal(2, ops.Count(o => o.GetProperty("path").GetString() == "/relations/-"));
     }
 }

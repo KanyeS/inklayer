@@ -26,5 +26,11 @@
     "type": "module"
   },
   "permissions": ["activeTab", "scripting", "storage", "identity", "alarms"],
-  "optional_host_permissions": ["<all_urls>", "https://*/*", "http://*/*"]
+  "optional_host_permissions": ["<all_urls>", "https://*/*", "http://*/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["player.html"],
+      "matches": ["https://*/*", "http://*/*"]
+    }
+  ]
 }

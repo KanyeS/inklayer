@@ -1,4 +1,11 @@
-import { MAX_RECORDING_SECONDS, type RecordingDone, recordingType, saveRecording } from "../lib/recordings";
+import {
+  MAX_RECORDING_SECONDS,
+  POSTER_AT_MS,
+  posterFrom,
+  type RecordingDone,
+  recordingType,
+  saveRecording,
+} from "../lib/recordings";
 
 /**
  * The recording window: opened from a new comment, it records a tab (the person picks it in the browser's share prompt)
@@ -12,6 +19,7 @@ const time = document.getElementById("time") as HTMLSpanElement;
 const status = document.getElementById("status") as HTMLParagraphElement;
 
 let recorder: MediaRecorder | null = null;
+let stopSharing: () => void = () => undefined;
 
 function say(text: string, error = false): void {
   status.textContent = text;
@@ -23,10 +31,22 @@ async function start(): Promise<void> {
   if (!type) return say("This browser can't record video.", true);
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
+    // Plain video, as asked for: constraints can make Firefox renegotiate the share, which fails in the Firefox snap.
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
   } catch {
     return say("Nothing was shared. Start again when you're ready.");
   }
+
+  // A still for issues, taken from the shared picture a moment in (before anything can end it).
+  let poster: Promise<Blob | null> = Promise.resolve(null);
+  const preview = document.createElement("video");
+  preview.muted = true;
+  preview.srcObject = stream;
+  void preview.play().catch(() => undefined);
+  // The preview stays attached until the share ends: detaching from a live share crashes the Firefox snap (see stopSharing).
+  setTimeout(() => {
+    poster = posterFrom(preview).catch(() => null);
+  }, POSTER_AT_MS);
 
   const chunks: Blob[] = [];
   recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 2_500_000 });
@@ -37,12 +57,21 @@ async function start(): Promise<void> {
   const tick = setInterval(() => {
     const seconds = Math.floor((Date.now() - began) / 1000);
     time.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} / 1:00`;
-    if (seconds >= MAX_RECORDING_SECONDS) recorder?.stop();
+    if (seconds >= MAX_RECORDING_SECONDS) stopSharing();
   }, 250);
   recorder.onstop = () => {
     clearInterval(tick);
     for (const track of stream.getTracks()) track.stop();
-    void finish(new Blob(chunks, { type: type.split(";")[0] }), Math.round((Date.now() - began) / 1000));
+    void poster.then((still) =>
+      finish(new Blob(chunks, { type: type.split(";")[0] }), still, Math.round((Date.now() - began) / 1000)),
+    );
+  };
+  // Stopping ends the share, and the recorder finishes when its video does. Stopping the recorder while the share is live
+  // crashes Firefox on Linux (the snap, in its PipeWire screen capture); this window is left open for the same reason.
+  stopSharing = () => {
+    for (const track of stream.getTracks()) track.stop();
+    // Browsers that don't end the recorder with its tracks.
+    setTimeout(() => recorder?.state === "recording" && recorder.stop(), 1000);
   };
   // The browser's own "Stop sharing" ends it too.
   for (const track of stream.getVideoTracks())
@@ -53,12 +82,16 @@ async function start(): Promise<void> {
   say("Recording. Switch to the tab and show what's wrong.");
 }
 
-async function finish(blob: Blob, seconds: number): Promise<void> {
-  action.disabled = true;
+let done = false;
+
+async function finish(blob: Blob, poster: Blob | null, seconds: number): Promise<void> {
+  done = true;
+  action.textContent = "Close";
+  action.className = "";
   if (blob.size === 0) return say("The recording was empty.", true);
   const recordingId = crypto.randomUUID();
   try {
-    await saveRecording(recordingId, blob);
+    await saveRecording(recordingId, blob, poster);
     await chrome.runtime.sendMessage({
       type: "recording.done",
       tabId,
@@ -69,11 +102,11 @@ async function finish(blob: Blob, seconds: number): Promise<void> {
   } catch (e) {
     return say(`The recording couldn't be kept: ${e instanceof Error ? e.message : String(e)}`, true);
   }
-  say("Attached to your comment. Save the comment to send it.");
-  setTimeout(() => window.close(), 1200);
+  say("Attached to your comment. Save the comment to send it. You can close this window.");
 }
 
 action.addEventListener("click", () => {
-  if (recorder?.state === "recording") recorder.stop();
+  if (done) window.close();
+  else if (recorder?.state === "recording") stopSharing();
   else void start();
 });

@@ -523,6 +523,18 @@ describe("a comment's parts", () => {
     expect(p.size(annotation())).toBeNull();
   });
 
+  it("offers to play a recording, in a frame from the extension", async () => {
+    vi.stubGlobal("chrome", { runtime: { getURL: (path: string) => `chrome-extension://inklayer/${path}` } });
+    const a = annotation({ media: [{ kind: "video", contentType: "video/webm", size: 1000, width: 0, height: 0 }] });
+    const box = mount(parts().screenshot(a));
+    expect(box.querySelector("iframe")).toBeNull();
+    clickButton(box, "▶ Play recording");
+    await new Promise((resolve) => setTimeout(resolve, 0)); // the next render
+    const frame = box.querySelector("iframe") as HTMLIFrameElement;
+    expect(frame.src).toBe(`chrome-extension://inklayer/player.html?id=${a.id}`);
+    vi.unstubAllGlobals();
+  });
+
   it("links issues on https only", () => {
     vi.stubGlobal("chrome", fakeChrome(() => []).chrome);
     const a = annotation({

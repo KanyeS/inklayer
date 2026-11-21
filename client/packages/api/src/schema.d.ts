@@ -1664,7 +1664,7 @@ export interface paths {
                 };
             };
         };
-        /** Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB) or video (WebM or MP4, at most 40 MB) */
+        /** Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB), video (WebM or MP4, at most 40 MB), or thumbnail (the video's still, at most 2 MB) */
         put: {
             parameters: {
                 query?: {

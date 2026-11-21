@@ -130,6 +130,9 @@ export function CommentPage({ commentId }: { commentId: string }) {
           // biome-ignore lint/a11y/useMediaCaption: a screen recording of a web page, with no speech to caption
           <video
             src={`/api/annotations/${c.id}/media/video`}
+            poster={
+              c.media?.some((m) => m.kind === "thumbnail") ? `/api/annotations/${c.id}/media/thumbnail` : undefined
+            }
             controls
             preload="metadata"
             className="mt-4 block max-h-96 w-full rounded-xl border bg-black"

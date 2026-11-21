@@ -100,9 +100,10 @@ export class CommentParts {
   /** The screenshot, drawn on a canvas (images from the extension can't be blocked by the page's content policy). Click to enlarge. */
   screenshot(a: PageAnnotation): ComponentChild {
     if (!this.#ctx.init.features.bugContext) return null;
-    // The full-page screenshot and recording open on the comment's page in Inklayer (which signs you in if needed).
     const kinds = new Set(a.media?.map((m) => m.kind));
-    const fullPage = (kinds.has("fullpage") || kinds.has("video")) && (
+    if (!a.hasScreenshot && kinds.size === 0) return null;
+    // The full-page screenshot opens on the comment's page in Inklayer (which signs you in if needed).
+    const fullPage = kinds.has("fullpage") && (
       <a
         className="link"
         href={`${this.#ctx.init.serverUrl}/comments/${a.id}`}
@@ -110,15 +111,13 @@ export class CommentParts {
         rel="noopener noreferrer"
         onClick={stopPropagation}
       >
-        {[kinds.has("video") && "Recording", kinds.has("fullpage") && "Full-page screenshot"]
-          .filter(Boolean)
-          .join(" · ")}
+        Full-page screenshot
       </a>
     );
-    if (!a.hasScreenshot) return fullPage || null;
     return (
       <>
-        <Screenshot annotationId={a.id} lightboxParent={this.#options.lightboxParent} />
+        {a.hasScreenshot && <Screenshot annotationId={a.id} lightboxParent={this.#options.lightboxParent} />}
+        {kinds.has("video") && <Recording annotationId={a.id} />}
         {fullPage}
       </>
     );
@@ -480,6 +479,38 @@ function Screenshot({ annotationId, lightboxParent }: { annotationId: string; li
       className="shot"
       title="Screenshot when this was commented: click to enlarge"
       onClick={enlarge}
+    />
+  );
+}
+
+/**
+ * "Play recording", then the recording in a frame: an extension page (player.html), so the page's content policy can't
+ * block it and the page can't read it.
+ */
+function Recording({ annotationId }: { annotationId: string }) {
+  const [playing, setPlaying] = useState(false);
+  if (!playing) {
+    return (
+      <button
+        type="button"
+        className="link"
+        onClick={(e) => {
+          e.stopPropagation();
+          setPlaying(true);
+        }}
+      >
+        ▶ Play recording
+      </button>
+    );
+  }
+  return (
+    <iframe
+      className="recording"
+      title="Recording"
+      src={chrome.runtime.getURL(`player.html?id=${encodeURIComponent(annotationId)}`)}
+      allow="autoplay; fullscreen"
+      allowFullScreen
+      onClick={stopPropagation}
     />
   );
 }

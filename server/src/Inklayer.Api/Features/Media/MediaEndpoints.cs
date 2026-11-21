@@ -27,7 +27,7 @@ internal static class MediaEndpoints
         var annotations = app.MapGroup("/api/annotations").WithTags("Annotations").RequireAuthorization();
         annotations.MapPut("/{annotationId:guid}/media/{kind}", PutAsync).Produces(StatusCodes.Status204NoContent)
             .WithMetadata(new RequestSizeLimitAttribute(AnnotationMedia.MaxVideoBytes + (1024 * 1024)))
-            .WithSummary("Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB) or video (WebM or MP4, at most 40 MB)");
+            .WithSummary("Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB), video (WebM or MP4, at most 40 MB), or thumbnail (the video's still, at most 2 MB)");
         annotations.MapGet("/{annotationId:guid}/media/{kind}", GetAsync).WithSummary("A comment's full-page screenshot (fullpage) or recording (video)");
         return app;
     }
@@ -36,12 +36,19 @@ internal static class MediaEndpoints
     {
         MediaKinds.FullPage when ImageTypes.Contains(type) => null,
         MediaKinds.FullPage => "Send a WebP, JPEG or PNG image.",
+        MediaKinds.Thumbnail when ImageTypes.Contains(type) => null,
+        MediaKinds.Thumbnail => "Send a WebP, JPEG or PNG image.",
         MediaKinds.Video when VideoTypes.Contains(type) => null,
         MediaKinds.Video => "Send a WebM or MP4 video.",
         _ => "Unknown kind of media.",
     };
 
-    private static long MaxBytes(string kind) => kind == MediaKinds.Video ? AnnotationMedia.MaxVideoBytes : AnnotationMedia.MaxImageBytes;
+    private static long MaxBytes(string kind) => kind switch
+    {
+        MediaKinds.Video => AnnotationMedia.MaxVideoBytes,
+        MediaKinds.Thumbnail => AnnotationMedia.MaxThumbnailBytes,
+        _ => AnnotationMedia.MaxImageBytes,
+    };
 
     /// <summary>Whether the file starts the way its type says: an image's signature, WebM's EBML header, or MP4's ftyp box.</summary>
     private static bool LooksLike(string type, byte[] head) => type switch
