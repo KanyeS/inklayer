@@ -27,7 +27,19 @@ public sealed record CreateTrackerRequest(string Kind, string? Name, string? Tok
 /// <param name="RemoveToken">Remove the shared token, so everyone acts as their own account.</param>
 public sealed record UpdateTrackerRequest(string? Name, string? Token, TrackerSettings? Settings, bool? CloseIssueOnResolve, bool? PostRepliesToIssue, bool? RemoveToken = null);
 
-public sealed record CreateIssueRequest(Guid ConnectionId, string? Title);
+/// <param name="Parent">Create the issue under this one (its address, number or key): a sub-task in Jira, a child work item in Azure DevOps.</param>
+/// <param name="Type">Jira and Azure DevOps: the issue type, from <c>/issue-trackers/{id}/issue-types</c>; the tracker's own when empty.</param>
+public sealed record CreateIssueRequest(Guid ConnectionId, string? Title, [property: StringLength(2000)] string? Parent = null, [property: StringLength(200)] string? Type = null);
+
+/// <summary>
+/// Which types issues can be created as, for a tracker's settings before they're saved. <see cref="Token"/>: a shared token
+/// being entered; else <see cref="ConnectionId"/>'s saved one, else your own connected account.
+/// </summary>
+public sealed record IssueTypesRequest(string Kind, TrackerSettings Settings, string? Token = null, Guid? ConnectionId = null);
+
+/// <param name="Types">Empty for trackers without issue types (GitHub, GitLab, Forgejo, Linear).</param>
+/// <param name="Suggested">The one to pick: the current type if the project has it, else Bug, Issue or Task, else the first.</param>
+public sealed record IssueTypesResponse(List<string> Types, string? Suggested);
 
 /// <param name="Reference">The issue's address or number (<c>#12</c>, <c>ABC-12</c>, <c>ENG-5</c>), or a search result's url.</param>
 /// <param name="AddComment">Post the comment, with its replies, page and details, on the issue.</param>
@@ -48,6 +60,10 @@ internal static class IssueEndpoints
         trackers.MapPost("/", CreateAsync).Produces<TrackerConnectionResponse>(StatusCodes.Status201Created).WithSummary("Connect an issue tracker (checked before saving)");
         trackers.MapPatch("/{id:guid}", UpdateAsync).Produces<TrackerConnectionResponse>();
         trackers.MapDelete("/{id:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent);
+        trackers.MapPost("/issue-types", IssueTypesAsync).Produces<IssueTypesResponse>()
+            .WithSummary("The types issues can be created as, for a tracker's settings (project Admins)");
+        trackers.MapGet("/{id:guid}/issue-types", TrackerIssueTypesAsync).Produces<IssueTypesResponse>()
+            .WithSummary("The types you can create issues as in a connected tracker (Commenters and above)");
         trackers.MapPost("/{id:guid}/test", TestAsync).Produces<TestResultResponse>().WithSummary("Check the connection still works");
         trackers.MapGet("/{id:guid}/search", SearchIssuesAsync).Produces<List<FoundIssue>>()
             .WithSummary("Open issues matching a title, or the issue an address or number points to (Commenters)");
@@ -211,6 +227,54 @@ internal static class IssueEndpoints
         return TypedResults.Ok(ToResponse(connection, secrets, accounts));
     }
 
+    private static async Task<IResult> IssueTypesAsync(
+        Guid projectId, IssueTypesRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, IntegrationSecrets secrets,
+        Trackers trackers, TrackerAccounts accounts, CancellationToken ct)
+    {
+        var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        if (!TrackerKinds.All.Contains(request.Kind))
+        {
+            return Invalid("kind", $"Choose one of {string.Join(", ", TrackerKinds.All)}.");
+        }
+
+        if (trackers.For(request.Kind) is not IIssueTypes typed)
+        {
+            return TypedResults.Ok(new IssueTypesResponse([], null));
+        }
+
+        var saved = request.ConnectionId is { } id
+            ? await db.IssueTrackerConnections.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id && c.ProjectId == projectId && c.Kind == request.Kind, ct)
+            : null;
+        var shared = request.Token?.Trim() is { Length: > 0 } t ? t : saved?.ProtectedToken is { } p ? secrets.Unprotect(p) : null;
+        if (Validate(request.Kind, request.Settings, shared is not null) is { } invalid)
+        {
+            return invalid;
+        }
+
+        try
+        {
+            var token = shared is not null ? shared
+                : accounts.PersonalFor(request.Kind, request.Settings) ? await OwnAsync(accounts, currentUser, request.Kind, request.Settings, ct)
+                : null;
+            if (token is null)
+            {
+                return Invalid("token", accounts.PersonalFor(request.Kind, request.Settings) ? OwnNeeded(request.Kind) : "A token is required.");
+            }
+
+            var types = (await typed.IssueTypesAsync(request.Settings, token, ct)).ToList();
+            return TypedResults.Ok(new IssueTypesResponse(types, IssueService.SuggestedType(types, request.Settings.IssueType)));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status400BadRequest, title: $"Couldn't read the types from {TrackerKinds.Name(request.Kind)}.", detail: ex.Message);
+        }
+    }
+
     private static async Task<IResult> DeleteAsync(Guid projectId, Guid id, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
         var check = await access.CheckProjectAsync(projectId, Permission.ManageProjects, ct);
@@ -277,7 +341,7 @@ internal static class IssueEndpoints
 
         try
         {
-            var issue = await issues.CreateAsync(comment, connection, request.Title, currentUser.Id!.Value, ct);
+            var issue = await issues.CreateAsync(comment, connection, request.Title, currentUser.Id!.Value, ct, request.Parent, request.Type);
             return TypedResults.Created(issue.Url, new IssueResponse(issue.Id, connection.Kind, issue.Key, issue.Url, issue.State));
         }
         catch (TrackerAccountNeededException ex)
@@ -287,6 +351,36 @@ internal static class IssueEndpoints
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             return TypedResults.Problem(statusCode: StatusCodes.Status502BadGateway, title: $"{TrackerKinds.Name(connection.Kind)} didn't create the issue.", detail: ex.Message);
+        }
+    }
+
+    internal static async Task<IResult> TrackerIssueTypesAsync(
+        Guid projectId, Guid id, AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct)
+    {
+        var check = await access.CheckProjectAsync(projectId, Permission.Comment, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        var connection = await db.IssueTrackerConnections.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id && c.ProjectId == projectId, ct);
+        if (connection is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        try
+        {
+            var (types, suggested) = await issues.IssueTypesAsync(connection, currentUser.Id!.Value, ct);
+            return TypedResults.Ok(new IssueTypesResponse([.. types], suggested));
+        }
+        catch (TrackerAccountNeededException ex)
+        {
+            return AccountNeeded(ex);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status502BadGateway, title: $"Couldn't read the types from {TrackerKinds.Name(connection.Kind)}.", detail: ex.Message);
         }
     }
 

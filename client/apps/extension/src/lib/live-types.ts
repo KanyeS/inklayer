@@ -72,7 +72,8 @@ export type LiveRequest =
   | { type: "live.reply"; annotationId: string; body: string }
   | { type: "live.replyDelete"; id: string; version: number }
   | { type: "live.trackers"; projectId: string }
-  | { type: "live.issue"; annotationId: string; connectionId: string }
+  | { type: "live.issue"; annotationId: string; connectionId: string; parent?: string; issueType?: string }
+  | { type: "live.issueTypes"; projectId: string; connectionId: string }
   | { type: "live.issueSearch"; projectId: string; connectionId: string; q: string }
   | { type: "live.issueLink"; annotationId: string; connectionId: string; reference: string; addComment: boolean }
   | { type: "live.share"; projectId: string; url: string }

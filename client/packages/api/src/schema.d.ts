@@ -2041,6 +2041,87 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/projects/{projectId}/issue-trackers/issue-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The types issues can be created as, for a tracker's settings (project Admins) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    projectId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueTypesRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssueTypesResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}/issue-trackers/{id}/issue-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The types you can create issues as in a connected tracker (Commenters and above) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    projectId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssueTypesResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/issue-trackers/{id}/test": {
         parameters: {
             query?: never;
@@ -3422,6 +3503,8 @@ export interface components {
             /** Format: uuid */
             connectionId: string;
             title?: null | string;
+            parent?: null | string;
+            type?: null | string;
         };
         CreateLiveAnnotationRequest: {
             url?: null | string;
@@ -3703,6 +3786,17 @@ export interface components {
             url: string;
             /** @enum {string} */
             state: "open" | "closed";
+        };
+        IssueTypesRequest: {
+            kind: string;
+            settings: components["schemas"]["TrackerSettings"];
+            token?: null | string;
+            /** Format: uuid */
+            connectionId?: null | string;
+        };
+        IssueTypesResponse: {
+            types: string[];
+            suggested: null | string;
         };
         JsonElement: unknown;
         LinkIssueRequest: {
@@ -4143,6 +4237,8 @@ export type IntegrationResponse = components['schemas']['IntegrationResponse'];
 export type InvitationResponse = components['schemas']['InvitationResponse'];
 export type IssueCommentResponse = components['schemas']['IssueCommentResponse'];
 export type IssueResponse = components['schemas']['IssueResponse'];
+export type IssueTypesRequest = components['schemas']['IssueTypesRequest'];
+export type IssueTypesResponse = components['schemas']['IssueTypesResponse'];
 export type JsonElement = components['schemas']['JsonElement'];
 export type LinkIssueRequest = components['schemas']['LinkIssueRequest'];
 export type LivePageAnnotationsResponse = components['schemas']['LivePageAnnotationsResponse'];

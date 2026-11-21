@@ -40,8 +40,8 @@ export class CommentParts {
   readonly #replies = new Map<string, TextDraft>();
   /** Each project's connected issue trackers, loaded the first time a comment there is shown. */
   readonly #trackers = new Map<string, TrackerChoice[] | "loading">();
-  /** Comments with "Link issue" open. */
-  readonly #linking = new Set<string>();
+  /** Comments with "Link issue" open ("link"), or the create form for a Jira or Azure DevOps tracker (its id). */
+  readonly #linking = new Map<string, "link" | { create: string }>();
 
   constructor(ctx: PanelContext, options: CommentPartsOptions) {
     this.#ctx = ctx;
@@ -110,12 +110,22 @@ export class CommentParts {
     // Trackers where the person acts as their own account, which they haven't connected (and there's no shared one).
     const trackers = choices.filter((t) => t.postsAs !== "connect");
     const toConnect = choices.find((t) => t.postsAs === "connect");
-    const create = this.#createIssue(a, trackers);
-    const linking = this.#linking.has(a.id) && trackers.length > 0;
-    const toggleLink = () => {
-      if (linking) this.#linking.delete(a.id);
-      else this.#linking.add(a.id);
+    const linking = this.#linking.get(a.id);
+    const creating = typeof linking === "object" ? trackers.find((t) => t.id === linking.create) : undefined;
+    const close = () => {
+      this.#linking.delete(a.id);
       this.#ctx.render();
+    };
+    const create = this.#createIssue(a, trackers, (t) => {
+      this.#linking.set(a.id, { create: t.id });
+      this.#ctx.render();
+    });
+    const toggleLink = () => {
+      if (linking === "link") close();
+      else {
+        this.#linking.set(a.id, "link");
+        this.#ctx.render();
+      }
     };
     if (issues.length === 0 && !create && !toConnect) return null;
     return (
@@ -150,11 +160,17 @@ export class CommentParts {
           </a>
         )}
         {create && (
-          <button type="button" className="link" disabled={this.#ctx.busy} aria-expanded={linking} onClick={toggleLink}>
+          <button
+            type="button"
+            className="link"
+            disabled={this.#ctx.busy}
+            aria-expanded={linking === "link"}
+            onClick={toggleLink}
+          >
             Link issue
           </button>
         )}
-        {linking && (
+        {linking === "link" && trackers.length > 0 && (
           <LinkIssue
             projectId={a.projectId}
             trackers={trackers}
@@ -165,17 +181,38 @@ export class CommentParts {
                 call({ type: "live.issueLink", annotationId: a.id, connectionId, reference, addComment }),
               );
             }}
-            onCancel={toggleLink}
+            onCancel={close}
+          />
+        )}
+        {creating && (
+          <CreateTypedIssue
+            key={creating.id}
+            projectId={a.projectId}
+            tracker={creating}
+            busy={this.#ctx.busy}
+            onCreate={(issueType, parent) => {
+              this.#linking.delete(a.id);
+              this.#ctx.mutate(() =>
+                call({ type: "live.issue", annotationId: a.id, connectionId: creating.id, issueType, parent }),
+              );
+            }}
+            onCancel={close}
           />
         )}
       </div>
     );
   }
 
-  /** A button (one tracker) or a menu (several) to create an issue from the comment; null with none connected. */
-  #createIssue(a: PageAnnotation, trackers: TrackerChoice[]): ComponentChild {
-    const createIn = (connectionId: string) =>
-      this.#ctx.mutate(() => call({ type: "live.issue", annotationId: a.id, connectionId }));
+  /**
+   * A button (one tracker) or a menu (several) to create an issue from the comment; null with none connected. Jira and
+   * Azure DevOps open a form first (`choose`), for the issue's type and an optional parent.
+   */
+  #createIssue(a: PageAnnotation, trackers: TrackerChoice[], choose: (t: TrackerChoice) => void): ComponentChild {
+    const createIn = (connectionId: string) => {
+      const tracker = trackers.find((t) => t.id === connectionId);
+      if (tracker && NESTING_KINDS.has(tracker.kind)) choose(tracker);
+      else this.#ctx.mutate(() => call({ type: "live.issue", annotationId: a.id, connectionId }));
+    };
     const [only] = trackers;
     if (trackers.length === 1 && only) {
       return (
@@ -441,6 +478,10 @@ function showLightbox(parent: ParentNode, bitmap: ImageBitmap): void {
  * Finds an issue that already exists, by title or a pasted address or number, and links it to the comment. Searches
  * as you type; an empty box lists the open issues.
  */
+/** Trackers that can create an issue under another. */
+const NESTING_KINDS: ReadonlySet<TrackerChoice["kind"]> = new Set<TrackerChoice["kind"]>(["jira", "azuredevops"]);
+
+/** Finds an issue to link to the comment, by searching or by its address or number. */
 function LinkIssue({
   projectId,
   trackers,
@@ -545,6 +586,125 @@ function LinkIssue({
       <div className="row">
         <button type="submit" disabled={busy || !reference}>
           {picked ? `Link ${picked.key}` : "Link"}
+        </button>
+        <button type="button" className="link" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Creating an issue in Jira or Azure DevOps: its type, from the types the user can use in the project (starting on the
+ * tracker's own), and optionally an issue to create it under (a sub-task, a child work item).
+ */
+function CreateTypedIssue({
+  projectId,
+  tracker,
+  busy,
+  onCreate,
+  onCancel,
+}: {
+  projectId: string;
+  tracker: TrackerChoice;
+  busy: boolean;
+  onCreate: (issueType: string | undefined, parent: string | undefined) => void;
+  onCancel: () => void;
+}) {
+  const [types, setTypes] = useState<string[] | null>(null);
+  const [issueType, setIssueType] = useState("");
+  const [typesError, setTypesError] = useState("");
+  const [parent, setParent] = useState("");
+  const [parents, setParents] = useState<FoundIssue[]>([]);
+
+  useEffect(() => {
+    let current = true;
+    call<{ types: string[]; suggested?: string | null }>({
+      type: "live.issueTypes",
+      projectId,
+      connectionId: tracker.id,
+    })
+      .then((found) => {
+        if (!current) return;
+        setTypes(found.types);
+        setIssueType(found.suggested ?? found.types[0] ?? "");
+      })
+      .catch((e: unknown) => {
+        if (!current) return;
+        setTypes([]);
+        setTypesError(e instanceof Error ? e.message : "Couldn't load the types.");
+      });
+    return () => {
+      current = false;
+    };
+  }, [projectId, tracker.id]);
+
+  // Suggestions for the parent as it's typed.
+  useEffect(() => {
+    const q = parent.trim();
+    if (!q) {
+      setParents([]);
+      return;
+    }
+    let current = true;
+    const timer = window.setTimeout(() => {
+      call<FoundIssue[]>({ type: "live.issueSearch", projectId, connectionId: tracker.id, q })
+        .then((found) => current && setParents(found))
+        .catch(() => current && setParents([]));
+    }, 300);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [projectId, tracker.id, parent]);
+
+  const under = tracker.kind === "jira" ? "Sub-task of" : "Child of";
+  const listId = `parents-${tracker.id}`;
+  const submit = (e: Event) => {
+    e.preventDefault();
+    onCreate(issueType || undefined, parent.trim() || undefined);
+  };
+
+  return (
+    <form className="link-issue" onSubmit={submit}>
+      <div className="row">
+        <span className="muted">Type</span>
+        {types && types.length > 0 ? (
+          <select
+            aria-label="Issue type"
+            value={issueType}
+            onChange={(e) => setIssueType((e.currentTarget as HTMLSelectElement).value)}
+          >
+            {types.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="muted">{types ? "The tracker's own" : "Loading…"}</span>
+        )}
+      </div>
+      {typesError && <p className="error">{typesError}</p>}
+      <input
+        type="text"
+        aria-label={`${under} (optional)`}
+        placeholder={`${under} (optional): search, or a key, #number or address`}
+        list={listId}
+        value={parent}
+        onInput={(e) => setParent((e.currentTarget as HTMLInputElement).value)}
+      />
+      <datalist id={listId}>
+        {parents.map((p) => (
+          <option key={p.externalId} value={p.key}>
+            {p.title}
+          </option>
+        ))}
+      </datalist>
+      <div className="row">
+        <button type="submit" disabled={busy || !types}>
+          Create in {TRACKER_NAMES[tracker.kind]}
         </button>
         <button type="button" className="link" onClick={onCancel}>
           Cancel

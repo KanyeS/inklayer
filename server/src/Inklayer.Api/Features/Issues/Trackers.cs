@@ -63,6 +63,20 @@ internal interface IIssueTracker
     Task<string> AddCommentAsync(TrackerSettings settings, TrackerAuth token, string externalId, string markdown, CancellationToken ct);
 }
 
+/// <summary>A tracker whose projects have their own issue types (Azure DevOps work item types, Jira issue types).</summary>
+internal interface IIssueTypes
+{
+    /// <summary>The types issues can be created as in the project, in the tracker's order; hidden types and sub-tasks left out.</summary>
+    Task<IReadOnlyList<string>> IssueTypesAsync(TrackerSettings settings, TrackerAuth token, CancellationToken ct);
+}
+
+/// <summary>A tracker that can create an issue under another: a Jira sub-task (or an issue in an epic), an Azure DevOps child work item.</summary>
+internal interface IChildIssues
+{
+    /// <param name="parentExternalId">The parent's <see cref="FoundIssue.ExternalId"/>, from <see cref="IIssueTracker.GetAsync"/>.</param>
+    Task<CreatedIssue> CreateUnderAsync(TrackerSettings settings, TrackerAuth token, string title, string markdown, string parentExternalId, CancellationToken ct);
+}
+
 internal sealed class Trackers(IHttpClientFactory httpClients)
 {
     public IIssueTracker For(string kind) => kind switch

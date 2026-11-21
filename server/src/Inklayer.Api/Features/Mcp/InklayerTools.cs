@@ -163,9 +163,18 @@ internal static class InklayerTools
     public static async Task<string> CreateIssueFromComment(
         [Description("Comment id")] Guid commentId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
         AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct,
-        [Description("Issue title; defaults to the comment's first line")] string? title = null) =>
+        [Description("Issue title; defaults to the comment's first line")] string? title = null,
+        [Description("Jira and Azure DevOps: create it under this issue (its key, number or address), as a sub-task or child work item")] string? parent = null,
+        [Description("Jira and Azure DevOps: the issue type, from list_issue_types; the tracker's own when empty")] string? type = null) =>
         ToolResults.ToJson(ToolResults.Value<IssueResponse>(
-            await IssueEndpoints.CreateIssueAsync(commentId, new CreateIssueRequest(trackerId, title), access, currentUser, db, issues, ct)));
+            await IssueEndpoints.CreateIssueAsync(commentId, new CreateIssueRequest(trackerId, title, parent, type), access, currentUser, db, issues, ct)));
+
+    [McpServerTool(Name = "list_issue_types", ReadOnly = true, OpenWorld = true),
+     Description("The issue types you can create issues as in a connected Jira or Azure DevOps tracker (empty for the others), and the one to suggest.")]
+    public static async Task<string> ListIssueTypes(
+        [Description("Project id")] Guid projectId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct) =>
+        ToolResults.ToJson(ToolResults.Value<IssueTypesResponse>(await IssueEndpoints.TrackerIssueTypesAsync(projectId, trackerId, access, currentUser, db, issues, ct)));
 
     [McpServerTool(Name = "search_issues", ReadOnly = true, OpenWorld = true),
      Description("Search a connected tracker's open issues by title, to link one to a comment instead of creating a duplicate. An issue's address, number or key finds that issue.")]

@@ -33,7 +33,10 @@ internal sealed class IssueService(
 
     public static string SettingsJson(TrackerSettings s) => JsonSerializer.Serialize(s, Json);
 
-    public async Task<AnnotationIssue> CreateAsync(Annotation comment, IssueTrackerConnection connection, string? title, Guid actorUserId, CancellationToken ct)
+    /// <param name="parent">Create it under this issue (its address, number or key): a Jira sub-task, an Azure DevOps child work item.</param>
+    /// <param name="type">The issue type, instead of the connection's (Jira, Azure DevOps); must be one the project has.</param>
+    public async Task<AnnotationIssue> CreateAsync(
+        Annotation comment, IssueTrackerConnection connection, string? title, Guid actorUserId, CancellationToken ct, string? parent = null, string? type = null)
     {
         var markdown = await IssueBodyAsync(comment, ct);
         var plainBody = markdown.Split('\n')[0];
@@ -41,7 +44,33 @@ internal sealed class IssueService(
         issueTitle = issueTitle.Length > 120 ? issueTitle[..119] + "…" : issueTitle;
 
         var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
-        var created = await accounts.WithAsync(token, t => trackers.For(connection.Kind).CreateAsync(SettingsOf(connection), t, issueTitle, markdown, ct), ct);
+        var tracker = trackers.For(connection.Kind);
+        var settings = SettingsOf(connection);
+        if (type?.Trim() is { Length: > 0 } wanted)
+        {
+            if (tracker is not IIssueTypes typed)
+            {
+                throw new InvalidOperationException($"{TrackerKinds.Name(connection.Kind)} issues don't have types to choose from.");
+            }
+
+            // Only a type the project offers, spelled as the tracker spells it.
+            var types = await accounts.WithAsync(token, t => typed.IssueTypesAsync(settings, t, ct), ct);
+            settings = settings with
+            {
+                IssueType = types.FirstOrDefault(x => string.Equals(x, wanted, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidOperationException($"The project has no issue type called {wanted}."),
+            };
+        }
+
+        var parentReference = parent?.Trim() is { Length: > 0 } p ? p : null;
+        if (parentReference is not null && tracker is not IChildIssues)
+        {
+            throw new InvalidOperationException($"{TrackerKinds.Name(connection.Kind)} issues can't be created under another issue here.");
+        }
+
+        var created = await accounts.WithAsync(token, async t => parentReference is null
+            ? await tracker.CreateAsync(settings, t, issueTitle, markdown, ct)
+            : await ((IChildIssues)tracker).CreateUnderAsync(settings, t, issueTitle, markdown, (await tracker.GetAsync(settings, t, parentReference, ct)).ExternalId, ct), ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var issue = new AnnotationIssue
         {
@@ -59,6 +88,29 @@ internal sealed class IssueService(
     {
         var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
         return await accounts.WithAsync(token, t => trackers.For(connection.Kind).GetAsync(SettingsOf(connection), t, reference, ct), ct);
+    }
+
+    /// <summary>
+    /// The types the person can create issues as in the connection's project, asked as them; empty for trackers without
+    /// types. <c>Suggested</c>: the connection's own type where the project has it, else Bug, Issue or Task, else the first.
+    /// </summary>
+    public async Task<(IReadOnlyList<string> Types, string? Suggested)> IssueTypesAsync(IssueTrackerConnection connection, Guid actorUserId, CancellationToken ct)
+    {
+        if (trackers.For(connection.Kind) is not IIssueTypes typed)
+        {
+            return ([], null);
+        }
+
+        var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
+        var settings = SettingsOf(connection);
+        var types = await accounts.WithAsync(token, t => typed.IssueTypesAsync(settings, t, ct), ct);
+        return (types, SuggestedType(types, settings.IssueType));
+    }
+
+    public static string? SuggestedType(IReadOnlyList<string> types, string? current)
+    {
+        string? Has(string? name) => types.FirstOrDefault(x => string.Equals(x, name?.Trim(), StringComparison.OrdinalIgnoreCase));
+        return Has(current) ?? Has("Bug") ?? Has("Issue") ?? Has("Task") ?? (types.Count > 0 ? types[0] : null);
     }
 
     public async Task<IReadOnlyList<FoundIssue>> SearchAsync(IssueTrackerConnection connection, string query, Guid actorUserId, CancellationToken ct)

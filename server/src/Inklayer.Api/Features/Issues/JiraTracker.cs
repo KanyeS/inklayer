@@ -8,7 +8,7 @@ using Inklayer.Domain.Issues;
 namespace Inklayer.Api.Features.Issues;
 
 /// <summary>Jira Cloud (REST v3). Token: an Atlassian API token for <see cref="TrackerSettings.Email"/>.</summary>
-internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker
+internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues
 {
     private static HttpRequestMessage Request(HttpMethod method, TrackerSettings s, string path, TrackerAuth token, object? body = null)
     {
@@ -28,19 +28,67 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker
         await Trackers.SendAsync(http, request, ct);
     }
 
-    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct)
+    /// <summary>The project's issue types, without sub-tasks (they need a parent issue).</summary>
+    public async Task<IReadOnlyList<string>> IssueTypesAsync(TrackerSettings s, TrackerAuth token, CancellationToken ct)
     {
-        var body = new
+        using var request = Request(HttpMethod.Get, s, $"/rest/api/3/project/{Uri.EscapeDataString(s.ProjectKey!)}", token);
+        var project = await Trackers.SendAsync(http, request, ct);
+        return (project?["issueTypes"]?.AsArray() ?? [])
+            .Where(t => t?["subtask"]?.GetValue<bool>() != true)
+            .Select(t => t?["name"]?.GetValue<string>())
+            .OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct) =>
+        CreateCoreAsync(s, token, title, markdown, s.IssueType is { Length: > 0 } t ? t : "Bug", null, ct);
+
+    /// <summary>
+    /// A sub-task of an ordinary issue, in the project's sub-task type; or, under an epic, an issue of the tracker's type
+    /// in that epic. Sub-tasks can't have sub-tasks of their own.
+    /// </summary>
+    public async Task<CreatedIssue> CreateUnderAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, string parentExternalId, CancellationToken ct)
+    {
+        using var get = Request(HttpMethod.Get, s, $"/rest/api/3/issue/{Uri.EscapeDataString(parentExternalId)}?fields=issuetype", token);
+        var parentType = (await Trackers.SendAsync(http, get, ct))?["fields"]?["issuetype"];
+        if (parentType?["subtask"]?.GetValue<bool>() == true)
         {
-            fields = new
-            {
-                project = new { key = s.ProjectKey },
-                summary = title,
-                issuetype = new { name = s.IssueType is { Length: > 0 } t ? t : "Bug" },
-                description = Adf(markdown),
-            },
+            throw new InvalidOperationException($"{parentExternalId} is a sub-task itself, and sub-tasks can't have their own. Choose its parent issue.");
+        }
+
+        var level = parentType?["hierarchyLevel"] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 0;
+        string type;
+        if (level >= 1)
+        {
+            type = s.IssueType is { Length: > 0 } t ? t : "Bug";
+        }
+        else
+        {
+            using var project = Request(HttpMethod.Get, s, $"/rest/api/3/project/{Uri.EscapeDataString(s.ProjectKey!)}", token);
+            type = ((await Trackers.SendAsync(http, project, ct))?["issueTypes"]?.AsArray() ?? [])
+                .FirstOrDefault(x => x?["subtask"]?.GetValue<bool>() == true)?["name"]?.GetValue<string>()
+                ?? throw new InvalidOperationException($"The Jira project {s.ProjectKey} has no sub-task issue type.");
+        }
+
+        return await CreateCoreAsync(s, token, title, markdown, type, parentExternalId, ct);
+    }
+
+    private async Task<CreatedIssue> CreateCoreAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, string type, string? parentKey, CancellationToken ct)
+    {
+        var fields = new Dictionary<string, object>
+        {
+            ["project"] = new { key = s.ProjectKey },
+            ["summary"] = title,
+            ["issuetype"] = new { name = type },
+            ["description"] = Adf(markdown),
         };
-        using var request = Request(HttpMethod.Post, s, "/rest/api/3/issue", token, body);
+        if (parentKey is not null)
+        {
+            fields["parent"] = new { key = parentKey };
+        }
+
+        using var request = Request(HttpMethod.Post, s, "/rest/api/3/issue", token, new { fields });
         var issue = await Trackers.SendAsync(http, request, ct);
         var key = issue!["key"]!.GetValue<string>();
         return new CreatedIssue(key, key, $"{s.Site!.TrimEnd('/')}/browse/{key}");

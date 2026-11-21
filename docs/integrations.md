@@ -33,6 +33,18 @@ Several comments can link to the same issue. Closing the issue resolves all of t
 
 An address from another repository or project is refused, as is a GitHub or Forgejo pull request.
 
+### Choosing the type, and creating an issue under another (Jira and Azure DevOps)
+
+When creating an issue in Jira or Azure DevOps, a small form opens first. In the extension it opens from **Create issue**; in the web app it's part of the **New issue** form.
+- **Type:** pick from the project's issue types. The list comes from the tracker as you, so it shows the types you can create. It starts on the tracker's own type. Hidden Azure DevOps types and Jira sub-task types aren't listed.
+- **Sub-task of** (Jira) or **Child of** (Azure DevOps), optional: an issue to create this one under. Search by title, or paste the parent's key, number or address.
+
+With a parent:
+- **Jira:** under an ordinary issue, it becomes a **sub-task**, in the project's sub-task type (whatever type was picked). Under an **epic**, it becomes an issue of the chosen type in that epic. A sub-task can't be a parent, since Jira doesn't allow sub-tasks of sub-tasks.
+- **Azure DevOps:** it becomes a work item of the chosen type, linked as a **child** of the parent.
+
+The parent must be in the same project. Leave it empty for an ordinary issue.
+
 ### Following an issue's comments
 
 Comments written on a linked issue in the tracker show in the Inklayer thread, mixed in with the replies by time. Each is marked with the issue it came from, such as "on GitHub #12". They are read-only in Inklayer.
@@ -199,7 +211,7 @@ You need an Atlassian account that can work in the Jira project, and an **API to
    | Site | `https://acme.atlassian.net` | The start of any Jira address in your browser |
    | Project key | `WEB` | The letters before the number in issue keys (`WEB-123`), or **Project settings → Details** |
    | Account email | `inklayer@acme.com` | The account from step 1 |
-   | Issue type | `Bug` (default) | Must be an issue type the project has, spelled as Jira shows it, such as `Task` |
+   | Issue type | `Bug` | Chosen from the project's issue types once the site, project key and token (or your own account) are filled in. Bug is picked if the project has it |
    | API token | | From step 2 |
 
 When a comment is resolved, Inklayer moves its issue through the first available transition into a **Done**-category status. If the workflow has no such transition from the issue's current status, the connection shows an error and the issue stays as it is. Closing an issue in Jira means any **Done**-category status.
@@ -233,10 +245,10 @@ Inklayer creates **work items** in Azure Boards. It works with Azure DevOps Serv
    |---|---|---|
    | Organisation address | `https://dev.azure.com/acme` | The start of any Azure DevOps address, up to the organisation. Older organisations use `https://acme.visualstudio.com`. For Azure DevOps Server, the collection's address, such as `https://tfs.acme.com/DefaultCollection` |
    | Project | `Web Shop` | The project's name, as it appears after the organisation in the address |
-   | Work item type | `Bug` (default) | A type the project's process has. The **Basic** process has no Bug, so use `Issue` or `Task` there |
+   | Work item type | `Bug` | Chosen from the project's work item types once the organisation, project and token (or your own account) are filled in. Bug is picked if the process has it, else Issue (the **Basic** process) or Task |
    | Personal access token | | From step 4 |
 
-Inklayer checks the token by looking up the work item type in the project, so a wrong project or type shows up when you save. The comment's text, page details and link go into **Repro Steps** for bugs, and into **Description** for other types.
+Inklayer checks the token by looking up the work item type in the project, so a wrong project or type shows up when you save. The comment's text, page details and link go into **Repro Steps** for bugs, and into **Description** for other types. To change the type later, pick another next to **Work item type** in the tracker's row.
 
 Open or closed follows the state's **category**, so custom states work too. When a comment is resolved, Inklayer moves its work item to the type's first **Completed**-category state (Done or Closed in the standard processes). A work item moved to a **Completed** or **Removed** state resolves its comment, and one moved back reopens it. **Resolved** states, such as a bug waiting to be verified, still count as open. If the process has rules that block the change, such as a required field, the connection shows the error and the work item stays as it is.
 

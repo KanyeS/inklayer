@@ -13,7 +13,7 @@ namespace Inklayer.Api.Features.Issues;
 /// <see cref="TrackerSettings.IssueType"/> the work item type (Bug by default). Token: a personal access token with
 /// Work Items: read and write. Open or closed follows the state's category: Completed and Removed count as closed.
 /// </summary>
-internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracker
+internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues
 {
     private const string Version = "api-version=7.1";
 
@@ -46,15 +46,54 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
         await Trackers.SendAsync(http, request, ct);
     }
 
-    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct)
+    /// <summary>The project's work item types, without disabled ones or those in the hidden category (test cases, code reviews…).</summary>
+    public async Task<IReadOnlyList<string>> IssueTypesAsync(TrackerSettings s, TrackerAuth token, CancellationToken ct)
+    {
+        using var types = Request(HttpMethod.Get, $"{Project(s)}/_apis/wit/workitemtypes?{Version}", token);
+        using var categories = Request(HttpMethod.Get, $"{Project(s)}/_apis/wit/workitemtypecategories?{Version}", token);
+        var all = (await Trackers.SendAsync(http, types, ct))?["value"]?.AsArray() ?? [];
+        var hidden = ((await Trackers.SendAsync(http, categories, ct))?["value"]?.AsArray() ?? [])
+            .Where(c => c?["referenceName"]?.GetValue<string>() == "Microsoft.HiddenCategory")
+            .SelectMany(c => c?["workItemTypes"]?.AsArray() ?? [])
+            .Select(t => t?["name"]?.GetValue<string>())
+            .OfType<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return all
+            .Where(t => t?["isDisabled"]?.GetValue<bool>() != true)
+            .Select(t => t?["name"]?.GetValue<string>())
+            .OfType<string>()
+            .Where(name => !hidden.Contains(name))
+            .ToList();
+    }
+
+    public Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct) =>
+        CreateCoreAsync(s, token, title, markdown, null, ct);
+
+    /// <summary>A work item of the tracker's type, as a child of the parent (a Hierarchy link).</summary>
+    public Task<CreatedIssue> CreateUnderAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, string parentExternalId, CancellationToken ct) =>
+        CreateCoreAsync(s, token, title, markdown, parentExternalId, ct);
+
+    private async Task<CreatedIssue> CreateCoreAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, string? parentId, CancellationToken ct)
     {
         var type = Type(s);
         // Bugs show Repro Steps on their form instead of Description. Both fields take HTML.
         var field = type.Equals("Bug", StringComparison.OrdinalIgnoreCase) ? "Microsoft.VSTS.TCM.ReproSteps" : "System.Description";
         var html = Trackers.HtmlFromText(markdown);
-        using var request = Request(HttpMethod.Post, $"{Project(s)}/_apis/wit/workitems/${Uri.EscapeDataString(type)}?{Version}", token, Patch(
+        var operations = new List<object>
+        {
             new { op = "add", path = "/fields/System.Title", value = title },
-            new { op = "add", path = $"/fields/{field}", value = html }));
+            new { op = "add", path = $"/fields/{field}", value = html },
+        };
+        if (parentId is not null)
+        {
+            operations.Add(new
+            {
+                op = "add", path = "/relations/-",
+                value = new { rel = "System.LinkTypes.Hierarchy-Reverse", url = $"{s.Site!.TrimEnd('/')}/_apis/wit/workItems/{Uri.EscapeDataString(parentId)}" },
+            });
+        }
+
+        using var request = Request(HttpMethod.Post, $"{Project(s)}/_apis/wit/workitems/${Uri.EscapeDataString(type)}?{Version}", token, Patch([.. operations]));
         var item = await Trackers.SendAsync(http, request, ct);
         var id = item!["id"]!.GetValue<int>().ToString(System.Globalization.CultureInfo.InvariantCulture);
         var url = item["_links"]?["html"]?["href"]?.GetValue<string>() ?? $"{Project(s)}/_workitems/edit/{id}";

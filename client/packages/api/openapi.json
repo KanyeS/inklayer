@@ -2005,6 +2005,87 @@
         }
       }
     },
+    "/api/projects/{projectId}/issue-trackers/issue-types": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "The types issues can be created as, for a tracker\u0027s settings (project Admins)",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueTypesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueTypesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{projectId}/issue-trackers/{id}/issue-types": {
+      "get": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "The types you can create issues as in a connected tracker (Commenters and above)",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueTypesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/projects/{projectId}/issue-trackers/{id}/test": {
       "post": {
         "tags": [
@@ -4054,6 +4135,22 @@
               "null",
               "string"
             ]
+          },
+          "parent": {
+            "maxLength": 2000,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "type": {
+            "maxLength": 200,
+            "minLength": 0,
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -5197,6 +5294,55 @@
               "closed"
             ],
             "type": "string"
+          }
+        }
+      },
+      "IssueTypesRequest": {
+        "required": [
+          "kind",
+          "settings"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/TrackerSettings"
+          },
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "connectionId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "IssueTypesResponse": {
+        "required": [
+          "types",
+          "suggested"
+        ],
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "suggested": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

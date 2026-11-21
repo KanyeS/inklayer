@@ -243,8 +243,19 @@ const HANDLERS: Handlers = {
   "live.issue": (r) =>
     api.post("/api/annotations/{annotationId}/issues", {
       params: { path: { annotationId: r.annotationId } },
-      body: { connectionId: r.connectionId },
+      body: {
+        connectionId: r.connectionId,
+        parent: r.parent?.slice(0, 2000) || undefined,
+        type: r.issueType?.slice(0, 200) || undefined,
+      },
     }),
+  // The types the user can create issues as (Jira, Azure DevOps); only in their own projects, like searching.
+  "live.issueTypes": async (r) => {
+    if (!(await projects.get()).some((p) => p.id === r.projectId)) throw new Error("Unknown project.");
+    return api.get("/api/projects/{projectId}/issue-trackers/{id}/issue-types", {
+      params: { path: { projectId: r.projectId, id: r.connectionId } },
+    });
+  },
   // Searching is limited to the user's own projects, like the tracker list.
   "live.issueSearch": async (r) => {
     if (!(await projects.get()).some((p) => p.id === r.projectId)) throw new Error("Unknown project.");

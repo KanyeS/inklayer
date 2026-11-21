@@ -17,6 +17,7 @@ import { CircleCheck, CircleDot, ExternalLink, Link2, Plus } from "lucide-react"
 import { type FormEvent, useEffect, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { GuideLink } from "@/components/GuideLink";
+import { IssueTypeChoice, IssueTypeField, ParentField, SavedIssueType, TYPED_KINDS } from "@/components/IssueTypes";
 import { ErrorText } from "@/components/Layout";
 import { accountName, connectTrackerUrl } from "@/components/TrackerAccounts";
 import { api } from "@/lib/api";
@@ -76,6 +77,8 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
   const [mode, setMode] = useState<IssueMode | null>(null);
   const [connectionId, setConnectionId] = useState("");
   const [title, setTitle] = useState("");
+  const [parent, setParent] = useState("");
+  const [issueType, setIssueType] = useState("");
   const { run, error, pending: busy } = useAction();
 
   const first = choices.data?.[0];
@@ -104,12 +107,18 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
     const created = await run(() =>
       api.post("/api/annotations/{annotationId}/issues", {
         params: { path: { annotationId: commentId } },
-        body: { connectionId: chosen, title: title.trim() || undefined },
+        body: {
+          connectionId: chosen,
+          title: title.trim() || undefined,
+          parent: TYPED_KINDS.has(choice.kind) ? parent.trim() || undefined : undefined,
+          type: TYPED_KINDS.has(choice.kind) ? issueType || undefined : undefined,
+        },
       }),
     );
     if (created.ok) {
       setMode(null);
       setTitle("");
+      setParent("");
     }
   };
 
@@ -175,6 +184,25 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
             maxLength={120}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {TYPED_KINDS.has(choice.kind) && (
+            <IssueTypeChoice
+              key={`type-${chosen}`}
+              projectId={projectId}
+              connectionId={chosen}
+              value={issueType}
+              onChange={setIssueType}
+            />
+          )}
+          {TYPED_KINDS.has(choice.kind) && (
+            <ParentField
+              key={chosen}
+              projectId={projectId}
+              connectionId={chosen}
+              label={choice.kind === "jira" ? "Sub-task of (optional)" : "Child of (optional)"}
+              value={parent}
+              onChange={setParent}
+            />
+          )}
           <p className="text-xs text-muted-foreground">
             The issue gets the comment, its replies, the page and its details. Closing the issue resolves the comment.{" "}
             <PostsAs choice={choice} />
@@ -453,6 +481,7 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
                   : "Leaves issues open when comments are resolved"}{" "}
                 · {t.postRepliesToIssue ? "Posts Inklayer replies to issues" : "Keeps Inklayer replies in Inklayer"}
               </p>
+              {TYPED_KINDS.has(t.kind) && <SavedIssueType projectId={projectId} tracker={t} />}
               {t.lastError && t.lastErrorAt && (
                 <p className="text-sm text-destructive">
                   {timeAgo(t.lastErrorAt)}: {t.lastError}
@@ -618,7 +647,15 @@ function AddTracker({ projectId }: { projectId: string }) {
             "bot@acme.com",
             !personal || !!token,
           )}
-          {text("issueType", "Issue type", "Bug", false)}
+          <IssueTypeField
+            projectId={projectId}
+            kind={kind}
+            label="Issue type"
+            settings={settings}
+            token={token}
+            value={settings.issueType ?? ""}
+            onChange={(issueType) => setSettings((s) => ({ ...s, issueType }))}
+          />
         </div>
       )}
       {kind === "linear" && text("teamId", "Team id", "a1b2c3d4-…")}
@@ -639,7 +676,15 @@ function AddTracker({ projectId }: { projectId: string }) {
         <div className="grid gap-4 sm:grid-cols-2">
           {text("site", "Organisation address", "https://dev.azure.com/acme")}
           {text("projectKey", "Project", "Web Shop")}
-          {text("issueType", "Work item type", "Bug", false)}
+          <IssueTypeField
+            projectId={projectId}
+            kind={kind}
+            label="Work item type"
+            settings={settings}
+            token={token}
+            value={settings.issueType ?? ""}
+            onChange={(issueType) => setSettings((s) => ({ ...s, issueType }))}
+          />
         </div>
       )}
       {personal && (
