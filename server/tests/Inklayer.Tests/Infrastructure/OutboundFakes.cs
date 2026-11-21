@@ -38,3 +38,14 @@ public sealed class FakeOutboundHandler : HttpMessageHandler
         return responder?.Invoke(request, body) ?? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("ok") };
     }
 }
+
+/// <summary>Stands in for the IP database: 203.0.113.7 is on NordVPN, 198.51.100.4 on Telstra; anything else unknown.</summary>
+internal sealed class FakeNetworkLookup : Inklayer.Api.Features.Annotations.INetworkLookup
+{
+    public Inklayer.Api.Features.Annotations.NetworkInfo? Find(IPAddress address) => address.ToString() switch
+    {
+        "203.0.113.7" => new("NordVPN S.A.", "Netherlands", "vpn"),
+        "198.51.100.4" => new("Telstra Limited", "Australia", ""),
+        _ => null,
+    };
+}

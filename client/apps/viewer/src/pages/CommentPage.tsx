@@ -292,6 +292,34 @@ function PageDetails({ context: c }: { context: PageContext }) {
           <span className="text-muted-foreground">Element:</span> <code className="break-all">{c.selector}</code>
         </p>
       )}
+      {(c.ipNetwork || c.ipCountry) && (
+        <p
+          className="mt-2"
+          title="From the address the comment came from (not kept). IP data by DB-IP (db-ip.com), CC BY 4.0"
+        >
+          <span className="text-muted-foreground">Network:</span>{" "}
+          {[c.ipNetwork, c.ipCountry && `(${c.ipCountry})`].filter(Boolean).join(" ")}
+          {c.ipNetworkKind === "vpn" && <span className="text-amber-600"> · likely a VPN</span>}
+          {c.ipNetworkKind === "hosting" && (
+            <span className="text-amber-600"> · hosting provider (likely a VPN or proxy)</span>
+          )}
+        </p>
+      )}
+      {c.timeZone && (
+        <p className="mt-2">
+          <span className="text-muted-foreground">Time zone:</span> {c.timeZone}
+        </p>
+      )}
+      {c.scripts && c.scripts.length > 0 && (
+        <p className="mt-2">
+          <span className="text-muted-foreground">Page build:</span>{" "}
+          {c.scripts.map((name) => (
+            <code key={name} className="mr-1.5 break-all">
+              {name}
+            </code>
+          ))}
+        </p>
+      )}
       {c.elementHtml && (
         <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-muted p-2 text-xs whitespace-pre-wrap">
           {c.elementHtml}

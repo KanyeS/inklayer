@@ -39,8 +39,41 @@ async function pageContext(draft: Draft, element: Element | null): Promise<PageC
     devicePixelRatio: devicePixelRatio,
     selector: draft.anchor.element.path.join(" >>> "),
     elementHtml: element ? elementHtml(element) : "",
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    utcOffsetMinutes: -new Date().getTimezoneOffset(),
+    scripts: pageScripts(),
     ...(await pageLogs()),
   };
+}
+
+/** Most script names sent: the site's own built files are usually a handful. */
+const MAX_SCRIPTS = 12;
+/** A built file's name: it has a content hash in it, like main.3f2a9c1e.js or chunk-AB12CD34.js. */
+const HASHED = /[.\-_~]([0-9a-f]{6,}|[A-Za-z0-9]{8,})\.m?js$/;
+
+/**
+ * The page's script file names (no addresses or queries), its own built files first: the same for everyone until the
+ * site deploys a new build. Next.js sites also say their build id.
+ */
+export function pageScripts(doc: Document = document): string[] {
+  const names = [...doc.scripts]
+    .map((s) => {
+      try {
+        return new URL(s.src).pathname.split("/").pop() ?? "";
+      } catch {
+        return "";
+      }
+    })
+    .filter((name) => name.length > 0);
+  const unique = [...new Set(names)];
+  const built = [...unique.filter((n) => HASHED.test(n)), ...unique.filter((n) => !HASHED.test(n))];
+  try {
+    const next = JSON.parse(doc.getElementById("__NEXT_DATA__")?.textContent ?? "null") as { buildId?: unknown } | null;
+    if (typeof next?.buildId === "string") built.unshift(`next build ${next.buildId}`);
+  } catch {
+    // Not a Next.js page, or not its data.
+  }
+  return built.slice(0, MAX_SCRIPTS);
 }
 
 /** Takes the screenshot with `hide` (Inklayer's own panel and bubbles) hidden, so it shows the page and the marks only. */

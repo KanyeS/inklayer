@@ -43,6 +43,8 @@ services:
       Inklayer__Trackers__AzureDevOps__CertificatePassword: ${AZURE_DEVOPS_CERTIFICATE_PASSWORD:-}
       # Full-page screenshots and videos: an S3 bucket (it can be the backups' bucket; they're kept under media/), or
       # without one, /data/media on the server. The server passes them on, so people download from the server, not S3.
+      # The network a comment came from (its owner and country, never the address), from DB-IP's free databases.
+      Inklayer__IpData__Enabled: ${INKLAYER_IP_DATA:-true}
       Inklayer__Media__S3Bucket: ${MEDIA_S3_BUCKET:-}
       Inklayer__Media__S3Region: ${MEDIA_S3_REGION:-${AWS_REGION:-}}
       AWS_ACCESS_KEY_ID: ${MEDIA_AWS_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}

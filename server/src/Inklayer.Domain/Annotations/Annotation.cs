@@ -168,6 +168,27 @@ public sealed class AnnotationContext
     public string Network { get; init; } = "[]";
 
     public DateTime CapturedAt { get; init; }
+
+    /// <summary>The commenter's time zone (IANA, e.g. Australia/Brisbane), for when the comment was made in their time.</summary>
+    public string TimeZone { get; init; } = "";
+
+    /// <summary>The commenter's offset from UTC then, in minutes; null for comments from before it was recorded.</summary>
+    public int? UtcOffsetMinutes { get; init; }
+
+    /// <summary>
+    /// The page's script file names (newline-separated): built sites name them after their contents, so they say which
+    /// build of the site it was, the same for everyone until it's deployed again.
+    /// </summary>
+    public string Scripts { get; init; } = "";
+
+    /// <summary>The network the commenter was on (its owner, from their IP address, which isn't kept), e.g. Telstra.</summary>
+    public string IpNetwork { get; set; } = "";
+
+    /// <summary>The country the commenter's IP address is in.</summary>
+    public string IpCountry { get; set; } = "";
+
+    /// <summary>"vpn" or "hosting" when the network is a known VPN or hosting provider (often a VPN or proxy); else empty.</summary>
+    public string IpNetworkKind { get; set; } = "";
 }
 
 /// <summary>A screenshot of the area around a comment, taken when it was made. Stored in the database, so backups include it.</summary>

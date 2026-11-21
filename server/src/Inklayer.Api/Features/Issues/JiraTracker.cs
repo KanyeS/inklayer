@@ -123,8 +123,50 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIss
         // Markdown images become their address: Jira can't show an image from elsewhere in an API-made issue.
         content = text.Split('\n').Select(line => Regex.Replace(line, @"^!\[([^\]]*)\]\((https?://[^)\s]+)\)$", "$1: $2")).Select(line => line.Length == 0
             ? (object)new { type = "paragraph", content = Array.Empty<object>() }
-            : new { type = "paragraph", content = new object[] { new { type = "text", text = line } } }).ToArray(),
+            : new { type = "paragraph", content = Inline(line) }).ToArray(),
     };
+
+    private static readonly Regex Marked = new(@"\*\*(.+?)\*\*|\[([^\]]+)\]\((https?://[^)\s]+)\)|`([^`]+)`|(https?://\S*[^\s.,;:!?)])", RegexOptions.Compiled);
+
+    /// <summary>A line's text, with **bold**, `code`, [links](…) and bare addresses as Jira marks.</summary>
+    private static object[] Inline(string line)
+    {
+        var nodes = new List<object>();
+        void Text(string value, object? mark = null)
+        {
+            if (value.Length > 0)
+            {
+                nodes.Add(mark is null ? new { type = "text", text = value } : new { type = "text", text = value, marks = new[] { mark } });
+            }
+        }
+
+        var at = 0;
+        foreach (Match m in Marked.Matches(line))
+        {
+            Text(line[at..m.Index]);
+            if (m.Groups[1].Success)
+            {
+                Text(m.Groups[1].Value, new { type = "strong" });
+            }
+            else if (m.Groups[2].Success)
+            {
+                Text(m.Groups[2].Value, new { type = "link", attrs = new { href = m.Groups[3].Value } });
+            }
+            else if (m.Groups[4].Success)
+            {
+                Text(m.Groups[4].Value, new { type = "code" });
+            }
+            else
+            {
+                Text(m.Value, new { type = "link", attrs = new { href = m.Value } });
+            }
+
+            at = m.Index + m.Length;
+        }
+
+        Text(line[at..]);
+        return [.. nodes];
+    }
 
     /// <summary>Atlassian Document Format as plain text: the text of each node, with paragraphs, headings and list items on their own lines.</summary>
     internal static string TextFromAdf(JsonNode? node)

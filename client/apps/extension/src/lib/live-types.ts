@@ -118,4 +118,9 @@ export interface PageContext {
   elementHtml: string;
   console: { level: string; message: string; at: string }[];
   network: { method: string; url: string; status: number; ms: number; at: string }[];
+  /** The commenter's time zone (IANA) and offset from UTC in minutes. */
+  timeZone?: string;
+  utcOffsetMinutes?: number;
+  /** The page's script file names: which build of the site it was. */
+  scripts?: string[];
 }

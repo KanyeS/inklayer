@@ -21,6 +21,17 @@ Inklayer checks the credentials before it saves them. Tokens are stored encrypte
 
 Once a tracker is connected, Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The comment's first line becomes the issue's title (you can change it when creating the issue in the web app). The issue includes the comment, its replies, the page address, a link back, the page details (browser, window size, console errors, failed requests), and the screenshot.
 
+**What else the issue says.** Besides the comment and its replies, the issue has:
+- links to the page and to the comment in Inklayer;
+- when it was commented, in the commenter's time zone;
+- the browser, window size and element;
+- the page's build: the site's script file names, such as `main.3f2a9c1e.js`, which are the same for everyone until the site deploys again, plus the build id on Next.js sites;
+- the network the commenter was on, such as "Telstra (Australia)" or "NordVPN (Netherlands), likely a VPN".
+
+Addresses written in comments are links in every tracker.
+
+**The network** is worked out on the Inklayer server from the address the comment came from, using DB-IP's free Lite databases, downloaded once a month into `/data/ipdata` (about 20 MB). The address isn't kept, and isn't sent anywhere; only the network's name, its country, and whether it's a known VPN or hosting provider are saved. Hosting providers are flagged because VPNs and proxies often run on them, so a flag means "probably", not "certainly". To turn it off, set `INKLAYER_IP_DATA=false`. IP data by [DB-IP](https://db-ip.com), under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 **Screenshots in issues.** The screenshot, and the full-page screenshot if one was taken, go into the issue:
 - **GitLab, Azure DevOps and Linear:** uploaded to the tracker and shown in the issue. The tracker keeps them.
 - **Jira and Codeberg/Forgejo/Gitea:** attached to the issue, and listed in it.

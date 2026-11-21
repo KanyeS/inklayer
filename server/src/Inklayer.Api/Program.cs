@@ -34,6 +34,7 @@ try
     builder.Services.AddInklayerNetworkAccess(builder.Configuration);
     builder.Services.AddInklayerFeatureSwitches(builder.Configuration);
     builder.Services.AddInklayerMedia(builder.Configuration);
+    builder.Services.AddInklayerNetworkLookup(builder.Configuration);
     builder.Services.AddInklayerAuth(builder.Configuration, builder.Environment);
     builder.Services.AddInklayerPresence(builder.Configuration);
     builder.Services.AddInklayerMcp();

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Inklayer.Api.Access;
 using Inklayer.Domain.Annotations;
@@ -12,14 +13,21 @@ public sealed record ConsoleEntry(string Level, string Message, DateTime? At);
 /// <param name="Url">Without its query string.</param>
 public sealed record NetworkEntry(string Method, string Url, int Status, int? Ms, DateTime? At);
 
+/// <param name="TimeZone">The commenter's time zone (IANA), and <paramref name="UtcOffsetMinutes"/> their offset from UTC.</param>
+/// <param name="Scripts">The page's script file names (the site's build).</param>
 public sealed record AnnotationContextRequest(
     string? Browser, string? Os, string? UserAgent, int ViewportWidth, int ViewportHeight, double DevicePixelRatio,
-    string? Selector, string? ElementHtml, List<ConsoleEntry>? Console, List<NetworkEntry>? Network, double? Zoom = null);
+    string? Selector, string? ElementHtml, List<ConsoleEntry>? Console, List<NetworkEntry>? Network, double? Zoom = null,
+    string? TimeZone = null, int? UtcOffsetMinutes = null, List<string>? Scripts = null);
 
 /// <summary>The page as it was when the comment was made.</summary>
+/// <param name="IpNetwork">The network the commenter was on, from their IP address (which isn't kept); <paramref name="IpNetworkKind"/>
+/// says if it's a known VPN or hosting provider.</param>
 public sealed record AnnotationContextResponse(
     string Browser, string Os, string UserAgent, int ViewportWidth, int ViewportHeight, double DevicePixelRatio,
-    string Selector, string ElementHtml, IReadOnlyList<ConsoleEntry> Console, IReadOnlyList<NetworkEntry> Network, DateTime CapturedAt, double? Zoom = null);
+    string Selector, string ElementHtml, IReadOnlyList<ConsoleEntry> Console, IReadOnlyList<NetworkEntry> Network, DateTime CapturedAt, double? Zoom = null,
+    string TimeZone = "", int? UtcOffsetMinutes = null, IReadOnlyList<string>? Scripts = null, string IpNetwork = "", string IpCountry = "",
+    [property: AllowedValues("", "vpn", "hosting")] string IpNetworkKind = "");
 
 /// <summary>
 /// Bug context: a screenshot and page details the extension captures with a comment (unless the commenter opts out), for
@@ -28,6 +36,7 @@ public sealed record AnnotationContextResponse(
 internal static class ContextEndpoints
 {
     private const int MaxEntries = 20;
+    private const int MaxScripts = 12;
     private const int MaxMessage = 500;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly string[] ImageTypes = ["image/webp", "image/jpeg", "image/png"];
@@ -42,7 +51,8 @@ internal static class ContextEndpoints
     }
 
     private static async Task<IResult> SetContextAsync(
-        Guid annotationId, AnnotationContextRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, TimeProvider clock, CancellationToken ct)
+        Guid annotationId, AnnotationContextRequest request, HttpContext http, AccessService access, CurrentUser currentUser, InklayerDbContext db,
+        INetworkLookup networks, TimeProvider clock, CancellationToken ct)
     {
         if (await AuthorsCommentAsync(annotationId, access, currentUser, db, ct) is { } denied)
         {
@@ -54,8 +64,13 @@ internal static class ContextEndpoints
             return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: "This comment already has its page details.");
         }
 
+        // The network the commenter is on, from the address this came from (which isn't kept).
+        var network = http.Connection.RemoteIpAddress is { } address ? networks.Find(address) : null;
         db.AnnotationContexts.Add(new AnnotationContext
         {
+            IpNetwork = Clip(network?.Network, 200),
+            IpCountry = Clip(network?.Country, 100),
+            IpNetworkKind = network?.Kind ?? "",
             AnnotationId = annotationId,
             Browser = Clip(request.Browser, 100),
             Os = Clip(request.Os, 100),
@@ -69,6 +84,9 @@ internal static class ContextEndpoints
             Console = Fit((request.Console ?? []).TakeLast(MaxEntries).Select(e => e with { Level = Clip(e.Level, 10), Message = Clip(e.Message, MaxMessage) }).ToList()),
             Network = Fit((request.Network ?? []).TakeLast(MaxEntries).Select(e => e with { Method = Clip(e.Method, 10), Url = WithoutQuery(e.Url) }).ToList()),
             CapturedAt = clock.GetUtcNow().UtcDateTime,
+            TimeZone = Clip(request.TimeZone, 64),
+            UtcOffsetMinutes = request.UtcOffsetMinutes is { } offset ? Math.Clamp(offset, -14 * 60, 14 * 60) : null,
+            Scripts = Clip(string.Join('\n', (request.Scripts ?? []).Select(WithoutQuery).Select(n => Clip(n, 150)).Where(n => n.Length > 0).Distinct().Take(MaxScripts)), 2000),
         });
         await db.SaveChangesAsync(ct);
         return TypedResults.NoContent();
@@ -164,7 +182,8 @@ internal static class ContextEndpoints
 
     internal static AnnotationContextResponse ToResponse(AnnotationContext c) => new(
         c.Browser, c.Os, c.UserAgent, c.ViewportWidth, c.ViewportHeight, c.DevicePixelRatio, c.Selector, c.ElementHtml,
-        JsonSerializer.Deserialize<List<ConsoleEntry>>(c.Console, Json) ?? [], JsonSerializer.Deserialize<List<NetworkEntry>>(c.Network, Json) ?? [], c.CapturedAt, c.Zoom);
+        JsonSerializer.Deserialize<List<ConsoleEntry>>(c.Console, Json) ?? [], JsonSerializer.Deserialize<List<NetworkEntry>>(c.Network, Json) ?? [], c.CapturedAt, c.Zoom,
+        c.TimeZone, c.UtcOffsetMinutes, c.Scripts.Length == 0 ? [] : c.Scripts.Split('\n'), c.IpNetwork, c.IpCountry, c.IpNetworkKind);
 
     /// <summary>Null if the caller wrote this comment (and may still comment in its project); otherwise the error to return.</summary>
     internal static async Task<IResult?> AuthorsCommentAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)

@@ -242,9 +242,25 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
     {
         var html = string.Join("<br>", text.Split('\n').Select(WebUtility.HtmlEncode));
         html = Regex.Replace(html, @"\*\*(.+?)\*\*", "<b>$1</b>");
-        // Images before links: an image's markdown contains a link's.
-        html = Regex.Replace(html, @"!\[([^\]]*)\]\((https?://[^)\s]+)\)", "<img src=\"$2\" alt=\"$1\">");
-        return Regex.Replace(html, @"\[([^\]]+)\]\((https?://[^)\s]+)\)", "<a href=\"$2\">$1</a>");
+        html = Regex.Replace(html, "`([^`]+)`", "<code>$1</code>");
+
+        // Images, links, then bare addresses; each set aside once made, so the next can't change it.
+        var made = new List<string>();
+        string Keep(string piece)
+        {
+            made.Add(piece);
+            return $"\u0001{made.Count - 1}\u0002";
+        }
+
+        html = Regex.Replace(html, @"!\[([^\]]*)\]\((https?://[^)\s]+)\)", m => Keep($"<img src=\"{m.Groups[2].Value}\" alt=\"{m.Groups[1].Value}\">"));
+        html = Regex.Replace(html, @"\[([^\]]+)\]\((https?://[^)\s]+)\)", m => Keep($"<a href=\"{m.Groups[2].Value}\">{m.Groups[1].Value}</a>"));
+        html = Regex.Replace(html, @"https?://[^\s<\u0001]*[^\s<\u0001.,;:!?)]", m => Keep($"<a href=\"{m.Value}\">{m.Value}</a>"));
+        while (Regex.IsMatch(html, @"\u0001\d+\u0002"))
+        {
+            html = Regex.Replace(html, @"\u0001(\d+)\u0002", m => made[int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)]);
+        }
+
+        return html;
     }
 
     /// <summary>Comments edited after <paramref name="since"/>, oldest first, for trackers that can't filter themselves.</summary>

@@ -39,6 +39,11 @@ internal sealed class AnnotationContextConfiguration : IEntityTypeConfiguration<
     public void Configure(EntityTypeBuilder<AnnotationContext> builder)
     {
         builder.HasKey(c => c.AnnotationId);
+        builder.Property(c => c.TimeZone).HasMaxLength(64);
+        builder.Property(c => c.Scripts).HasMaxLength(2000);
+        builder.Property(c => c.IpNetwork).HasMaxLength(200);
+        builder.Property(c => c.IpCountry).HasMaxLength(100);
+        builder.Property(c => c.IpNetworkKind).HasMaxLength(16);
         builder.Property(c => c.Browser).HasMaxLength(100);
         builder.Property(c => c.Os).HasMaxLength(100);
         builder.Property(c => c.UserAgent).HasMaxLength(512);

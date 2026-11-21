@@ -101,7 +101,7 @@ public sealed partial class IssueTrackerTests(InklayerApiFactory factory)
         using var sent = JsonDocument.Parse(body);
         Assert.Equal($"Pay button does nothing @{anaMe.DisplayName}", sent.RootElement.GetProperty("title").GetString());
         var markdown = sent.RootElement.GetProperty("body").GetString()!;
-        Assert.Contains("**Page:** https://shop.example/checkout", markdown, StringComparison.Ordinal);
+        Assert.Contains("**Page:** [https://shop.example/checkout](https://shop.example/checkout)", markdown, StringComparison.Ordinal);
         Assert.Contains($"/comments/{commentId}", markdown, StringComparison.Ordinal);
         Assert.Contains(": Happens on Safari too", markdown, StringComparison.Ordinal);
 

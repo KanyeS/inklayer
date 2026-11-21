@@ -413,8 +413,9 @@ internal sealed partial class IssueService(
         var body = new StringBuilder();
         body.AppendLine(Mentions.ToNames(comment.Body, names).Trim());
         body.AppendLine();
-        body.AppendLine($"**Page:** {comment.PageUrl}");
-        body.AppendLine($"**Reported by:** {names.GetValueOrDefault(comment.AuthorUserId, "someone")} in Inklayer: {origin}/comments/{comment.Id}");
+        body.AppendLine($"**Page:** {Link(comment.PageUrl)}");
+        body.AppendLine($"**Reported by:** {names.GetValueOrDefault(comment.AuthorUserId, "someone")} in Inklayer: {Link($"{origin}/comments/{comment.Id}")}");
+        body.AppendLine($"**Commented:** {When(comment.CreatedAt, context)}");
         if (replies.Count > 0)
         {
             body.AppendLine();
@@ -433,6 +434,22 @@ internal sealed partial class IssueService(
             if (c.Selector.Length > 0)
             {
                 body.AppendLine($"**Element:** `{c.Selector}`");
+            }
+
+            if (c.Scripts is { Count: > 0 } scripts)
+            {
+                body.AppendLine($"**Page build:** {string.Join(", ", scripts.Select(name => $"`{name.Replace("`", "", StringComparison.Ordinal)}`"))}");
+            }
+
+            if (c.IpNetwork.Length > 0 || c.IpCountry.Length > 0)
+            {
+                var place = c.IpNetwork.Length > 0 && c.IpCountry.Length > 0 ? $"{c.IpNetwork} ({c.IpCountry})" : c.IpNetwork + c.IpCountry;
+                body.AppendLine($"**Network:** {place}{c.IpNetworkKind switch
+                {
+                    "vpn" => ", likely a VPN",
+                    "hosting" => ", a hosting provider (likely a VPN or proxy)",
+                    _ => "",
+                }}");
             }
 
             foreach (var e in c.Console.Take(10))
@@ -457,6 +474,39 @@ internal sealed partial class IssueService(
         }
 
         return body.ToString().TrimEnd();
+    }
+
+    /// <summary>An address as a Markdown link to itself, with the characters that would end the link escaped.</summary>
+    private static string Link(string url)
+    {
+        var safe = url.Replace(" ", "%20", StringComparison.Ordinal).Replace("(", "%28", StringComparison.Ordinal).Replace(")", "%29", StringComparison.Ordinal);
+        return $"[{url.Replace("[", "%5B", StringComparison.Ordinal).Replace("]", "%5D", StringComparison.Ordinal)}]({safe})";
+    }
+
+    /// <summary>When the comment was made, in the commenter's time zone where it's known: "21 Nov 2026, 21:32 (Australia/Brisbane, UTC+10:00)".</summary>
+    internal static string When(DateTime createdAtUtc, AnnotationContext? context)
+    {
+        var utc = DateTime.SpecifyKind(createdAtUtc, DateTimeKind.Utc);
+        string Format(DateTime at, TimeSpan offset, string? zone)
+        {
+            var sign = offset < TimeSpan.Zero ? "-" : "+";
+            var label = $"UTC{sign}{offset.Duration():hh\\:mm}";
+            return $"{at.ToString("d MMM yyyy, HH:mm", System.Globalization.CultureInfo.InvariantCulture)} ({(zone is { Length: > 0 } ? $"{zone}, {label}" : label)})";
+        }
+
+        if (context?.TimeZone is { Length: > 0 } zone && TimeZoneInfo.TryFindSystemTimeZoneById(zone, out var tz))
+        {
+            var local = TimeZoneInfo.ConvertTimeFromUtc(utc, tz);
+            return Format(local, tz.GetUtcOffset(utc), zone);
+        }
+
+        if (context?.UtcOffsetMinutes is { } minutes)
+        {
+            var offset = TimeSpan.FromMinutes(minutes);
+            return Format(utc + offset, offset, null);
+        }
+
+        return Format(utc, TimeSpan.Zero, null).Replace("(UTC+00:00)", "(UTC)", StringComparison.Ordinal);
     }
 
     private static string Shorten(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host + u.AbsolutePath : url;

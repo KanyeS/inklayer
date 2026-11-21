@@ -61,6 +61,7 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("Inklayer:Auth:AllowInsecureHttp", "true");
         builder.UseSetting("Inklayer:Auth:AuthRequestsPerMinute", "100000");
         builder.UseSetting("Inklayer:Sharing:PublicRequestsPerMinute", "100000");
+        builder.UseSetting("Inklayer:IpData:Enabled", "false");
 
         // Two providers, so sign-in shows a chooser. Google's metadata is only fetched on a challenge, which tests don't follow.
         builder.UseSetting("Inklayer:Auth:Google:ClientId", "google-client");
@@ -100,6 +101,7 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         {
             services.Configure<OpenIdConnectOptions>(AuthSchemes.ForProvider(OidcProviderId), o => o.BackchannelHttpHandler = Oidc);
             services.AddSingleton<Inklayer.Api.Features.Notifications.IEmailSender>(Emails);
+            services.AddSingleton<Inklayer.Api.Features.Annotations.INetworkLookup, FakeNetworkLookup>();
             services.AddHttpClient(Inklayer.Api.Features.Notifications.NotificationDispatcher.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => Outbound).SetHandlerLifetime(Timeout.InfiniteTimeSpan);
         });
     }

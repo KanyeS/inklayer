@@ -3477,6 +3477,10 @@ export interface components {
             network?: null | components["schemas"]["NetworkEntry"][];
             /** Format: double */
             zoom?: null | number;
+            timeZone?: null | string;
+            /** Format: int32 */
+            utcOffsetMinutes?: null | number;
+            scripts?: null | string[];
         };
         AnnotationContextResponse: {
             browser: string;
@@ -3496,6 +3500,20 @@ export interface components {
             capturedAt: string;
             /** Format: double */
             zoom?: null | number;
+            /** @default  */
+            timeZone?: string;
+            /** Format: int32 */
+            utcOffsetMinutes?: null | number;
+            scripts?: null | string[];
+            /** @default  */
+            ipNetwork?: string;
+            /** @default  */
+            ipCountry?: string;
+            /**
+             * @default
+             * @enum {string}
+             */
+            ipNetworkKind?: "" | "vpn" | "hosting";
         };
         AnnotationDetailResponse: {
             /** Format: uuid */

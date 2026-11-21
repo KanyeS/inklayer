@@ -3592,6 +3592,28 @@
               "number"
             ],
             "format": "double"
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "utcOffsetMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "scripts": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -3660,6 +3682,43 @@
               "number"
             ],
             "format": "double"
+          },
+          "timeZone": {
+            "type": "string",
+            "default": ""
+          },
+          "utcOffsetMinutes": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "scripts": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "ipNetwork": {
+            "type": "string",
+            "default": ""
+          },
+          "ipCountry": {
+            "type": "string",
+            "default": ""
+          },
+          "ipNetworkKind": {
+            "enum": [
+              "",
+              "vpn",
+              "hosting"
+            ],
+            "type": "string",
+            "default": ""
           }
         }
       },

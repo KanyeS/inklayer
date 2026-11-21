@@ -225,7 +225,9 @@ public sealed partial class IssueTrackerTests
                 var attachments = sent.Where(x => x.Request.RequestUri!.ToString().EndsWith("/issue/WEB-9/attachments", StringComparison.Ordinal)).ToList();
                 Assert.Equal(2, attachments.Count);
                 Assert.All(attachments, a => Assert.Equal("no-check", a.Request.Headers.GetValues("X-Atlassian-Token").Single()));
-                Assert.Contains("Screenshot: attached (screenshot.png)", Sent("/rest/api/3/issue", HttpMethod.Post).Replace("**", "", StringComparison.Ordinal), StringComparison.Ordinal);
+                var description = Sent("/rest/api/3/issue", HttpMethod.Post);
+                Assert.Contains("{\"type\":\"text\",\"text\":\"Screenshot:\",\"marks\":[{\"type\":\"strong\"}]}", description, StringComparison.Ordinal);
+                Assert.Contains("attached (screenshot.png)", description, StringComparison.Ordinal);
                 break;
             }
 
