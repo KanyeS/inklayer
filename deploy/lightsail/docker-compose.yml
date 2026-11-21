@@ -68,6 +68,8 @@ services:
       Inklayer__Trackers__AzureDevOps__ClientId: ${AZURE_DEVOPS_CLIENT_ID:-}
       Inklayer__Trackers__AzureDevOps__ClientSecret: ${AZURE_DEVOPS_CLIENT_SECRET:-}
       Inklayer__Trackers__AzureDevOps__TenantId: ${AZURE_DEVOPS_TENANT_ID:-organizations}
+      Inklayer__Trackers__AzureDevOps__CertificatePath: ${AZURE_DEVOPS_CERTIFICATE_PATH:-}
+      Inklayer__Trackers__AzureDevOps__CertificatePassword: ${AZURE_DEVOPS_CERTIFICATE_PASSWORD:-}
       Inklayer__Auth__Oidc__0__Id: ${OIDC_ID:-}
       Inklayer__Auth__Oidc__0__DisplayName: ${OIDC_DISPLAY_NAME:-}
       Inklayer__Auth__Oidc__0__Authority: ${OIDC_AUTHORITY:-}
@@ -97,6 +99,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     volumes:
       - inklayer-data:/data
+      # Certificates the server signs in with (AZURE_DEVOPS_CERTIFICATE_PATH=/certs/...). Readable by uid 1654.
+      - ./certs:/certs:ro
     expose:
       - "8080"
     mem_limit: 320m

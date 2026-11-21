@@ -109,7 +109,7 @@ internal static class TrackerAccountEndpoints
             tokens = await oauth.ExchangeAsync(kind, code, connect.Verifier, redirectUri, ct);
             identity = await oauth.IdentifyAsync(kind, tokens.AccessToken, ct);
         }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException or TrackerOAuthSetupException)
         {
             return Back(back, $"{name} wasn't connected: {ex.Message}");
         }

@@ -103,17 +103,30 @@ Forgejo and Gitea don't narrow what an OAuth app can do: people allow access to 
 
 When someone connects, Atlassian asks which site to allow Inklayer on: it must be the site in the Jira connection.
 
-**Azure DevOps** (`AZURE_DEVOPS_CLIENT_ID`, `AZURE_DEVOPS_CLIENT_SECRET`, `AZURE_DEVOPS_TENANT_ID`)
+**Azure DevOps** (`AZURE_DEVOPS_CLIENT_ID`, `AZURE_DEVOPS_CLIENT_SECRET` or `AZURE_DEVOPS_CERTIFICATE_PATH`, `AZURE_DEVOPS_TENANT_ID`)
 
 Azure DevOps no longer takes new OAuth apps of its own; sign-in goes through Microsoft Entra ID.
 1. In the [Azure portal](https://portal.azure.com), **Microsoft Entra ID → App registrations → New registration**.
 2. **Name** `Inklayer`. **Supported account types:** *this organisational directory only* if everyone is in your tenant, else *any organisational directory*. **Redirect URI:** platform **Web**, `…/api/me/tracker-accounts/azuredevops/callback`.
 3. **Register**, and copy the **Application (client) ID** and the **Directory (tenant) ID**.
-4. **Certificates & secrets → New client secret**; copy its **Value** (shown once). Note when it expires: renew it before then.
+4. **Certificates & secrets → New client secret**; copy its **Value** (shown once). Note when it expires: renew it before then. Or use a certificate instead, which is safer ([below](#signing-in-with-a-certificate)).
 5. **API permissions → Add a permission → Azure DevOps → Delegated → user_impersonation → Add.** An administrator can **Grant admin consent** so people aren't asked one by one.
 6. Set `AZURE_DEVOPS_TENANT_ID` to the tenant ID for a single-tenant app, or leave it as `organizations` for a multi-tenant one.
 
 The Azure DevOps organisation must be connected to that Entra tenant (**Organization settings → Microsoft Entra**).
+
+<a id="signing-in-with-a-certificate"></a>**Signing in with a certificate.** Instead of a client secret, the server can prove who it is with a certificate. Its private key never leaves the server: each token request carries a short-lived proof signed with it, rather than the secret itself.
+1. On the server, make a certificate and its key in one file, readable by the server (uid 1654):
+   ```bash
+   cd /opt/inklayer && sudo mkdir -p certs && cd certs
+   sudo openssl req -x509 -newkey rsa:2048 -sha256 -days 730 -nodes -subj "/CN=Inklayer Azure DevOps" -keyout key.pem -out azuredevops.crt
+   sudo sh -c 'cat azuredevops.crt key.pem > azuredevops.pem' && sudo rm key.pem
+   sudo chown 1654 azuredevops.pem && sudo chmod 400 azuredevops.pem
+   ```
+2. In the app registration, **Certificates & secrets → Certificates → Upload certificate**, and upload `azuredevops.crt` (only the public part; copy it off the server with `scp`).
+3. In `.env`, set `AZURE_DEVOPS_CERTIFICATE_PATH=/certs/azuredevops.pem` (the compose file mounts `./certs` at `/certs`), leave `AZURE_DEVOPS_CLIENT_SECRET` empty, and run `sudo docker compose up -d`.
+
+A `.pfx` works too, with its password in `AZURE_DEVOPS_CERTIFICATE_PASSWORD`. The certificate expires as well (after 730 days above): before then, make a new one, upload it, swap the file and restart the server. If the server can't read the file, connecting Azure DevOps shows why, and people's connected accounts are kept.
 
 ### GitHub
 

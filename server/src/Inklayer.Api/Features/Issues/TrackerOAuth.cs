@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json.Nodes;
 using Inklayer.Domain.Issues;
@@ -37,7 +39,7 @@ public sealed class TrackerOAuthOptions
 
         public string ClientSecret { get; set; } = "";
 
-        public bool IsConfigured => ClientId.Length > 0 && ClientSecret.Length > 0;
+        public virtual bool IsConfigured => ClientId.Length > 0 && ClientSecret.Length > 0;
     }
 
     public sealed class GitHubOAuthOptions : OAuthClientOptions
@@ -60,6 +62,17 @@ public sealed class TrackerOAuthOptions
     {
         /// <summary>The Entra tenant (directory) id, or <c>organizations</c> for any work or school account.</summary>
         public string TenantId { get; set; } = "organizations";
+
+        /// <summary>
+        /// A certificate to sign in to Entra with instead of <see cref="OAuthClientOptions.ClientSecret"/>: a PEM file with the
+        /// certificate and its RSA private key, or a <c>.pfx</c>. Used when set, even if there's a secret too.
+        /// </summary>
+        public string CertificatePath { get; set; } = "";
+
+        /// <summary>The password of a <c>.pfx</c>, or of an encrypted PEM private key.</summary>
+        public string CertificatePassword { get; set; } = "";
+
+        public override bool IsConfigured => ClientId.Length > 0 && (ClientSecret.Length > 0 || CertificatePath.Length > 0);
     }
 }
 
@@ -72,11 +85,20 @@ internal sealed record OAuthIdentity(string Id, string Login, string? ProfileUrl
 internal sealed record JiraSite(string Id, string Url);
 
 /// <summary>
+/// The server's OAuth app is set up wrong (a certificate it can't read, say). Not the account's fault, so accounts aren't
+/// forgotten over it.
+/// </summary>
+internal sealed class TrackerOAuthSetupException(string message, Exception? inner = null) : Exception(message, inner);
+
+/// <summary>
 /// The OAuth details of each tracker: where people allow Inklayer, how codes and refresh tokens become access tokens,
 /// who the account is, and how to give access back.
 /// </summary>
 internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpClientFactory http, TimeProvider clock)
 {
+    private readonly Lazy<X509Certificate2> certificate = new(
+        () => LoadCertificate(options.Value.AzureDevOps.CertificatePath, options.Value.AzureDevOps.CertificatePassword), LazyThreadSafetyMode.PublicationOnly);
+
     /// <summary>The Azure DevOps resource, in Microsoft Entra.</summary>
     private const string AzureDevOpsScope = "499b84ac-1321-427f-aa17-267ca6975798/user_impersonation offline_access";
 
@@ -161,14 +183,6 @@ internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpC
     private async Task<OAuthTokens> TokenAsync(string kind, Dictionary<string, string> fields, CancellationToken ct)
     {
         var client = Client(kind)!;
-        fields.Remove("");
-        fields["client_id"] = client.ClientId;
-        fields["client_secret"] = client.ClientSecret;
-        if (kind == TrackerKinds.AzureDevOps)
-        {
-            fields["scope"] = AzureDevOpsScope;
-        }
-
         var url = kind switch
         {
             TrackerKinds.GitHub => $"{Trim(O.GitHub.WebUrl)}/login/oauth/access_token",
@@ -179,6 +193,23 @@ internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpC
             TrackerKinds.AzureDevOps => $"https://login.microsoftonline.com/{E(O.AzureDevOps.TenantId)}/oauth2/v2.0/token",
             _ => throw new InvalidOperationException($"Unknown tracker {kind}."),
         };
+        fields.Remove("");
+        fields["client_id"] = client.ClientId;
+        if (kind == TrackerKinds.AzureDevOps && O.AzureDevOps.CertificatePath.Length > 0)
+        {
+            fields["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+            fields["client_assertion"] = ClientAssertion(client.ClientId, url);
+        }
+        else
+        {
+            fields["client_secret"] = client.ClientSecret;
+        }
+
+        if (kind == TrackerKinds.AzureDevOps)
+        {
+            fields["scope"] = AzureDevOpsScope;
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             // Atlassian takes JSON; the rest take a form.
@@ -314,6 +345,50 @@ internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpC
         request.Headers.UserAgent.ParseAdd("Inklayer");
         return await Trackers.SendAsync(http, request, ct);
     }
+
+    /// <summary>
+    /// Proof that the server holds the certificate's private key, in place of a client secret: a short-lived JWT for the
+    /// token endpoint, signed with the key (PS256) and naming the certificate by its SHA-256 thumbprint.
+    /// </summary>
+    private string ClientAssertion(string clientId, string audience)
+    {
+        var cert = certificate.Value;
+        var now = clock.GetUtcNow().ToUnixTimeSeconds();
+        var header = new JsonObject { ["alg"] = "PS256", ["typ"] = "JWT", ["x5t#S256"] = Base64Url(cert.GetCertHash(HashAlgorithmName.SHA256)) };
+        var claims = new JsonObject
+        {
+            ["aud"] = audience, ["iss"] = clientId, ["sub"] = clientId, ["jti"] = Guid.NewGuid().ToString(), ["nbf"] = now, ["iat"] = now, ["exp"] = now + 300,
+        };
+        var signed = $"{Base64Url(Encoding.UTF8.GetBytes(header.ToJsonString()))}.{Base64Url(Encoding.UTF8.GetBytes(claims.ToJsonString()))}";
+        using var key = cert.GetRSAPrivateKey()!;
+        return $"{signed}.{Base64Url(key.SignData(Encoding.ASCII.GetBytes(signed), HashAlgorithmName.SHA256, RSASignaturePadding.Pss))}";
+    }
+
+    private static X509Certificate2 LoadCertificate(string path, string password)
+    {
+        X509Certificate2 cert;
+        try
+        {
+            cert = path.EndsWith(".pfx", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".p12", StringComparison.OrdinalIgnoreCase)
+                ? X509CertificateLoader.LoadPkcs12FromFile(path, password.Length > 0 ? password : null)
+                : password.Length > 0 ? X509Certificate2.CreateFromEncryptedPemFile(path, password) : X509Certificate2.CreateFromPemFile(path);
+        }
+        catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            throw new TrackerOAuthSetupException($"The server couldn't read its Azure DevOps certificate ({path}): {ex.Message}", ex);
+        }
+
+        using var key = cert.GetRSAPrivateKey();
+        if (key is null)
+        {
+            cert.Dispose();
+            throw new TrackerOAuthSetupException($"The Azure DevOps certificate ({path}) needs its RSA private key in the same file.");
+        }
+
+        return cert;
+    }
+
+    private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private static string Trim(string url) => url.TrimEnd('/');
 
