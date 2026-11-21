@@ -117,4 +117,26 @@ public sealed class AzureDevOpsCertificateTests : IDisposable
         await Assert.ThrowsAsync<TrackerOAuthSetupException>(() => OAuth(Path.Combine(directory, "missing.pem")).RefreshAsync(TrackerKinds.AzureDevOps, "rt-1", null, default));
         Assert.Empty(outbound.Requests);
     }
+
+    private static string EntraToken(object claims) =>
+        $"eyJhbGciOiJSUzI1NiJ9.{Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(claims)).TrimEnd('=').Replace('+', '-').Replace('/', '_')}.sig";
+
+    [Fact]
+    public async Task Who_connected_comes_from_the_Entra_token_without_asking_the_profile_service()
+    {
+        // A personal Microsoft account in a directory: no profile in Azure DevOps (VSS011031), so the token is what says who it is.
+        outbound.Responders["https://app.vssps.visualstudio.com/"] = (_, _) => new HttpResponseMessage(HttpStatusCode.NotFound);
+        var oauth = OAuth("", secret: "az-secret");
+        var guest = await oauth.IdentifyAsync(TrackerKinds.AzureDevOps,
+            EntraToken(new { oid = "oid-1", unique_name = "live.com#ana@gmail.example", name = "Ana" }), default);
+        Assert.Equal(("oid-1", "ana@gmail.example"), (guest.Id, guest.Login));
+
+        var member = await oauth.IdentifyAsync(TrackerKinds.AzureDevOps, EntraToken(new { oid = "oid-2", upn = "bo@acme.example", unique_name = "bo@acme.example" }), default);
+        Assert.Equal(("oid-2", "bo@acme.example"), (member.Id, member.Login));
+        Assert.Empty(outbound.Requests);
+
+        // Not a token it can read: the profile service is asked, and its answer is the error.
+        await Assert.ThrowsAsync<HttpRequestException>(() => oauth.IdentifyAsync(TrackerKinds.AzureDevOps, "opaque-token", default));
+        Assert.Null(TrackerOAuth.EntraIdentity(EntraToken(new { name = "No object id" })));
+    }
 }

@@ -275,6 +275,13 @@ internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpC
 
             case TrackerKinds.AzureDevOps:
             {
+                // Who signed in, from Entra's own token. Azure DevOps' profile service has no profile for some Entra identities
+                // (VSS011031), so it's only asked when the token can't be read.
+                if (EntraIdentity(accessToken) is { } identity)
+                {
+                    return identity;
+                }
+
                 var me = await GetAsync("https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1", accessToken, ct);
                 var id = me?["id"]?.GetValue<string>() ?? throw new InvalidOperationException("Azure DevOps didn't say who the account is.");
                 return new OAuthIdentity(id, me["emailAddress"]?.GetValue<string>() ?? me["displayName"]?.GetValue<string>() ?? "Azure DevOps", null);
@@ -386,6 +393,41 @@ internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpC
         }
 
         return cert;
+    }
+
+    /// <summary>
+    /// The person in an Entra access token: its object id, and their sign-in name or email. The token came straight from
+    /// Entra's token endpoint over HTTPS, so its claims are read without checking the signature (Azure DevOps checks that).
+    /// </summary>
+    internal static OAuthIdentity? EntraIdentity(string accessToken)
+    {
+        var parts = accessToken.Split('.');
+        if (parts.Length != 3)
+        {
+            return null;
+        }
+
+        JsonNode? claims;
+        try
+        {
+            var b64 = parts[1].Replace('-', '+').Replace('_', '/');
+            claims = JsonNode.Parse(Convert.FromBase64String(b64.PadRight(b64.Length + ((4 - (b64.Length % 4)) % 4), '=')));
+        }
+        catch (Exception ex) when (ex is FormatException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
+
+        string? Claim(string name) => claims?[name] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : null;
+        if (Claim("oid") is not { } oid)
+        {
+            return null;
+        }
+
+        // Personal Microsoft accounts in a directory sign in as "live.com#name@example.com".
+        var login = Claim("upn") ?? Claim("email") ?? Claim("unique_name") ?? Claim("preferred_username") ?? Claim("name") ?? "Azure DevOps";
+        var hash = login.LastIndexOf('#');
+        return new OAuthIdentity(oid, hash >= 0 && hash < login.Length - 1 ? login[(hash + 1)..] : login, null);
     }
 
     private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
