@@ -24,7 +24,7 @@ public sealed record IssueCommentResponse(
 
 /// <summary>Issues made from comments: creating them with everything a developer needs, and closing them when comments are resolved.</summary>
 internal sealed class IssueService(
-    InklayerDbContext db, Trackers trackers, IntegrationSecrets secrets, NotificationService notifications, IHttpContextAccessor http, IConfiguration configuration,
+    InklayerDbContext db, Trackers trackers, TrackerAccounts accounts, NotificationService notifications, IHttpContextAccessor http, IConfiguration configuration,
     FeatureSwitches features, TimeProvider clock)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -40,7 +40,8 @@ internal sealed class IssueService(
         var issueTitle = (title?.Trim() is { Length: > 0 } t ? t : plainBody.Length > 0 ? plainBody : $"Comment on {Shorten(comment.PageUrl)}");
         issueTitle = issueTitle.Length > 120 ? issueTitle[..119] + "…" : issueTitle;
 
-        var created = await trackers.For(connection.Kind).CreateAsync(SettingsOf(connection), secrets.Unprotect(connection.ProtectedToken), issueTitle, markdown, ct);
+        var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
+        var created = await accounts.WithAsync(token, t => trackers.For(connection.Kind).CreateAsync(SettingsOf(connection), t, issueTitle, markdown, ct), ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var issue = new AnnotationIssue
         {
@@ -53,12 +54,18 @@ internal sealed class IssueService(
         return issue;
     }
 
-    /// <summary>Looks up the issue a pasted address or number points to.</summary>
-    public Task<FoundIssue> FindAsync(IssueTrackerConnection connection, string reference, CancellationToken ct) =>
-        trackers.For(connection.Kind).GetAsync(SettingsOf(connection), secrets.Unprotect(connection.ProtectedToken), reference, ct);
+    /// <summary>Looks up the issue a pasted address or number points to, as the person asking.</summary>
+    public async Task<FoundIssue> FindAsync(IssueTrackerConnection connection, string reference, Guid actorUserId, CancellationToken ct)
+    {
+        var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
+        return await accounts.WithAsync(token, t => trackers.For(connection.Kind).GetAsync(SettingsOf(connection), t, reference, ct), ct);
+    }
 
-    public Task<IReadOnlyList<FoundIssue>> SearchAsync(IssueTrackerConnection connection, string query, CancellationToken ct) =>
-        trackers.For(connection.Kind).SearchAsync(SettingsOf(connection), secrets.Unprotect(connection.ProtectedToken), query, ct);
+    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(IssueTrackerConnection connection, string query, Guid actorUserId, CancellationToken ct)
+    {
+        var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
+        return await accounts.WithAsync(token, t => trackers.For(connection.Kind).SearchAsync(SettingsOf(connection), t, query, ct), ct);
+    }
 
     /// <summary>
     /// Links an issue that already exists to the comment. With <paramref name="addComment"/>, posts the comment (with its
@@ -69,12 +76,12 @@ internal sealed class IssueService(
     {
         var tracker = trackers.For(connection.Kind);
         var settings = SettingsOf(connection);
-        var token = secrets.Unprotect(connection.ProtectedToken);
+        var token = await accounts.RequireForUserAsync(connection, actorUserId, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         if (addComment)
         {
             var note = $"**Linked from Inklayer**\n\n{await IssueBodyAsync(comment, ct)}";
-            var noteId = await tracker.AddCommentAsync(settings, token, found.ExternalId, note, ct);
+            var noteId = await accounts.WithAsync(token, t => tracker.AddCommentAsync(settings, t, found.ExternalId, note, ct), ct);
             await AddPostedAsync(connection.Id, found.ExternalId, noteId, actorUserId, note, null, now, ct);
         }
 
@@ -88,7 +95,7 @@ internal sealed class IssueService(
 
         try
         {
-            await ImportCommentsAsync(connection, found.ExternalId, null, ct);
+            await ImportCommentsAsync(connection, found.ExternalId, null, token, ct);
             issue.CommentsCheckedAt = now;
             await db.SaveChangesAsync(ct);
         }
@@ -108,9 +115,10 @@ internal sealed class IssueService(
     /// Fetches the issue's comments changed since <paramref name="since"/> and stores them: new ones are added, edited
     /// ones updated. Comments Inklayer posted are recognised by their id and skipped. Returns the new ones.
     /// </summary>
-    public async Task<List<IssueComment>> ImportCommentsAsync(IssueTrackerConnection connection, string issueExternalId, DateTime? since, CancellationToken ct)
+    public async Task<List<IssueComment>> ImportCommentsAsync(
+        IssueTrackerConnection connection, string issueExternalId, DateTime? since, TrackerToken token, CancellationToken ct)
     {
-        var fetched = await trackers.For(connection.Kind).CommentsAsync(SettingsOf(connection), secrets.Unprotect(connection.ProtectedToken), issueExternalId, since, ct);
+        var fetched = await accounts.WithAsync(token, t => trackers.For(connection.Kind).CommentsAsync(SettingsOf(connection), t, issueExternalId, since, ct), ct);
         if (fetched.Count == 0)
         {
             return [];
@@ -149,8 +157,9 @@ internal sealed class IssueService(
     }
 
     /// <summary>
-    /// A reply was written in Inklayer: post it on the comment's linked issues, where the connection says to. Failures are
-    /// noted on the connection; the reply stands either way.
+    /// A reply was written in Inklayer: post it on the comment's linked issues, where the connection says to, as its author's
+    /// own account (else the shared one, with their name; else not at all). Failures are noted on the connection; the reply
+    /// stands either way.
     /// </summary>
     public async Task ReplyAddedAsync(Annotation comment, AnnotationReply reply, CancellationToken ct)
     {
@@ -171,15 +180,25 @@ internal sealed class IssueService(
 
         var people = Mentions.Extract(reply.Body).Append(reply.AuthorUserId).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => people.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.PreferredName ?? u.DisplayName, ct);
-        var text = $"**{names.GetValueOrDefault(reply.AuthorUserId, "Someone")}** (via Inklayer): {Mentions.ToNames(reply.Body, names).Trim()}\n\n" +
-            $"[View in Inklayer]({Origin()}/comments/{comment.Id})";
+        var said = Mentions.ToNames(reply.Body, names).Trim();
+        var view = $"[View in Inklayer]({Origin()}/comments/{comment.Id})";
         foreach (var link in linked.DistinctBy(l => (l.Issue.ConnectionId, l.Issue.ExternalId)))
         {
             var now = clock.GetUtcNow().UtcDateTime;
+            if (await accounts.ForUserAsync(link.Connection, reply.AuthorUserId, ct) is not { } token)
+            {
+                // Neither their own account nor a shared one: the reply stays in Inklayer.
+                continue;
+            }
+
+            // Their own account says who it is; the shared one needs the name.
+            var text = token.IsPersonal
+                ? $"{said}\n\n<sub>{view}</sub>"
+                : $"**{names.GetValueOrDefault(reply.AuthorUserId, "Someone")}** (via Inklayer): {said}\n\n{view}";
             try
             {
-                var id = await trackers.For(link.Connection.Kind).AddCommentAsync(
-                    SettingsOf(link.Connection), secrets.Unprotect(link.Connection.ProtectedToken), link.Issue.ExternalId, text, ct);
+                var id = await accounts.WithAsync(token, t => trackers.For(link.Connection.Kind).AddCommentAsync(
+                    SettingsOf(link.Connection), t, link.Issue.ExternalId, text, ct), ct);
                 await AddPostedAsync(link.Connection.Id, link.Issue.ExternalId, id, reply.AuthorUserId, text, reply.Id, now, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -203,8 +222,11 @@ internal sealed class IssueService(
         });
     }
 
-    /// <summary>The comment was resolved in Inklayer: close its open issues where the connection says to. Failures are noted on the connection.</summary>
-    public async Task CommentResolvedAsync(Annotation comment, CancellationToken ct)
+    /// <summary>
+    /// The comment was resolved in Inklayer: close its open issues where the connection says to, as whoever resolved it (else
+    /// the shared account, else whoever linked the issue). Failures are noted on the connection.
+    /// </summary>
+    public async Task CommentResolvedAsync(Annotation comment, Guid actorUserId, CancellationToken ct)
     {
         if (!await features.IsEnabledAsync(Feature.IssueTrackers, ct))
         {
@@ -231,9 +253,21 @@ internal sealed class IssueService(
                 continue;
             }
 
+            var token = await accounts.ForUserAsync(connection, actorUserId, ct) ?? await accounts.ForBackgroundAsync(connection, [issue.CreatedByUserId], ct);
+            if (token is null)
+            {
+                connection.LastError = Clip($"Couldn't close {issue.Key}: no one involved has connected a {TrackerKinds.Name(connection.Kind)} account, and there's no shared one.");
+                connection.LastErrorAt = clock.GetUtcNow().UtcDateTime;
+                continue;
+            }
+
             try
             {
-                await trackers.For(connection.Kind).CloseAsync(SettingsOf(connection), secrets.Unprotect(connection.ProtectedToken), issue.ExternalId, ct);
+                await accounts.WithAsync(token, async t =>
+                {
+                    await trackers.For(connection.Kind).CloseAsync(SettingsOf(connection), t, issue.ExternalId, ct);
+                    return true;
+                }, ct);
                 issue.State = IssueStates.Closed;
                 issue.LastSyncedAt = clock.GetUtcNow().UtcDateTime;
                 issue.ClosedAt = issue.LastSyncedAt;

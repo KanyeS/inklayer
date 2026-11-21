@@ -16,15 +16,15 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker
     private static string Repo(TrackerSettings s) =>
         $"{(s.Site is { Length: > 0 } site ? site : "https://codeberg.org").TrimEnd('/')}/api/v1/repos/{Uri.EscapeDataString(s.Owner!.Trim())}/{Uri.EscapeDataString(s.Repo!.Trim())}";
 
-    private static HttpRequestMessage Request(HttpMethod method, string url, string token, object? body = null)
+    private static HttpRequestMessage Request(HttpMethod method, string url, TrackerAuth token, object? body = null)
     {
         var request = new HttpRequestMessage(method, url) { Content = body is null ? null : Trackers.Json(body) };
-        request.Headers.Authorization = new AuthenticationHeaderValue("token", token);
+        request.Headers.Authorization = new AuthenticationHeaderValue(token.OAuth ? "Bearer" : "token", token.Token);
         request.Headers.Accept.ParseAdd("application/json");
         return request;
     }
 
-    public async Task TestAsync(TrackerSettings s, string token, CancellationToken ct)
+    public async Task TestAsync(TrackerSettings s, TrackerAuth token, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, Repo(s), token);
         var repo = await Trackers.SendAsync(http, request, ct);
@@ -34,7 +34,7 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker
         }
     }
 
-    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, string token, string title, string markdown, CancellationToken ct)
+    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, $"{Repo(s)}/issues", token, new { title, body = markdown });
         var issue = await Trackers.SendAsync(http, request, ct);
@@ -42,14 +42,14 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker
         return new CreatedIssue(number, $"#{number}", issue["html_url"]!.GetValue<string>());
     }
 
-    public async Task<string> StateAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task<string> StateAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, $"{Repo(s)}/issues/{Uri.EscapeDataString(externalId)}", token);
         var issue = await Trackers.SendAsync(http, request, ct);
         return issue!["state"]!.GetValue<string>() == "closed" ? IssueStates.Closed : IssueStates.Open;
     }
 
-    public async Task CloseAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task CloseAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Patch, $"{Repo(s)}/issues/{Uri.EscapeDataString(externalId)}", token, new { state = "closed" });
         await Trackers.SendAsync(http, request, ct);
@@ -59,7 +59,7 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker
         Trackers.Id(issue["number"]), $"#{Trackers.Id(issue["number"])}", issue["title"]?.GetValue<string>() ?? "", issue["html_url"]!.GetValue<string>(),
         issue["state"]?.GetValue<string>() == "closed" ? IssueStates.Closed : IssueStates.Open);
 
-    public async Task<FoundIssue> GetAsync(TrackerSettings s, string token, string reference, CancellationToken ct)
+    public async Task<FoundIssue> GetAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
     {
         var number = Trackers.IssueNumber(reference, Regex.Escape($"{Trackers.SitePath(s.Site)}/{s.Owner}/{s.Repo}") + "/issues", $"{s.Owner}/{s.Repo}");
         using var request = Request(HttpMethod.Get, $"{Repo(s)}/issues/{number}", token);
@@ -67,7 +67,7 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker
         return issue?["pull_request"] is null or JsonValue ? Found(issue!) : throw new InvalidOperationException($"#{number} is a pull request, not an issue.");
     }
 
-    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, string token, string query, CancellationToken ct)
+    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
     {
         var q = query.Trim().Length > 0 ? $"&q={Uri.EscapeDataString(query.Trim())}" : "";
         using var request = Request(HttpMethod.Get, $"{Repo(s)}/issues?state=open&type=issues&limit=10{q}", token);
@@ -75,7 +75,7 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker
         return [.. issues.Select(i => Found(i!))];
     }
 
-    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, string token, string externalId, DateTime? since, CancellationToken ct)
+    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, TrackerAuth token, string externalId, DateTime? since, CancellationToken ct)
     {
         var after = since is { } t ? $"?since={Trackers.Iso(t)}" : "";
         using var request = Request(HttpMethod.Get, $"{Repo(s)}/issues/{Uri.EscapeDataString(externalId)}/comments{after}", token);
@@ -86,7 +86,7 @@ internal sealed class ForgejoTracker(IHttpClientFactory http) : IIssueTracker
             c["user"]?["html_url"]?.GetValue<string>(), c["body"]?.GetValue<string>() ?? "", Trackers.Time(c["created_at"]), Trackers.Time(c["updated_at"]))), since);
     }
 
-    public async Task<string> AddCommentAsync(TrackerSettings s, string token, string externalId, string markdown, CancellationToken ct)
+    public async Task<string> AddCommentAsync(TrackerSettings s, TrackerAuth token, string externalId, string markdown, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, $"{Repo(s)}/issues/{Uri.EscapeDataString(externalId)}/comments", token, new { body = markdown });
         return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);

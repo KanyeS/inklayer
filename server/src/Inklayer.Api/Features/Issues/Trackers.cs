@@ -22,32 +22,45 @@ public sealed record FoundIssue(string ExternalId, string Key, string Title, str
 /// <summary>A comment on a tracker issue. <see cref="Body"/> is plain text or markdown.</summary>
 public sealed record TrackerComment(string ExternalId, string AuthorName, string? AuthorUrl, string Body, DateTime CreatedAt, DateTime UpdatedAt);
 
+/// <summary>
+/// How to sign requests to a tracker: a shared token, in the tracker's own scheme (GitHub's token, GitLab's
+/// <c>PRIVATE-TOKEN</c>, Jira's email and API token, Linear's API key, Azure DevOps' personal access token), or someone's own
+/// OAuth access token (<see cref="OAuth"/>), sent as a bearer token. <see cref="ApiBase"/> replaces the API's address where
+/// OAuth needs another (Jira: <c>https://api.atlassian.com/ex/jira/&lt;cloud id&gt;</c>).
+/// </summary>
+internal sealed record TrackerAuth(string Token, bool OAuth = false, string? ApiBase = null)
+{
+    public static implicit operator TrackerAuth(string token) => new(token);
+
+    public static TrackerAuth FromString(string token) => new(token);
+}
+
 /// <summary>Talks to one issue tracker. Methods throw with a readable message when the tracker refuses.</summary>
 internal interface IIssueTracker
 {
-    Task TestAsync(TrackerSettings settings, string token, CancellationToken ct);
+    Task TestAsync(TrackerSettings settings, TrackerAuth token, CancellationToken ct);
 
-    Task<CreatedIssue> CreateAsync(TrackerSettings settings, string token, string title, string markdown, CancellationToken ct);
+    Task<CreatedIssue> CreateAsync(TrackerSettings settings, TrackerAuth token, string title, string markdown, CancellationToken ct);
 
     /// <summary><see cref="IssueStates.Open"/> or <see cref="IssueStates.Closed"/>.</summary>
-    Task<string> StateAsync(TrackerSettings settings, string token, string externalId, CancellationToken ct);
+    Task<string> StateAsync(TrackerSettings settings, TrackerAuth token, string externalId, CancellationToken ct);
 
-    Task CloseAsync(TrackerSettings settings, string token, string externalId, CancellationToken ct);
+    Task CloseAsync(TrackerSettings settings, TrackerAuth token, string externalId, CancellationToken ct);
 
     /// <summary>
     /// The issue a pasted address or number points to (<c>#12</c>, <c>12</c>, <c>ABC-12</c>, <c>ENG-5</c>, or its URL).
     /// Throws <see cref="InvalidOperationException"/> when the reference belongs to another repository or project.
     /// </summary>
-    Task<FoundIssue> GetAsync(TrackerSettings settings, string token, string reference, CancellationToken ct);
+    Task<FoundIssue> GetAsync(TrackerSettings settings, TrackerAuth token, string reference, CancellationToken ct);
 
     /// <summary>Up to 10 open issues whose title matches <paramref name="query"/>, recently updated first; all open ones if it's empty.</summary>
-    Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings settings, string token, string query, CancellationToken ct);
+    Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings settings, TrackerAuth token, string query, CancellationToken ct);
 
     /// <summary>The issue's comments added or edited after <paramref name="since"/> (all of them, up to 100, when null), oldest first.</summary>
-    Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings settings, string token, string externalId, DateTime? since, CancellationToken ct);
+    Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings settings, TrackerAuth token, string externalId, DateTime? since, CancellationToken ct);
 
     /// <summary>Posts a comment on the issue; returns the comment's id.</summary>
-    Task<string> AddCommentAsync(TrackerSettings settings, string token, string externalId, string markdown, CancellationToken ct);
+    Task<string> AddCommentAsync(TrackerSettings settings, TrackerAuth token, string externalId, string markdown, CancellationToken ct);
 }
 
 internal sealed class Trackers(IHttpClientFactory httpClients)
@@ -76,7 +89,7 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
                 401 or 403 => $"The tracker refused the token ({(int)response.StatusCode}). Check it has access. {detail}",
                 404 => $"Not found (404). Check the repository, project or team. {detail}",
                 _ => $"The tracker answered {(int)response.StatusCode}: {detail}",
-            });
+            }, null, response.StatusCode);
         }
 
         return text.Length == 0 ? null : JsonNode.Parse(text);

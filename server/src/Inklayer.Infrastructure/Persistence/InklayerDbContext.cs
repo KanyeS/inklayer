@@ -62,6 +62,8 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<IssueComment> IssueComments => Set<IssueComment>();
 
+    public DbSet<TrackerAccount> TrackerAccounts => Set<TrackerAccount>();
+
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
 
     public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();

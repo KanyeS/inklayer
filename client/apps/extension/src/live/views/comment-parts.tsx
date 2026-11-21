@@ -106,7 +106,10 @@ export class CommentParts {
   issues(a: PageAnnotation): ComponentChild {
     if (!this.#ctx.init.features.issueTrackers) return null;
     const issues = (a.issues ?? []).filter((issue) => HTTPS.test(issue.url));
-    const trackers = this.#options.canCommentIn(a.projectId) ? this.#trackersIn(a.projectId) : [];
+    const choices = this.#options.canCommentIn(a.projectId) ? this.#trackersIn(a.projectId) : [];
+    // Trackers where the person acts as their own account, which they haven't connected (and there's no shared one).
+    const trackers = choices.filter((t) => t.postsAs !== "connect");
+    const toConnect = choices.find((t) => t.postsAs === "connect");
     const create = this.#createIssue(a, trackers);
     const linking = this.#linking.has(a.id) && trackers.length > 0;
     const toggleLink = () => {
@@ -114,7 +117,7 @@ export class CommentParts {
       else this.#linking.add(a.id);
       this.#ctx.render();
     };
-    if (issues.length === 0 && !create) return null;
+    if (issues.length === 0 && !create && !toConnect) return null;
     return (
       <div className="issues" onClick={stopPropagation}>
         {issues.map((issue) => {
@@ -133,6 +136,19 @@ export class CommentParts {
           );
         })}
         {create}
+        {!create && toConnect && (
+          <a
+            className="link"
+            href={`${this.#ctx.init.serverUrl}/#tracker-accounts`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Issues are created as your own ${TRACKER_NAMES[toConnect.kind]} account`}
+            // Asked again next time, so the buttons show once the account is connected.
+            onClick={() => this.#trackers.delete(a.projectId)}
+          >
+            Connect {TRACKER_NAMES[toConnect.kind]} to create issues
+          </a>
+        )}
         {create && (
           <button type="button" className="link" disabled={this.#ctx.busy} aria-expanded={linking} onClick={toggleLink}>
             Link issue

@@ -3,6 +3,7 @@ import { useMe } from "@/App";
 import { ConnectedApps } from "@/components/ConnectedApps";
 import { Page, PageTitle } from "@/components/Layout";
 import { type CardItem, LinkCards } from "@/components/LinkCards";
+import { TrackerAccounts } from "@/components/TrackerAccounts";
 import { Link } from "@/lib/router";
 
 export function HomePage() {
@@ -35,6 +36,7 @@ export function HomePage() {
         <LinkCards items={items} />
       )}
       <ConnectedApps />
+      <TrackerAccounts />
     </Page>
   );
 }

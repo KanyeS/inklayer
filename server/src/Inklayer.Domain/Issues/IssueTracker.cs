@@ -20,8 +20,9 @@ public static class TrackerKinds
 }
 
 /// <summary>
-/// A project's link to an issue tracker: where issues made from its comments go. A project can have several. The token is
-/// encrypted; <see cref="Settings"/> holds the rest (repository, Jira site and project, Linear team, Azure DevOps organisation and project) as JSON.
+/// A project's link to an issue tracker: where issues made from its comments go. A project can have several. Where the
+/// tracker supports it (GitHub), people act as themselves through their own <see cref="TrackerAccount"/>, and the shared
+/// token is optional: a fallback for people who haven't connected. The token is encrypted; <see cref="Settings"/> holds the rest (repository, Jira site and project, Linear team, Azure DevOps organisation and project) as JSON.
 /// </summary>
 public sealed class IssueTrackerConnection
 {
@@ -40,12 +41,13 @@ public sealed class IssueTrackerConnection
     /// GitLab <c>{site?, projectKey (path such as group/project)}</c>; Forgejo and Gitea <c>{site?, owner, repo}</c>.</summary>
     public required string Settings { get; set; }
 
-    public required string ProtectedToken { get; set; }
+    /// <summary>The shared account's token (a bot account, say), encrypted. Optional where people can connect their own accounts.</summary>
+    public string? ProtectedToken { get; set; }
 
     /// <summary>Close the issue when its comment is resolved in Inklayer.</summary>
     public bool CloseIssueOnResolve { get; set; } = true;
 
-    /// <summary>Post replies written in Inklayer to linked issues, as the token's account.</summary>
+    /// <summary>Post replies written in Inklayer to linked issues: as their author's own account, or the shared one.</summary>
     public bool PostRepliesToIssue { get; set; }
 
     public Guid CreatedByUserId { get; init; }
@@ -55,6 +57,43 @@ public sealed class IssueTrackerConnection
     public DateTime? LastErrorAt { get; set; }
 
     public string? LastError { get; set; }
+}
+
+/// <summary>
+/// Someone's own account in a tracker, connected with OAuth, so what they do from Inklayer (issues, replies,
+/// closing) shows as them. One per person and tracker, used in every project. The token is encrypted.
+/// </summary>
+public sealed class TrackerAccount
+{
+    public Guid Id { get; init; } = Guid.CreateVersion7();
+
+    public required Guid UserId { get; init; }
+
+    public required string Kind { get; init; }
+
+    /// <summary>The tracker's id for the account, which stays the same when the login is renamed.</summary>
+    public required string ExternalUserId { get; set; }
+
+    /// <summary>The account's name in the tracker, such as a GitHub login.</summary>
+    public required string Login { get; set; }
+
+    public required string ProtectedAccessToken { get; set; }
+
+    /// <summary>For trackers whose access tokens expire (all but GitHub): gets a new one. Encrypted; some trackers replace it each time.</summary>
+    public string? ProtectedRefreshToken { get; set; }
+
+    /// <summary>When the access token stops working; null when it doesn't expire.</summary>
+    public DateTime? ExpiresAt { get; set; }
+
+    /// <summary>The account's page in the tracker, where it has one.</summary>
+    public string? ProfileUrl { get; set; }
+
+    /// <summary>JSON the tracker needs later: the address it was connected with (for refreshing), and Jira's sites.</summary>
+    public string? Data { get; set; }
+
+    public DateTime CreatedAt { get; init; }
+
+    public DateTime UpdatedAt { get; set; }
 }
 
 public static class IssueStates

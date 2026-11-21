@@ -154,8 +154,9 @@ internal static class InklayerTools
     /* ------------------------------------------------------------------ issue trackers */
 
     [McpServerTool(Name = "list_issue_trackers", ReadOnly = true), Description("The issue trackers (GitHub, GitLab, Forgejo/Gitea, Jira, Linear, Azure DevOps) connected to a project, to create issues in.")]
-    public static async Task<string> ListIssueTrackers([Description("Project id")] Guid projectId, AccessService access, InklayerDbContext db, CancellationToken ct) =>
-        ToolResults.ToJson(ToolResults.Value<List<TrackerChoiceResponse>>(await IssueEndpoints.ChoicesAsync(projectId, access, db, ct)));
+    public static async Task<string> ListIssueTrackers(
+        [Description("Project id")] Guid projectId, AccessService access, CurrentUser currentUser, InklayerDbContext db, TrackerAccounts accounts, CancellationToken ct) =>
+        ToolResults.ToJson(ToolResults.Value<List<TrackerChoiceResponse>>(await IssueEndpoints.ChoicesAsync(projectId, access, currentUser, db, accounts, ct)));
 
     [McpServerTool(Name = "create_issue_from_comment", OpenWorld = true),
      Description("Create an issue in a connected tracker from a comment, with its replies, page and page details. Closing the issue later resolves the comment.")]
@@ -171,8 +172,8 @@ internal static class InklayerTools
     public static async Task<string> SearchIssues(
         [Description("Project id")] Guid projectId, [Description("Tracker id, from list_issue_trackers")] Guid trackerId,
         [Description("Words in the title, or the issue's address, number (#12) or key (ABC-12)")] string query,
-        AccessService access, InklayerDbContext db, IssueService issues, CancellationToken ct) =>
-        ToolResults.ToJson(ToolResults.Value<List<FoundIssue>>(await IssueEndpoints.SearchIssuesAsync(projectId, trackerId, query, access, db, issues, ct)));
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, IssueService issues, CancellationToken ct) =>
+        ToolResults.ToJson(ToolResults.Value<List<FoundIssue>>(await IssueEndpoints.SearchIssuesAsync(projectId, trackerId, query, access, currentUser, db, issues, ct)));
 
     [McpServerTool(Name = "link_issue_to_comment", OpenWorld = true),
      Description("Link an issue that already exists to a comment. By default also posts the comment (with its replies, page and details) on the issue. The issue's comments then show in the comment's thread, and closing it resolves the comment.")]

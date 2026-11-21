@@ -1,6 +1,7 @@
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Issues;
 using Inklayer.Domain.Projects;
+using Inklayer.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -49,5 +50,22 @@ internal sealed class IssueCommentConfiguration : IEntityTypeConfiguration<Issue
         builder.Property(c => c.Body).HasMaxLength(20_000);
         builder.HasIndex(c => new { c.ConnectionId, c.IssueExternalId, c.ExternalId }).IsUnique();
         builder.HasOne<IssueTrackerConnection>().WithMany().HasForeignKey(c => c.ConnectionId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class TrackerAccountConfiguration : IEntityTypeConfiguration<TrackerAccount>
+{
+    public void Configure(EntityTypeBuilder<TrackerAccount> builder)
+    {
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Kind).HasMaxLength(16);
+        builder.Property(a => a.ExternalUserId).HasMaxLength(100);
+        builder.Property(a => a.Login).HasMaxLength(200);
+        builder.Property(a => a.ProtectedAccessToken).HasMaxLength(4000);
+        builder.Property(a => a.ProtectedRefreshToken).HasMaxLength(4000);
+        builder.Property(a => a.ProfileUrl).HasMaxLength(500);
+        builder.Property(a => a.Data).HasMaxLength(8000);
+        builder.HasIndex(a => new { a.UserId, a.Kind }).IsUnique();
+        builder.HasOne<User>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

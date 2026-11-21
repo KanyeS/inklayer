@@ -12,10 +12,11 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
 {
     private const string Api = "https://api.linear.app/graphql";
 
-    private async Task<JsonNode> QueryAsync(string token, string query, object variables, CancellationToken ct)
+    private async Task<JsonNode> QueryAsync(TrackerAuth token, string query, object variables, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, Api) { Content = Trackers.Json(new { query, variables }) };
-        request.Headers.TryAddWithoutValidation("Authorization", token);
+        // An API key goes in as it is; an OAuth token as a bearer token.
+        request.Headers.TryAddWithoutValidation("Authorization", token.OAuth ? $"Bearer {token.Token}" : token.Token);
         var result = await Trackers.SendAsync(http, request, ct);
         if (result?["errors"] is JsonArray { Count: > 0 } errors)
         {
@@ -25,10 +26,10 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
         return result!["data"]!;
     }
 
-    public Task TestAsync(TrackerSettings s, string token, CancellationToken ct) =>
+    public Task TestAsync(TrackerSettings s, TrackerAuth token, CancellationToken ct) =>
         QueryAsync(token, "query($id: String!) { team(id: $id) { id name } }", new { id = s.TeamId }, ct);
 
-    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, string token, string title, string markdown, CancellationToken ct)
+    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct)
     {
         var data = await QueryAsync(token,
             "mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }",
@@ -37,13 +38,13 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
         return new CreatedIssue(issue["id"]!.GetValue<string>(), issue["identifier"]!.GetValue<string>(), issue["url"]!.GetValue<string>());
     }
 
-    public async Task<string> StateAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task<string> StateAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         var data = await QueryAsync(token, "query($id: String!) { issue(id: $id) { state { type } } }", new { id = externalId }, ct);
         return data["issue"]?["state"]?["type"]?.GetValue<string>() is "completed" or "canceled" ? IssueStates.Closed : IssueStates.Open;
     }
 
-    public async Task CloseAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task CloseAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         var team = await QueryAsync(token, "query($id: String!) { team(id: $id) { states { nodes { id type } } } }", new { id = s.TeamId }, ct);
         var done = team["team"]?["states"]?["nodes"]?.AsArray().FirstOrDefault(n => n?["type"]?.GetValue<string>() == "completed")
@@ -58,7 +59,7 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
         issue["id"]!.GetValue<string>(), issue["identifier"]!.GetValue<string>(), issue["title"]?.GetValue<string>() ?? "", issue["url"]!.GetValue<string>(),
         issue["state"]?["type"]?.GetValue<string>() is "completed" or "canceled" ? IssueStates.Closed : IssueStates.Open);
 
-    public async Task<FoundIssue> GetAsync(TrackerSettings s, string token, string reference, CancellationToken ct)
+    public async Task<FoundIssue> GetAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
     {
         var text = reference.Trim();
         string id;
@@ -82,7 +83,7 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
         return issue["team"]?["id"]?.GetValue<string>() == s.TeamId ? Found(issue) : throw new InvalidOperationException($"{id} isn't in this connection's Linear team.");
     }
 
-    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, string token, string query, CancellationToken ct)
+    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
     {
         var filter = new Dictionary<string, object>
         {
@@ -99,7 +100,7 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
         return [.. (data["issues"]?["nodes"]?.AsArray() ?? []).Select(i => Found(i!))];
     }
 
-    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, string token, string externalId, DateTime? since, CancellationToken ct)
+    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, TrackerAuth token, string externalId, DateTime? since, CancellationToken ct)
     {
         var data = await QueryAsync(token,
             "query($id: String!) { issue(id: $id) { comments(first: 100) { nodes { id body createdAt updatedAt user { name url } } } } }", new { id = externalId }, ct);
@@ -109,7 +110,7 @@ internal sealed class LinearTracker(IHttpClientFactory http) : IIssueTracker
             c["body"]?.GetValue<string>() ?? "", Trackers.Time(c["createdAt"]), Trackers.Time(c["updatedAt"]))), since);
     }
 
-    public async Task<string> AddCommentAsync(TrackerSettings s, string token, string externalId, string markdown, CancellationToken ct)
+    public async Task<string> AddCommentAsync(TrackerSettings s, TrackerAuth token, string externalId, string markdown, CancellationToken ct)
     {
         var data = await QueryAsync(token, "mutation($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { id } } }",
             new { input = new { issueId = externalId, body = markdown } }, ct);

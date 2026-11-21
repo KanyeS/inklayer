@@ -2121,6 +2121,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/tracker-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trackers you can connect your own account to, and the accounts you've connected */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackerAccountResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/tracker-accounts/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect your account from a tracker */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/shares": {
         parameters: {
             query?: never;
@@ -3391,7 +3463,7 @@ export interface components {
         CreateTrackerRequest: {
             kind: string;
             name?: null | string;
-            token: string;
+            token?: null | string;
             settings: components["schemas"]["TrackerSettings"];
             /** @default true */
             closeIssueOnResolve?: boolean;
@@ -3896,12 +3968,25 @@ export interface components {
             ok: boolean;
             error: null | string;
         };
+        TrackerAccountResponse: {
+            /** @enum {string} */
+            kind: "github" | "jira" | "linear" | "azuredevops" | "gitlab" | "forgejo";
+            name: string;
+            login: null | string;
+            url: null | string;
+            /** Format: date-time */
+            connectedAt: null | string;
+            site: null | string;
+        };
         TrackerChoiceResponse: {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
             kind: "github" | "jira" | "linear" | "azuredevops" | "gitlab" | "forgejo";
             name: string;
+            /** @enum {string} */
+            postsAs: "you" | "shared" | "connect";
+            login: null | string;
         };
         TrackerConnectionResponse: {
             /** Format: uuid */
@@ -3911,11 +3996,12 @@ export interface components {
             name: string;
             settings: components["schemas"]["TrackerSettings"];
             closeIssueOnResolve: boolean;
-            tokenHint: string;
+            tokenHint: null | string;
             /** Format: date-time */
             lastErrorAt: null | string;
             lastError: null | string;
             postRepliesToIssue: boolean;
+            personalAccounts: boolean;
         };
         TrackerSettings: {
             owner?: null | string;
@@ -3989,6 +4075,7 @@ export interface components {
             settings?: null | components["schemas"]["TrackerSettings"];
             closeIssueOnResolve?: null | boolean;
             postRepliesToIssue?: null | boolean;
+            removeToken?: null | boolean;
         };
         VersionResponse: {
             version: string;
@@ -4089,6 +4176,7 @@ export type SetRoleRequest = components['schemas']['SetRoleRequest'];
 export type ShareResponse = components['schemas']['ShareResponse'];
 export type SignInProvider = components['schemas']['SignInProvider'];
 export type TestResultResponse = components['schemas']['TestResultResponse'];
+export type TrackerAccountResponse = components['schemas']['TrackerAccountResponse'];
 export type TrackerChoiceResponse = components['schemas']['TrackerChoiceResponse'];
 export type TrackerConnectionResponse = components['schemas']['TrackerConnectionResponse'];
 export type TrackerSettings = components['schemas']['TrackerSettings'];

@@ -21,11 +21,13 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
 
     private static string Project(TrackerSettings s) => $"{s.Site!.TrimEnd('/')}/{Uri.EscapeDataString(s.ProjectKey!.Trim())}";
 
-    private static HttpRequestMessage Request(HttpMethod method, string url, string token, HttpContent? content = null)
+    private static HttpRequestMessage Request(HttpMethod method, string url, TrackerAuth token, HttpContent? content = null)
     {
         var request = new HttpRequestMessage(method, url) { Content = content };
-        // A personal access token goes in Basic auth with an empty user name.
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($":{token}")));
+        // A personal access token goes in Basic auth with an empty user name; a Microsoft Entra token as a bearer token.
+        request.Headers.Authorization = token.OAuth
+            ? new AuthenticationHeaderValue("Bearer", token.Token)
+            : new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($":{token.Token}")));
         request.Headers.Accept.ParseAdd("application/json");
         return request;
     }
@@ -38,13 +40,13 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
         $"{Project(s)}/_apis/wit/workitemtypes/{Uri.EscapeDataString(type)}";
 
     /// <summary>Checks the project and the work item type in one call, with only the Work Items scope.</summary>
-    public async Task TestAsync(TrackerSettings s, string token, CancellationToken ct)
+    public async Task TestAsync(TrackerSettings s, TrackerAuth token, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, $"{WorkItemType(s, Type(s))}?{Version}", token);
         await Trackers.SendAsync(http, request, ct);
     }
 
-    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, string token, string title, string markdown, CancellationToken ct)
+    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct)
     {
         var type = Type(s);
         // Bugs show Repro Steps on their form instead of Description. Both fields take HTML.
@@ -59,14 +61,14 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
         return new CreatedIssue(id, $"#{id}", url);
     }
 
-    public async Task<string> StateAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task<string> StateAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         var (type, state) = await CurrentAsync(s, token, externalId, ct);
         var category = (await StatesAsync(s, token, type, ct)).FirstOrDefault(st => st.Name.Equals(state, StringComparison.OrdinalIgnoreCase)).Category;
         return category is "Completed" or "Removed" ? IssueStates.Closed : IssueStates.Open;
     }
 
-    public async Task CloseAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task CloseAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         var (type, _) = await CurrentAsync(s, token, externalId, ct);
         var done = (await StatesAsync(s, token, type, ct)).FirstOrDefault(st => st.Category == "Completed").Name is { Length: > 0 } name
@@ -78,7 +80,7 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
     }
 
     /// <summary>The work item's own type (it may have been changed since) and its state.</summary>
-    private async Task<(string Type, string State)> CurrentAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    private async Task<(string Type, string State)> CurrentAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get,
             $"{Project(s)}/_apis/wit/workitems/{Uri.EscapeDataString(externalId)}?fields=System.WorkItemType,System.State&{Version}", token);
@@ -87,7 +89,7 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
     }
 
     /// <summary>The type's states with their categories (Proposed, InProgress, Resolved, Completed, Removed).</summary>
-    private async Task<List<(string Name, string Category)>> StatesAsync(TrackerSettings s, string token, string type, CancellationToken ct)
+    private async Task<List<(string Name, string Category)>> StatesAsync(TrackerSettings s, TrackerAuth token, string type, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, $"{WorkItemType(s, type)}/states?{Version}", token);
         var states = (await Trackers.SendAsync(http, request, ct))?["value"]?.AsArray() ?? [];
@@ -98,7 +100,7 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
 
     private static string ItemUrl(TrackerSettings s, string id) => $"{Project(s)}/_workitems/edit/{id}";
 
-    public async Task<FoundIssue> GetAsync(TrackerSettings s, string token, string reference, CancellationToken ct)
+    public async Task<FoundIssue> GetAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
     {
         var text = reference.Trim();
         var match = Regex.Match(text, @"^#?(\d{1,12})$");
@@ -129,7 +131,7 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
             category is "Completed" or "Removed" ? IssueStates.Closed : IssueStates.Open);
     }
 
-    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, string token, string query, CancellationToken ct)
+    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
     {
         // WIQL can't ask for state categories; these are the finished states of the standard processes.
         var words = query.Trim().Replace("'", "''", StringComparison.Ordinal);
@@ -151,7 +153,7 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
         })];
     }
 
-    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, string token, string externalId, DateTime? since, CancellationToken ct)
+    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, TrackerAuth token, string externalId, DateTime? since, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, $"{Project(s)}/_apis/wit/workItems/{Uri.EscapeDataString(externalId)}/comments?$top=100&{CommentsVersion}", token);
         var comments = (await Trackers.SendAsync(http, request, ct))?["comments"]?.AsArray() ?? [];
@@ -160,7 +162,7 @@ internal sealed class AzureDevOpsTracker(IHttpClientFactory http) : IIssueTracke
             Trackers.TextFromHtml(c["text"]?.GetValue<string>() ?? ""), Trackers.Time(c["createdDate"]), Trackers.Time(c["modifiedDate"] ?? c["createdDate"]))), since);
     }
 
-    public async Task<string> AddCommentAsync(TrackerSettings s, string token, string externalId, string markdown, CancellationToken ct)
+    public async Task<string> AddCommentAsync(TrackerSettings s, TrackerAuth token, string externalId, string markdown, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, $"{Project(s)}/_apis/wit/workItems/{Uri.EscapeDataString(externalId)}/comments?{CommentsVersion}", token,
             Trackers.Json(new { text = Trackers.HtmlFromText(markdown) }, "application/json"));

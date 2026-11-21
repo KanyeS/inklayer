@@ -15,6 +15,8 @@ Project Admins connect trackers in the project's **Settings** tab, under **Issue
 - whether to **close the issue when its comment is resolved** (on by default);
 - whether to **post replies written in Inklayer to the issue** (off by default; see [below](#following-an-issues-comments)).
 
+People can act as **their own accounts** instead of a shared token, once the server has an OAuth app for the tracker; see [Your own tracker account](#your-own-tracker-account). Otherwise everything is done as the account whose token the connection has.
+
 Inklayer checks the credentials before it saves them. Tokens are stored encrypted, and only their last four characters are shown again. **Test** on a connection checks it again later, and the connection shows the last error if syncing fails, for example when a token has expired.
 
 Once a tracker is connected, Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The issue includes the comment, its replies, the page address, a link back, and the page details (browser, window size, console errors, failed requests). Inklayer checks linked issues every 5 minutes. Closing an issue in the tracker resolves its comment, and reopening it reopens the comment.
@@ -25,7 +27,7 @@ When the problem is already tracked, link the comment to that issue instead of c
 - **search:** type words from the title, and pick from the tracker's open issues. An empty box lists the most recently updated ones;
 - **paste:** give the issue's address, or its number or key (`#12`, `ABC-12`, `ENG-5`).
 
-With **Add this comment to the issue** (on by default), Inklayer posts the comment on the issue as a note: its text, replies, page address, page details and a link back. The note is posted as the connection's token account. Turn it off to link without posting anything.
+With **Add this comment to the issue** (on by default), Inklayer posts the comment on the issue as a note: its text, replies, page address, page details and a link back. The note is posted as your own account where you've [connected one](#your-own-tracker-account), otherwise as the connection's token account. Turn it off to link without posting anything.
 
 Several comments can link to the same issue. Closing the issue resolves all of them. Resolving them in Inklayer closes the issue only when the last one is resolved, so one fix doesn't close an issue that still has open reports.
 
@@ -40,11 +42,82 @@ Comments written on a linked issue in the tracker show in the Inklayer thread, m
 - Edits made in the tracker are picked up. Deletions aren't yet: a comment deleted in the tracker stays in Inklayer.
 - GitLab's system notes ("changed the description") are left out. Jira and Azure DevOps comments are shown as plain text.
 
-**Posting replies back.** With **Post replies** turned on for a connection (in the project's **Settings → Issue trackers**, or when connecting it), each reply written in Inklayer on a linked comment is also posted on the issue, as **Name (via Inklayer): reply**, with a link back. It's posted as the token's account, so people in the tracker see that account as the author. Inklayer recognises what it posted and doesn't show it twice. Editing or deleting a reply in Inklayer doesn't change the posted copy.
+**Posting replies back.** With **Post replies** turned on for a connection (in the project's **Settings → Issue trackers**, or when connecting it), each reply written in Inklayer on a linked comment is also posted on the issue, with a link back. It's posted as its author's [own account](#your-own-tracker-account) where they've connected one. Otherwise it's posted as the connection's token account, as **Name (via Inklayer): reply**, and if the connection has no token the reply stays in Inklayer. Inklayer recognises what it posted and doesn't show it twice. Editing or deleting a reply in Inklayer doesn't change the posted copy.
+
+### Your own tracker account
+
+People can connect their own accounts in GitHub, GitLab, Codeberg/Forgejo/Gitea, Jira, Linear and Azure DevOps, so what they do from Inklayer shows as them in the tracker: the issues they create, the notes added when they link an issue, the replies posted to issues, and issues closed when they resolve a comment. Each tracker needs an OAuth app registered once for the server ([below](#registering-the-oauth-apps)); trackers without one use the connection's token for everything.
+
+**For people:** on the Inklayer home page, under **Tracker accounts**, choose **Connect** next to the tracker and allow Inklayer there. You come straight back. **Create issue** and **Link existing issue** also offer it when it's needed. One connection covers every project. Inklayer renews the access by itself; you only connect again if you take the access back in the tracker. **Disconnect** removes it from Inklayer, and in GitHub, GitLab and Linear also takes back Inklayer's access there. (Elsewhere, remove it in the tracker's own settings: Codeberg **Settings → Applications**, Atlassian **Account settings → Connected apps**, Microsoft **My Apps**.)
+
+**For project Admins:** where people's own accounts work, a connection doesn't need a token. Connect your own account first; Inklayer uses it to check the settings. A **shared token**, such as a bot account's, is then optional: people who haven't connected their own account act as it, and replies posted through it carry the author's name. Without a shared token, they're asked to connect when they create or link an issue, and their replies stay in Inklayer. For Jira without a shared token, the account email isn't needed.
+
+Inklayer checks linked issues every 5 minutes with the shared token if there is one, otherwise with the account of whoever created or linked the issue, otherwise with the account of whoever connected the tracker. Resolving a comment closes its issue as the person who resolved it, falling back the same way.
+
+Which connections use people's own accounts:
+- **GitHub:** repositories on github.com (or on the GitHub Enterprise Server the app is registered on).
+- **GitLab** and **Codeberg/Forgejo/Gitea:** projects on the one instance the app is registered on (gitlab.com and codeberg.org by default). Connections to other instances use their token.
+- **Jira, Linear:** all of them. For Jira, the person must allow Inklayer on that Jira site when connecting.
+- **Azure DevOps:** organisations on Azure DevOps Services (`dev.azure.com`) backed by Microsoft Entra ID. Azure DevOps Server, and organisations that only use personal Microsoft accounts, use the token.
+
+#### Registering the OAuth apps
+
+For each tracker you want, register an app, then give its client ID and secret to the server. With the Docker Compose files in `deploy/`, set the variables shown in `.env` and run `docker compose up -d`. The **callback URL** (also called redirect URI) is always:
+
+```
+https://<your Inklayer address>/api/me/tracker-accounts/<tracker>/callback
+```
+
+with `<tracker>` one of `github`, `gitlab`, `forgejo`, `linear`, `jira`, `azuredevops`.
+
+**GitHub** (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`)
+1. **Settings → Developer settings → OAuth Apps → New OAuth App** ([direct link](https://github.com/settings/applications/new)), or the same under an organisation's settings if a team should manage it.
+2. **Application name** `Inklayer`, **Homepage URL** your Inklayer address, **Authorization callback URL** `…/api/me/tracker-accounts/github/callback`.
+3. **Register application**, then **Generate a new client secret**.
+
+GitHub OAuth apps can't be limited to one repository: people allow the `repo` scope, which covers every repository they can reach; Inklayer only uses it for the repositories connected to projects. Organisations with **OAuth app access restrictions** (**Settings → Third-party access**) must approve the app first; until then GitHub answers "Not found". For GitHub Enterprise Server, register the app there and also set `Inklayer__Trackers__GitHub__WebUrl` (`https://github.acme.com`) and `Inklayer__Trackers__GitHub__ApiUrl` (`https://github.acme.com/api/v3`).
+
+**GitLab** (`GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET`, and `GITLAB_URL` for a self-managed instance)
+1. On gitlab.com: **User settings → Applications → Add new application** ([direct link](https://gitlab.com/-/user_settings/applications)). A group's **Settings → Applications** works too, and a self-managed instance's administrator can add an instance-wide one under **Admin → Applications**.
+2. **Name** `Inklayer`, **Redirect URI** `…/api/me/tracker-accounts/gitlab/callback`, **Confidential** ticked, scope **api**.
+3. **Save application**, and copy the **Application ID** (the client ID) and **Secret**.
+
+**Codeberg, Forgejo and Gitea** (`FORGEJO_CLIENT_ID`, `FORGEJO_CLIENT_SECRET`, and `FORGEJO_URL` for your own instance)
+1. **Settings → Applications → Manage OAuth2 applications** ([Codeberg](https://codeberg.org/user/settings/applications)).
+2. **Application name** `Inklayer`, **Redirect URIs** `…/api/me/tracker-accounts/forgejo/callback`, **Confidential client** ticked.
+3. **Create application**, and copy the **Client ID** and **Client secret** (shown once).
+
+Forgejo and Gitea don't narrow what an OAuth app can do: people allow access to their account as a whole.
+
+**Linear** (`LINEAR_CLIENT_ID`, `LINEAR_CLIENT_SECRET`)
+1. In Linear, **Settings → API → OAuth applications → Create new** (you need to be a workspace admin).
+2. **Application name** `Inklayer`, **Developer URL** your Inklayer address, **Callback URLs** `…/api/me/tracker-accounts/linear/callback`. Leave **Public** off unless people in other Linear workspaces will use your server.
+3. **Create**, and copy the **Client ID** and **Client secret**.
+
+**Jira Cloud** (`ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET`)
+1. At [developer.atlassian.com](https://developer.atlassian.com/console/myapps/), **Create → OAuth 2.0 integration**, named `Inklayer`.
+2. **Permissions → Jira API → Add**, then **Configure** and add the classic scopes **read:jira-work**, **write:jira-work** and **read:jira-user**. Also add **User identity API** with **read:me**.
+3. **Authorization → OAuth 2.0 (3LO) → Configure**, with **Callback URL** `…/api/me/tracker-accounts/jira/callback`.
+4. **Settings**: copy the **Client ID** and **Secret**.
+5. **Distribution**: while the app is in development, only you can use it. Choose **Edit → Sharing** so people in your organisation can, and fill in the details Atlassian asks for.
+
+When someone connects, Atlassian asks which site to allow Inklayer on: it must be the site in the Jira connection.
+
+**Azure DevOps** (`AZURE_DEVOPS_CLIENT_ID`, `AZURE_DEVOPS_CLIENT_SECRET`, `AZURE_DEVOPS_TENANT_ID`)
+
+Azure DevOps no longer takes new OAuth apps of its own; sign-in goes through Microsoft Entra ID.
+1. In the [Azure portal](https://portal.azure.com), **Microsoft Entra ID → App registrations → New registration**.
+2. **Name** `Inklayer`. **Supported account types:** *this organisational directory only* if everyone is in your tenant, else *any organisational directory*. **Redirect URI:** platform **Web**, `…/api/me/tracker-accounts/azuredevops/callback`.
+3. **Register**, and copy the **Application (client) ID** and the **Directory (tenant) ID**.
+4. **Certificates & secrets → New client secret**; copy its **Value** (shown once). Note when it expires: renew it before then.
+5. **API permissions → Add a permission → Azure DevOps → Delegated → user_impersonation → Add.** An administrator can **Grant admin consent** so people aren't asked one by one.
+6. Set `AZURE_DEVOPS_TENANT_ID` to the tenant ID for a single-tenant app, or leave it as `organizations` for a multi-tenant one.
+
+The Azure DevOps organisation must be connected to that Entra tenant (**Organization settings → Microsoft Entra**).
 
 ### GitHub
 
-You need a **fine-grained personal access token** that can read and write issues on the repository.
+With [people's own accounts](#your-own-tracker-account) set up on the server, the token is optional: it's the shared account for people who haven't connected their own. Otherwise, you need a **fine-grained personal access token** that can read and write issues on the repository.
 
 1. On GitHub, open **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token** ([direct link](https://github.com/settings/personal-access-tokens/new)).
 2. **Resource owner:** the account or organisation that owns the repository. Some organisations require approval for fine-grained tokens. If yours does, an organisation owner approves the request under the organisation's **Settings → Personal access tokens → Pending requests**.
@@ -58,7 +131,7 @@ You need a **fine-grained personal access token** that can read and write issues
    |---|---|---|
    | Owner | `acme` | The first part of the repository address, `github.com/acme/website` |
    | Repository | `website` | The second part |
-   | Token | `github_pat_…` | From step 6 |
+   | Token | `github_pat_…` | From step 6 (optional with people's own accounts) |
    | API address | leave empty | Only for **GitHub Enterprise Server**: `https://<your GitHub host>/api/v3` |
 
 The repository must have Issues turned on (**Settings → General → Features → Issues**).

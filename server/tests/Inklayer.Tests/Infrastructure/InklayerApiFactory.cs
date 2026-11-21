@@ -37,6 +37,16 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
     /// <summary>Emails the server sent.</summary>
     public RecordingEmailSender Emails { get; } = new();
 
+    /// <summary>The fake GitHub people connect their own accounts to.</summary>
+    public const string GitHubWeb = "https://github-oauth.test";
+
+    public const string GitHubApi = "https://api.github-oauth.test";
+
+    /// <summary>The GitLab and Forgejo instances people connect their own accounts on.</summary>
+    public const string GitLabUrl = "https://gitlab-oauth.test";
+
+    public const string ForgejoUrl = "https://forgejo-oauth.test";
+
     /// <summary>Calls the server made to Slack, webhooks and issue trackers.</summary>
     public FakeOutboundHandler Outbound { get; } = new();
 
@@ -61,6 +71,24 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         builder.UseSetting("Inklayer:Auth:Oidc:0:ClientId", FakeOidcProvider.ClientId);
         builder.UseSetting("Inklayer:Auth:Oidc:0:ClientSecret", "oidc-secret");
         builder.UseSetting("Inklayer:Auth:Oidc:0:VerifiedDomains", OidcVerifiedDomain);
+
+        // A GitHub OAuth app, so people can connect their own accounts; repositories on GitHubApi use them.
+        builder.UseSetting("Inklayer:Trackers:GitHub:ClientId", "gh-client");
+        builder.UseSetting("Inklayer:Trackers:GitHub:ClientSecret", "gh-secret");
+        builder.UseSetting("Inklayer:Trackers:GitHub:WebUrl", GitHubWeb);
+        builder.UseSetting("Inklayer:Trackers:GitHub:ApiUrl", GitHubApi);
+        builder.UseSetting("Inklayer:Trackers:GitLab:ClientId", "gl-client");
+        builder.UseSetting("Inklayer:Trackers:GitLab:ClientSecret", "gl-secret");
+        builder.UseSetting("Inklayer:Trackers:GitLab:Url", GitLabUrl);
+        builder.UseSetting("Inklayer:Trackers:Forgejo:ClientId", "fj-client");
+        builder.UseSetting("Inklayer:Trackers:Forgejo:ClientSecret", "fj-secret");
+        builder.UseSetting("Inklayer:Trackers:Forgejo:Url", ForgejoUrl);
+        builder.UseSetting("Inklayer:Trackers:Linear:ClientId", "ln-client");
+        builder.UseSetting("Inklayer:Trackers:Linear:ClientSecret", "ln-secret");
+        builder.UseSetting("Inklayer:Trackers:Jira:ClientId", "at-client");
+        builder.UseSetting("Inklayer:Trackers:Jira:ClientSecret", "at-secret");
+        builder.UseSetting("Inklayer:Trackers:AzureDevOps:ClientId", "az-client");
+        builder.UseSetting("Inklayer:Trackers:AzureDevOps:ClientSecret", "az-secret");
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<IStartupFilter, TestClientIpStartupFilter>();

@@ -10,21 +10,25 @@ namespace Inklayer.Api.Features.Issues;
 /// <summary>Jira Cloud (REST v3). Token: an Atlassian API token for <see cref="TrackerSettings.Email"/>.</summary>
 internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker
 {
-    private static HttpRequestMessage Request(HttpMethod method, TrackerSettings s, string path, string token, object? body = null)
+    private static HttpRequestMessage Request(HttpMethod method, TrackerSettings s, string path, TrackerAuth token, object? body = null)
     {
-        var request = new HttpRequestMessage(method, $"{s.Site!.TrimEnd('/')}{path}") { Content = body is null ? null : Trackers.Json(body) };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{s.Email}:{token}")));
+        // Someone's own account goes through Atlassian's API gateway for the site; links still use the site's address.
+        var api = token.ApiBase ?? s.Site!;
+        var request = new HttpRequestMessage(method, $"{api.TrimEnd('/')}{path}") { Content = body is null ? null : Trackers.Json(body) };
+        request.Headers.Authorization = token.OAuth
+            ? new AuthenticationHeaderValue("Bearer", token.Token)
+            : new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{s.Email}:{token.Token}")));
         request.Headers.Accept.ParseAdd("application/json");
         return request;
     }
 
-    public async Task TestAsync(TrackerSettings s, string token, CancellationToken ct)
+    public async Task TestAsync(TrackerSettings s, TrackerAuth token, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, s, $"/rest/api/3/project/{Uri.EscapeDataString(s.ProjectKey!)}", token);
         await Trackers.SendAsync(http, request, ct);
     }
 
-    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, string token, string title, string markdown, CancellationToken ct)
+    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct)
     {
         var body = new
         {
@@ -42,14 +46,14 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker
         return new CreatedIssue(key, key, $"{s.Site!.TrimEnd('/')}/browse/{key}");
     }
 
-    public async Task<string> StateAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task<string> StateAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, s, $"/rest/api/3/issue/{Uri.EscapeDataString(externalId)}?fields=status", token);
         var issue = await Trackers.SendAsync(http, request, ct);
         return issue?["fields"]?["status"]?["statusCategory"]?["key"]?.GetValue<string>() == "done" ? IssueStates.Closed : IssueStates.Open;
     }
 
-    public async Task CloseAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task CloseAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         // Any transition into the "done" category.
         using var list = Request(HttpMethod.Get, s, $"/rest/api/3/issue/{Uri.EscapeDataString(externalId)}/transitions", token);
@@ -139,13 +143,13 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker
             issue["fields"]?["status"]?["statusCategory"]?["key"]?.GetValue<string>() == "done" ? IssueStates.Closed : IssueStates.Open);
     }
 
-    public async Task<FoundIssue> GetAsync(TrackerSettings s, string token, string reference, CancellationToken ct)
+    public async Task<FoundIssue> GetAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, s, $"/rest/api/3/issue/{Uri.EscapeDataString(Key(s, reference))}?fields=summary,status", token);
         return Found(s, (await Trackers.SendAsync(http, request, ct))!);
     }
 
-    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, string token, string query, CancellationToken ct)
+    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
     {
         // JQL text search treats these as operators; searching words is enough.
         var words = Regex.Replace(query, @"[+\-&|!(){}\[\]^~*?\\:""']", " ").Trim();
@@ -155,7 +159,7 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker
         return [.. issues.Select(i => Found(s, i!))];
     }
 
-    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, string token, string externalId, DateTime? since, CancellationToken ct)
+    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, TrackerAuth token, string externalId, DateTime? since, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, s, $"/rest/api/3/issue/{Uri.EscapeDataString(externalId)}/comment?orderBy=-created&maxResults=100", token);
         var comments = (await Trackers.SendAsync(http, request, ct))?["comments"]?.AsArray() ?? [];
@@ -164,7 +168,7 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker
             TextFromAdf(c["body"]), Trackers.Time(c["created"]), Trackers.Time(c["updated"]))), since);
     }
 
-    public async Task<string> AddCommentAsync(TrackerSettings s, string token, string externalId, string markdown, CancellationToken ct)
+    public async Task<string> AddCommentAsync(TrackerSettings s, TrackerAuth token, string externalId, string markdown, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, s, $"/rest/api/3/issue/{Uri.EscapeDataString(externalId)}/comment", token, new { body = Adf(markdown) });
         return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);

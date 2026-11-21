@@ -18,6 +18,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { GuideLink } from "@/components/GuideLink";
 import { ErrorText } from "@/components/Layout";
+import { accountName, connectTrackerUrl } from "@/components/TrackerAccounts";
 import { api } from "@/lib/api";
 import { dateTime, timeAgo } from "@/lib/format";
 import { queries } from "@/lib/queries";
@@ -80,6 +81,7 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
   const first = choices.data?.[0];
   if (!choices.data || !first) return null;
   const chosen = connectionId || first.id;
+  const choice = choices.data.find((c) => c.id === chosen) ?? first;
   const trackerName = choices.data.length === 1 ? first.name : "tracker";
 
   if (!mode) {
@@ -139,7 +141,23 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
           </NativeSelect>
         )}
       </div>
-      {mode === "existing" ? (
+      {choice.postsAs === "connect" ? (
+        <div className="flex flex-col items-start gap-2 text-sm">
+          <p className="text-muted-foreground">
+            Issues here are created and linked as your own {TRACKER_NAMES[choice.kind]} account. Connect it first; you
+            come straight back here.
+          </p>
+          <div className="flex items-center gap-2">
+            <Button nativeButton={false} render={<a href={connectTrackerUrl(choice.kind)} />}>
+              <ExternalLink data-icon="inline-start" />
+              Connect {TRACKER_NAMES[choice.kind]}
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setMode(null)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : mode === "existing" ? (
         <LinkIssueForm
           key={chosen}
           commentId={commentId}
@@ -158,7 +176,8 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
             onChange={(e) => setTitle(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
-            The issue gets the comment, its replies, the page and its details. Closing the issue resolves the comment.
+            The issue gets the comment, its replies, the page and its details. Closing the issue resolves the comment.{" "}
+            <PostsAs choice={choice} />
           </p>
           <div className="flex items-center gap-2">
             <Button type="submit" disabled={busy}>
@@ -173,6 +192,13 @@ export function CreateIssueButton({ commentId, projectId }: { commentId: string;
       )}
     </div>
   );
+}
+
+/** Who an issue or note will come from in the tracker. */
+function PostsAs({ choice }: { choice: { postsAs: string; login?: string | null; kind: TrackerKind } }) {
+  if (choice.postsAs === "you" && choice.login) return <>Posted as {accountName(choice.kind, choice.login)}.</>;
+  if (choice.postsAs === "shared") return <>Posted as the project's shared {TRACKER_NAMES[choice.kind]} account.</>;
+  return null;
 }
 
 /** Finds an issue that already exists (by title, or a pasted address or number) and links it to the comment. */
@@ -359,6 +385,32 @@ const GUIDE_SECTION = {
 /** Picker labels where the tracker covers more than its name says. */
 const PICKER_LABEL: Partial<Record<TrackerKind, string>> = { forgejo: "Codeberg, Forgejo, Gitea" };
 
+/** Where trackers are when no address is given. */
+const DEFAULT_SITE: Partial<Record<TrackerKind, string>> = {
+  gitlab: "https://gitlab.com",
+  forgejo: "https://codeberg.org",
+};
+
+const sameSite = (a: string, b: string) => a.replace(/\/+$/, "").toLowerCase() === b.replace(/\/+$/, "").toLowerCase();
+
+/**
+ * Whether people's own accounts work for a connection with these settings (the server decides; this mirrors it for the
+ * form): GitHub.com, the GitLab or Forgejo instance the server's app is on, Azure DevOps Services, and any Jira or Linear.
+ */
+function usesOwnAccounts(kind: TrackerKind, settings: TrackerSettings, instance: string | null): boolean {
+  switch (kind) {
+    case "github":
+      return !settings.apiUrl;
+    case "gitlab":
+    case "forgejo":
+      return !!instance && sameSite(settings.site || DEFAULT_SITE[kind] || "", instance);
+    case "azuredevops":
+      return /^https:\/\/(dev\.azure\.com|[^/]+\.visualstudio\.com)(\/|$)/i.test(settings.site ?? "");
+    default:
+      return true;
+  }
+}
+
 /** A project's connected issue trackers, for project Admins: any number of each kind (repositories, projects, teams). */
 export function IssueTrackersSection({ projectId }: { projectId: string }) {
   const trackers = useQuery(queries.issueTrackers(projectId));
@@ -390,7 +442,12 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
                 {t.name} <Badge variant="outline">{TRACKER_NAMES[t.kind]}</Badge>
               </p>
               <p className="text-sm text-muted-foreground">
-                Token {t.tokenHint} ·{" "}
+                {t.personalAccounts
+                  ? t.tokenHint
+                    ? `People act as their own accounts; shared token ${t.tokenHint} for the rest`
+                    : "People act as their own accounts"
+                  : `Token ${t.tokenHint ?? ""}`}{" "}
+                ·{" "}
                 {t.closeIssueOnResolve
                   ? "Closes issues when comments are resolved"
                   : "Leaves issues open when comments are resolved"}{" "}
@@ -421,10 +478,27 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
               >
                 {t.closeIssueOnResolve ? "Don't close issues" : "Close issues"}
               </Button>
+              {t.personalAccounts && t.tokenHint && (
+                <ConfirmButton
+                  title="Remove the shared token?"
+                  description="Everyone then acts as their own account; people who haven't connected one are asked to."
+                  confirmLabel="Remove"
+                  onConfirm={() =>
+                    void run(() =>
+                      api.patch("/api/projects/{projectId}/issue-trackers/{id}", {
+                        params: { path: { projectId, id: t.id } },
+                        body: { removeToken: true },
+                      }),
+                    )
+                  }
+                >
+                  Remove shared token
+                </ConfirmButton>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
-                title="Replies are posted as the token's account, with the name of the person who wrote them."
+                title="Replies are posted as their author's own account; else as the shared account, with their name."
                 onClick={() =>
                   void run(() =>
                     api.patch("/api/projects/{projectId}/issue-trackers/{id}", {
@@ -460,6 +534,7 @@ export function IssueTrackersSection({ projectId }: { projectId: string }) {
 }
 
 function AddTracker({ projectId }: { projectId: string }) {
+  const accounts = useQuery(queries.trackerAccounts());
   const [kind, setKind] = useState<TrackerKind>("github");
   const [settings, setSettings] = useState<TrackerSettings>({});
   const [token, setToken] = useState("");
@@ -467,6 +542,9 @@ function AddTracker({ projectId }: { projectId: string }) {
   const [closeIssueOnResolve, setClose] = useState(true);
   const [postRepliesToIssue, setPostReplies] = useState(false);
   const { run, error, pending: busy } = useAction();
+  // People can act as their own accounts (GitHub.com, when the server has the OAuth app): the token is optional then.
+  const account = accounts.data?.find((a) => a.kind === kind);
+  const personal = !!account && usesOwnAccounts(kind, settings, account.site ?? null);
   const set = (key: keyof TrackerSettings) => (e: { target: { value: string } }) =>
     setSettings((s) => ({ ...s, [key]: e.target.value }));
 
@@ -475,7 +553,14 @@ function AddTracker({ projectId }: { projectId: string }) {
     const added = await run(() =>
       api.post("/api/projects/{projectId}/issue-trackers", {
         params: { path: { projectId } },
-        body: { kind, name: name || undefined, token, settings, closeIssueOnResolve, postRepliesToIssue },
+        body: {
+          kind,
+          name: name || undefined,
+          token: token || undefined,
+          settings,
+          closeIssueOnResolve,
+          postRepliesToIssue,
+        },
       }),
     );
     if (added.ok) {
@@ -527,7 +612,12 @@ function AddTracker({ projectId }: { projectId: string }) {
         <div className="grid gap-4 sm:grid-cols-2">
           {text("site", "Site", "https://acme.atlassian.net")}
           {text("projectKey", "Project key", "WEB")}
-          {text("email", "Account email", "bot@acme.com")}
+          {text(
+            "email",
+            personal ? "Account email (for a shared token)" : "Account email",
+            "bot@acme.com",
+            !personal || !!token,
+          )}
           {text("issueType", "Issue type", "Bug", false)}
         </div>
       )}
@@ -552,17 +642,29 @@ function AddTracker({ projectId }: { projectId: string }) {
           {text("issueType", "Work item type", "Bug", false)}
         </div>
       )}
+      {personal && (
+        <p className="text-sm text-muted-foreground">
+          People create issues, post replies and close issues as their own {TRACKER_NAMES[kind]} accounts.{" "}
+          {account.login
+            ? `Your account (${account.login}) checks the settings.`
+            : `Connect your own account first, on the home page, so Inklayer can check the settings.`}
+        </p>
+      )}
       <Field>
-        <FieldLabel htmlFor="tracker-token">{TOKEN_LABEL[kind]}</FieldLabel>
+        <FieldLabel htmlFor="tracker-token">
+          {personal ? `Shared ${TOKEN_LABEL[kind].toLowerCase()} (optional)` : TOKEN_LABEL[kind]}
+        </FieldLabel>
         <Input
           id="tracker-token"
           type="password"
-          required
+          required={!personal}
           autoComplete="off"
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />
         <FieldDescription>
+          {personal &&
+            "For people who haven't connected their own account: a bot account's token, say. Leave it empty and they're asked to connect. "}
           {HELP[kind]} Stored encrypted; only its last four characters are shown again.{" "}
           <GuideLink section={GUIDE_SECTION[kind]}>Step-by-step setup</GuideLink>
         </FieldDescription>
@@ -585,7 +687,9 @@ function AddTracker({ projectId }: { projectId: string }) {
       </label>
       <label className="flex items-center gap-2 text-sm">
         <Checkbox checked={postRepliesToIssue} onCheckedChange={(on) => setPostReplies(on === true)} />
-        Post replies written in Inklayer to the issue (as the token's account)
+        {personal
+          ? "Post replies written in Inklayer to the issue (as each person's own account)"
+          : "Post replies written in Inklayer to the issue (as the token's account)"}
       </label>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={busy}>

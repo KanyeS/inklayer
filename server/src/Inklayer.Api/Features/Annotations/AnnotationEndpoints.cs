@@ -177,7 +177,7 @@ internal static partial class AnnotationEndpoints
         if (resolvedNow)
         {
             await notifications.ResolvedAsync(annotation, userId, ct);
-            await issues.CommentResolvedAsync(annotation, ct);
+            await issues.CommentResolvedAsync(annotation, userId, ct);
         }
 
         return TypedResults.Ok((await EnrichAsync(db, [ToResponse(annotation, authors, check.Role, userId)], _ => check.Role, userId, ct))[0]);

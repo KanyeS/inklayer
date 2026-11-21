@@ -8,6 +8,7 @@ const GUIDE = "https://github.com/KanyeS/inklayer/blob/main/docs/integrations.md
 export type GuideSection =
   | "issue-trackers"
   | "github"
+  | "your-own-tracker-account"
   | "gitlab"
   | "codeberg-forgejo-and-gitea"
   | "jira-cloud"

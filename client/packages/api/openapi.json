@@ -2095,6 +2095,52 @@
         }
       }
     },
+    "/api/me/tracker-accounts": {
+      "get": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Trackers you can connect your own account to, and the accounts you\u0027ve connected",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerAccountResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/tracker-accounts/{kind}": {
+      "delete": {
+        "tags": [
+          "Me"
+        ],
+        "summary": "Disconnect your account from a tracker",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/shares": {
       "post": {
         "tags": [
@@ -4178,7 +4224,6 @@
       "CreateTrackerRequest": {
         "required": [
           "kind",
-          "token",
           "settings"
         ],
         "type": "object",
@@ -4193,7 +4238,10 @@
             ]
           },
           "token": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "settings": {
             "$ref": "#/components/schemas/TrackerSettings"
@@ -6147,11 +6195,65 @@
           }
         }
       },
+      "TrackerAccountResponse": {
+        "required": [
+          "kind",
+          "name",
+          "login",
+          "url",
+          "connectedAt",
+          "site"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "github",
+              "jira",
+              "linear",
+              "azuredevops",
+              "gitlab",
+              "forgejo"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "login": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "connectedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "site": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "TrackerChoiceResponse": {
         "required": [
           "id",
           "kind",
-          "name"
+          "name",
+          "postsAs",
+          "login"
         ],
         "type": "object",
         "properties": {
@@ -6172,6 +6274,20 @@
           },
           "name": {
             "type": "string"
+          },
+          "postsAs": {
+            "enum": [
+              "you",
+              "shared",
+              "connect"
+            ],
+            "type": "string"
+          },
+          "login": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6185,7 +6301,8 @@
           "tokenHint",
           "lastErrorAt",
           "lastError",
-          "postRepliesToIssue"
+          "postRepliesToIssue",
+          "personalAccounts"
         ],
         "type": "object",
         "properties": {
@@ -6214,7 +6331,10 @@
             "type": "boolean"
           },
           "tokenHint": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "lastErrorAt": {
             "type": [
@@ -6230,6 +6350,9 @@
             ]
           },
           "postRepliesToIssue": {
+            "type": "boolean"
+          },
+          "personalAccounts": {
             "type": "boolean"
           }
         }
@@ -6600,6 +6723,12 @@
             ]
           },
           "postRepliesToIssue": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "removeToken": {
             "type": [
               "null",
               "boolean"

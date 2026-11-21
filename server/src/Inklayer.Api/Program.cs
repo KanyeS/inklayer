@@ -61,6 +61,7 @@ try
     app.MapContextEndpoints();
     app.MapNotificationEndpoints();
     app.MapIssueEndpoints();
+    app.MapTrackerAccountEndpoints();
     app.MapShareEndpoints();
     app.MapPublicShareEndpoints();
     app.MapLiveEndpoints();

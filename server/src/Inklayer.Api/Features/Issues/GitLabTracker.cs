@@ -17,15 +17,23 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
     private static string Project(TrackerSettings s) =>
         $"{(s.Site is { Length: > 0 } site ? site : "https://gitlab.com").TrimEnd('/')}/api/v4/projects/{Uri.EscapeDataString(s.ProjectKey!.Trim().Trim('/'))}";
 
-    private static HttpRequestMessage Request(HttpMethod method, string url, string token, object? body = null)
+    private static HttpRequestMessage Request(HttpMethod method, string url, TrackerAuth token, object? body = null)
     {
         var request = new HttpRequestMessage(method, url) { Content = body is null ? null : Trackers.Json(body) };
-        request.Headers.Add("PRIVATE-TOKEN", token);
+        if (token.OAuth)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+        }
+        else
+        {
+            request.Headers.Add("PRIVATE-TOKEN", token.Token);
+        }
+
         request.Headers.Accept.ParseAdd("application/json");
         return request;
     }
 
-    public async Task TestAsync(TrackerSettings s, string token, CancellationToken ct)
+    public async Task TestAsync(TrackerSettings s, TrackerAuth token, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, Project(s), token);
         var project = await Trackers.SendAsync(http, request, ct);
@@ -35,7 +43,7 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
         }
     }
 
-    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, string token, string title, string markdown, CancellationToken ct)
+    public async Task<CreatedIssue> CreateAsync(TrackerSettings s, TrackerAuth token, string title, string markdown, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, $"{Project(s)}/issues", token, new { title, description = markdown });
         var issue = await Trackers.SendAsync(http, request, ct);
@@ -44,14 +52,14 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
         return new CreatedIssue(iid, $"#{iid}", issue["web_url"]!.GetValue<string>());
     }
 
-    public async Task<string> StateAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task<string> StateAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Get, $"{Project(s)}/issues/{Uri.EscapeDataString(externalId)}", token);
         var issue = await Trackers.SendAsync(http, request, ct);
         return issue!["state"]!.GetValue<string>() == "closed" ? IssueStates.Closed : IssueStates.Open;
     }
 
-    public async Task CloseAsync(TrackerSettings s, string token, string externalId, CancellationToken ct)
+    public async Task CloseAsync(TrackerSettings s, TrackerAuth token, string externalId, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Put, $"{Project(s)}/issues/{Uri.EscapeDataString(externalId)}", token, new { state_event = "close" });
         await Trackers.SendAsync(http, request, ct);
@@ -61,7 +69,7 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
         Trackers.Id(issue["iid"]), $"#{Trackers.Id(issue["iid"])}", issue["title"]?.GetValue<string>() ?? "", issue["web_url"]!.GetValue<string>(),
         issue["state"]?.GetValue<string>() == "closed" ? IssueStates.Closed : IssueStates.Open);
 
-    public async Task<FoundIssue> GetAsync(TrackerSettings s, string token, string reference, CancellationToken ct)
+    public async Task<FoundIssue> GetAsync(TrackerSettings s, TrackerAuth token, string reference, CancellationToken ct)
     {
         var path = s.ProjectKey!.Trim().Trim('/');
         var iid = Trackers.IssueNumber(reference, Regex.Escape($"{Trackers.SitePath(s.Site)}/{path}") + "(?:/-)?/issues", path);
@@ -69,7 +77,7 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
         return Found((await Trackers.SendAsync(http, request, ct))!);
     }
 
-    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, string token, string query, CancellationToken ct)
+    public async Task<IReadOnlyList<FoundIssue>> SearchAsync(TrackerSettings s, TrackerAuth token, string query, CancellationToken ct)
     {
         var q = query.Trim().Length > 0 ? $"&search={Uri.EscapeDataString(query.Trim())}&in=title" : "";
         using var request = Request(HttpMethod.Get, $"{Project(s)}/issues?state=opened&order_by=updated_at&per_page=10{q}", token);
@@ -77,7 +85,7 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
         return [.. issues.Select(i => Found(i!))];
     }
 
-    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, string token, string externalId, DateTime? since, CancellationToken ct)
+    public async Task<IReadOnlyList<TrackerComment>> CommentsAsync(TrackerSettings s, TrackerAuth token, string externalId, DateTime? since, CancellationToken ct)
     {
         // Notes include system ones ("changed the description", "closed"); only people's comments are wanted.
         using var request = Request(HttpMethod.Get, $"{Project(s)}/issues/{Uri.EscapeDataString(externalId)}/notes?sort=desc&order_by=updated_at&per_page=100", token);
@@ -87,7 +95,7 @@ internal sealed class GitLabTracker(IHttpClientFactory http) : IIssueTracker
             n["body"]?.GetValue<string>() ?? "", Trackers.Time(n["created_at"]), Trackers.Time(n["updated_at"]))), since);
     }
 
-    public async Task<string> AddCommentAsync(TrackerSettings s, string token, string externalId, string markdown, CancellationToken ct)
+    public async Task<string> AddCommentAsync(TrackerSettings s, TrackerAuth token, string externalId, string markdown, CancellationToken ct)
     {
         using var request = Request(HttpMethod.Post, $"{Project(s)}/issues/{Uri.EscapeDataString(externalId)}/notes", token, new { body = markdown });
         return Trackers.Id((await Trackers.SendAsync(http, request, ct))?["id"]);

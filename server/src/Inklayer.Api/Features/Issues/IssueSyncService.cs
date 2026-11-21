@@ -56,7 +56,7 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<InklayerDbContext>();
         var trackers = services.GetRequiredService<Trackers>();
-        var secrets = services.GetRequiredService<IntegrationSecrets>();
+        var accounts = services.GetRequiredService<TrackerAccounts>();
         var notifications = services.GetRequiredService<NotificationService>();
         var indexer = services.GetRequiredService<DocIndexer>();
 
@@ -80,10 +80,18 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
                 row.LastSyncedAt = now;
             }
 
+            // The shared account, else the account of someone who linked the issue.
+            if (await accounts.ForBackgroundAsync(connection, rows.Select(r => r.CreatedByUserId), ct) is not { } token)
+            {
+                connection.LastError = $"Couldn't check {rows[0].Key}: no one who linked it has a {TrackerKinds.Name(connection.Kind)} account connected, and there's no shared one.";
+                connection.LastErrorAt = now;
+                continue;
+            }
+
             string state;
             try
             {
-                state = await trackers.For(connection.Kind).StateAsync(IssueService.SettingsOf(connection), secrets.Unprotect(connection.ProtectedToken), group.Key.ExternalId, ct);
+                state = await accounts.WithAsync(token, t => trackers.For(connection.Kind).StateAsync(IssueService.SettingsOf(connection), t, group.Key.ExternalId, ct), ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -102,7 +110,7 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
                 {
                     // A little overlap, for clocks that disagree; known comments are recognised by id.
                     var since = firstRead ? (DateTime?)null : rows.Min(r => r.CommentsCheckedAt)!.Value - TimeSpan.FromMinutes(5);
-                    newComments = await issueService.ImportCommentsAsync(connection, group.Key.ExternalId, since, ct);
+                    newComments = await issueService.ImportCommentsAsync(connection, group.Key.ExternalId, since, token, ct);
                     foreach (var row in rows)
                     {
                         row.CommentsCheckedAt = now;

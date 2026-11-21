@@ -13,6 +13,8 @@ const project = (projectId: string) => ({ params: { path: { projectId } } });
 export const queries = {
   me: () => queryOptions({ queryKey: ["me"], queryFn: () => api.get("/api/me") }),
   connectedApps: () => queryOptions({ queryKey: ["me", "apps"], queryFn: () => api.get("/api/me/apps") }),
+  trackerAccounts: () =>
+    queryOptions({ queryKey: ["me", "tracker-accounts"], queryFn: () => api.get("/api/me/tracker-accounts") }),
   livePages: () => queryOptions({ queryKey: ["live", "pages"], queryFn: () => api.get("/api/live/pages") }),
 
   org: (orgId: string) =>

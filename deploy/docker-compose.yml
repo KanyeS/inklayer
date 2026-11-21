@@ -23,6 +23,22 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       Inklayer__Auth__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
       Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      # People's own tracker accounts for issues: an OAuth app per tracker (see docs/integrations.md). Unset ones use shared tokens.
+      Inklayer__Trackers__GitHub__ClientId: ${GITHUB_CLIENT_ID:-}
+      Inklayer__Trackers__GitHub__ClientSecret: ${GITHUB_CLIENT_SECRET:-}
+      Inklayer__Trackers__GitLab__ClientId: ${GITLAB_CLIENT_ID:-}
+      Inklayer__Trackers__GitLab__ClientSecret: ${GITLAB_CLIENT_SECRET:-}
+      Inklayer__Trackers__GitLab__Url: ${GITLAB_URL:-https://gitlab.com}
+      Inklayer__Trackers__Forgejo__ClientId: ${FORGEJO_CLIENT_ID:-}
+      Inklayer__Trackers__Forgejo__ClientSecret: ${FORGEJO_CLIENT_SECRET:-}
+      Inklayer__Trackers__Forgejo__Url: ${FORGEJO_URL:-https://codeberg.org}
+      Inklayer__Trackers__Linear__ClientId: ${LINEAR_CLIENT_ID:-}
+      Inklayer__Trackers__Linear__ClientSecret: ${LINEAR_CLIENT_SECRET:-}
+      Inklayer__Trackers__Jira__ClientId: ${ATLASSIAN_CLIENT_ID:-}
+      Inklayer__Trackers__Jira__ClientSecret: ${ATLASSIAN_CLIENT_SECRET:-}
+      Inklayer__Trackers__AzureDevOps__ClientId: ${AZURE_DEVOPS_CLIENT_ID:-}
+      Inklayer__Trackers__AzureDevOps__ClientSecret: ${AZURE_DEVOPS_CLIENT_SECRET:-}
+      Inklayer__Trackers__AzureDevOps__TenantId: ${AZURE_DEVOPS_TENANT_ID:-organizations}
       Inklayer__Auth__Oidc__0__Id: ${OIDC_ID:-}
       Inklayer__Auth__Oidc__0__DisplayName: ${OIDC_DISPLAY_NAME:-}
       Inklayer__Auth__Oidc__0__Authority: ${OIDC_AUTHORITY:-}
