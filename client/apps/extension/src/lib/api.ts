@@ -17,8 +17,10 @@ async function authorizedFetch(request: Request): Promise<Response> {
   if (!serverUrl) throw new NotSignedInError();
   const url = new URL(request.url);
   const target = new URL(url.pathname + url.search, serverUrl);
-  // The body can only be read once; keep a copy for the retry.
-  const body = request.body ? await request.arrayBuffer() : undefined;
+  // The body can only be read once; keep a copy for the retry. Read it whatever `request.body` says: Firefox doesn't
+  // implement `Request.body`, so it's always undefined there, even when there is one.
+  const bytes = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
+  const body = bytes?.byteLength ? bytes : undefined;
 
   const send = (token: string) => {
     const headers = new Headers(request.headers);
