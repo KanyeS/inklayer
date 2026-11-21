@@ -153,6 +153,14 @@ public sealed partial class IssueTrackerTests
         await ana.PostJsonAsync($"/api/annotations/{first}/issues", new { connectionId = tracker.Id }).ExpectAsync(HttpStatusCode.Created);
         Assert.Equal($"at-{kind}-1", LastIssueToken());
 
+        // Replies posted as her own account end with a link back: small print only where the tracker renders markdown's HTML.
+        await admin.PatchJsonAsync($"/api/projects/{projectId}/issue-trackers/{tracker.Id}", new { postRepliesToIssue = true }).ExpectAsync(HttpStatusCode.OK);
+        var before = factory.Outbound.Requests.Count;
+        await ana.PostJsonAsync($"/api/annotations/{first}/replies", new { body = "Still blurry on retina" }).ExpectAsync(HttpStatusCode.Created);
+        var posted = Assert.Single(factory.Outbound.Requests.Skip(before), r => r.Body.Contains("View in Inklayer", StringComparison.Ordinal)).Body;
+        var small = System.Text.RegularExpressions.Regex.IsMatch(posted, @"sub(>|&gt;|\\u003E)");
+        Assert.Equal(kind is not ("azuredevops" or "jira"), small);
+
         // An expiring token is refreshed first.
         async Task ExpireAsync(string? refreshToken = null)
         {

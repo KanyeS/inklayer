@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Features.Notifications;
@@ -13,25 +14,88 @@ namespace Inklayer.Api.Features.Issues;
 /// Keeps comments in step with their issues. Trackers can't reach a server behind a VPN, so this asks them instead, every
 /// few minutes: an issue closed in the tracker resolves its comment (with a short reply saying so, and a notification);
 /// reopened, it reopens the comment. New comments on the issue are brought into the thread, and the people in it told.
+/// <list type="bullet">
+/// <item>Every 5 minutes, everything due, in batches: open issues (and those closed in the last 14 days) every 5 minutes,
+/// older closed ones once a day, which still notices one being reopened.</item>
+/// <item>Every 30 seconds, the issues of comments someone is looking at (<see cref="Want"/>), at most once a minute each,
+/// so what's on screen keeps up.</item>
+/// </list>
 /// </summary>
 internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, FeatureSwitches features, TimeProvider clock, ILogger<IssueSyncService> logger) : BackgroundService
 {
     private static readonly TimeSpan Every = TimeSpan.FromMinutes(5);
     private const int Batch = 50;
 
+    /// <summary>Batches in one round at most (2,500 issues): the rest wait for the next round.</summary>
+    private const int MaxBatches = 50;
+
+    /// <summary>Between batches, to go easy on the trackers' rate limits.</summary>
+    private static readonly TimeSpan BatchPause = TimeSpan.FromSeconds(1);
+
+    /// <summary>Issues closed longer than this are checked once a day.</summary>
+    private static readonly TimeSpan RecentlyClosed = TimeSpan.FromDays(14);
+
+    private static readonly TimeSpan OldClosedEvery = TimeSpan.FromDays(1);
+
+    /// <summary>How often the issues people are looking at are checked, and how soon one is checked again.</summary>
+    private static readonly TimeSpan WantedEvery = TimeSpan.FromSeconds(30);
+
+    private static readonly TimeSpan WantedAgain = TimeSpan.FromMinutes(1);
+
+    private const int MaxWanted = 5000;
+
+    /// <summary>Issues of comments being looked at, to check soon.</summary>
+    private readonly ConcurrentDictionary<Guid, byte> wanted = new();
+
+    /// <summary>One check at a time: the round and the quick checks don't step on each other.</summary>
+    private readonly SemaphoreSlim running = new(1, 1);
+
+    /// <summary>
+    /// Someone is looking at these comments: check their issues (open ones, and those closed lately) within about a minute.
+    /// </summary>
+    public async Task WantForCommentsAsync(InklayerDbContext db, IReadOnlyCollection<Guid> annotationIds, CancellationToken ct)
+    {
+        if (annotationIds.Count == 0 || wanted.Count >= MaxWanted)
+        {
+            return;
+        }
+
+        var recent = clock.GetUtcNow().UtcDateTime - RecentlyClosed;
+        Want(await db.AnnotationIssues.AsNoTracking()
+            .Where(i => annotationIds.Contains(i.AnnotationId) && (i.State == IssueStates.Open || i.ClosedAt > recent))
+            .Select(i => i.Id).ToListAsync(ct));
+    }
+
+    /// <summary>Someone is looking at comments linked to these issues: check them within about a minute.</summary>
+    public void Want(IEnumerable<Guid> issueIds)
+    {
+        foreach (var id in issueIds)
+        {
+            if (wanted.Count >= MaxWanted)
+            {
+                break;
+            }
+
+            wanted.TryAdd(id, 0);
+        }
+    }
+
     /// <summary>How long after an issue closes its comments are still read.</summary>
     private static readonly TimeSpan CommentsAfterClosing = TimeSpan.FromDays(14);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        Task.WhenAll(EveryAsync(Every, RunOnceAsync, stoppingToken), EveryAsync(WantedEvery, RunWantedAsync, stoppingToken));
+
+    private async Task EveryAsync(TimeSpan every, Func<CancellationToken, Task<int>> run, CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(Every, clock);
+        using var timer = new PeriodicTimer(every, clock);
         try
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
                 try
                 {
-                    await RunOnceAsync(stoppingToken);
+                    await run(stoppingToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -44,14 +108,87 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
         }
     }
 
-    /// <summary>Checks the issues not checked for a while. Returns how many changed.</summary>
+    /// <summary>Checks everything due, in batches. Returns how many changed.</summary>
     public async Task<int> RunOnceAsync(CancellationToken ct)
     {
-        if (!await features.IsEnabledAsync(Feature.IssueTrackers, ct))
+        var changed = 0;
+        for (var round = 0; round < MaxBatches; round++)
+        {
+            var (count, batchChanged) = await CheckAsync(async (db, now) =>
+            {
+                var fresh = now - Every + TimeSpan.FromSeconds(30);
+                var daily = now - OldClosedEvery + TimeSpan.FromSeconds(30);
+                var recent = now - RecentlyClosed;
+                return await db.AnnotationIssues
+                    .Where(i => i.State == IssueStates.Open || i.ClosedAt > recent ? i.LastSyncedAt < fresh : i.LastSyncedAt < daily)
+                    .OrderBy(i => i.LastSyncedAt).Take(Batch).ToListAsync(ct);
+            }, ct);
+            changed += batchChanged;
+            if (count < Batch)
+            {
+                break;
+            }
+
+            await Task.Delay(BatchPause, clock, ct);
+        }
+
+        return changed;
+    }
+
+    /// <summary>Checks the issues people are looking at (<see cref="Want"/>) that weren't checked in the last minute.</summary>
+    public async Task<int> RunWantedAsync(CancellationToken ct)
+    {
+        var ids = wanted.Keys.ToList();
+        foreach (var id in ids)
+        {
+            wanted.TryRemove(id, out _);
+        }
+
+        if (ids.Count == 0)
         {
             return 0;
         }
 
+        var (_, changed) = await CheckAsync(async (db, now) =>
+        {
+            var again = now - WantedAgain;
+            var picked = await db.AnnotationIssues.Where(i => ids.Contains(i.Id) && i.LastSyncedAt < again)
+                .Select(i => new { i.ConnectionId, i.ExternalId }).Distinct().Take(Batch).ToListAsync(ct);
+            if (picked.Count == 0)
+            {
+                return [];
+            }
+
+            // With every comment linked to the same issues, so they move together.
+            var connectionIds = picked.Select(p => p.ConnectionId).Distinct().ToList();
+            var externalIds = picked.Select(p => p.ExternalId).Distinct().ToList();
+            var rows = await db.AnnotationIssues.Where(i => connectionIds.Contains(i.ConnectionId) && externalIds.Contains(i.ExternalId)).ToListAsync(ct);
+            return [.. rows.Where(r => picked.Any(p => p.ConnectionId == r.ConnectionId && p.ExternalId == r.ExternalId))];
+        }, ct);
+        return changed;
+    }
+
+    /// <summary>Checks the issues <paramref name="select"/> picks. Returns how many it picked, and how many changed.</summary>
+    private async Task<(int Count, int Changed)> CheckAsync(Func<InklayerDbContext, DateTime, Task<List<AnnotationIssue>>> select, CancellationToken ct)
+    {
+        if (!await features.IsEnabledAsync(Feature.IssueTrackers, ct))
+        {
+            return (0, 0);
+        }
+
+        await running.WaitAsync(ct);
+        try
+        {
+            return await CheckCoreAsync(select, ct);
+        }
+        finally
+        {
+            running.Release();
+        }
+    }
+
+    private async Task<(int Count, int Changed)> CheckCoreAsync(Func<InklayerDbContext, DateTime, Task<List<AnnotationIssue>>> select, CancellationToken ct)
+    {
         await using var scope = scopes.CreateAsyncScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<InklayerDbContext>();
@@ -63,8 +200,7 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
         var issueService = services.GetRequiredService<IssueService>();
 
         var now = clock.GetUtcNow().UtcDateTime;
-        var due = now - Every + TimeSpan.FromSeconds(30);
-        var batch = await db.AnnotationIssues.Where(i => i.LastSyncedAt < due).OrderBy(i => i.LastSyncedAt).Take(Batch).ToListAsync(ct);
+        var batch = await select(db, now);
         var connectionIds = batch.Select(i => i.ConnectionId).Distinct().ToList();
         var connections = await db.IssueTrackerConnections.Where(c => connectionIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
 
@@ -192,7 +328,7 @@ internal sealed partial class IssueSyncService(IServiceScopeFactory scopes, Feat
         }
 
         await db.SaveChangesAsync(ct);
-        return changed;
+        return (batch.Count, changed);
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Checking linked issues failed")]

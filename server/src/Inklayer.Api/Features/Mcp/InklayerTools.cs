@@ -57,9 +57,10 @@ internal static class InklayerTools
 
     [McpServerTool(Name = "list_comments", ReadOnly = true), Description("The comments on a web page, across the person's projects, with replies and the docs they link.")]
     public static async Task<string> ListComments(
-        [Description("The page's address, e.g. https://example.com/pricing")] string url, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+        [Description("The page's address, e.g. https://example.com/pricing")] string url, CurrentUser currentUser, InklayerDbContext db, Issues.IssueSyncService sync,
+        CancellationToken ct)
     {
-        var pages = ToolResults.Value<List<LivePageAnnotationsResponse>>(await LiveEndpoints.ListAsync(url, currentUser, db, ct));
+        var pages = ToolResults.Value<List<LivePageAnnotationsResponse>>(await LiveEndpoints.ListAsync(url, currentUser, db, sync, ct));
         return ToolResults.ToJson(pages.Select(p => new { p.ProjectId, p.PageUrl, Comments = p.Annotations.Select(Summary) }));
     }
 

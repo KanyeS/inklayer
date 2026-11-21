@@ -274,8 +274,10 @@ internal sealed partial class IssueService(
             }
 
             // Their own account says who it is; the shared one needs the name.
+            // Small print where the tracker renders markdown's HTML; Azure DevOps and Jira would show the tags.
+            var footer = link.Connection.Kind is TrackerKinds.AzureDevOps or TrackerKinds.Jira ? view : $"<sub>{view}</sub>";
             var text = token.IsPersonal
-                ? $"{said}\n\n<sub>{view}</sub>"
+                ? $"{said}\n\n{footer}"
                 : $"**{names.GetValueOrDefault(reply.AuthorUserId, "Someone")}** (via Inklayer): {said}\n\n{view}";
             try
             {

@@ -104,7 +104,7 @@ internal static class LiveEndpoints
             v.Project.Id, v.Project.Name, v.Project.OrganizationId, v.OrganizationName, v.Role, v.Role.Grants(Permission.Comment))).ToList());
     }
 
-    internal static async Task<IResult> ListAsync(string? url, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> ListAsync(string? url, CurrentUser currentUser, InklayerDbContext db, Issues.IssueSyncService sync, CancellationToken ct)
     {
         if (await VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
         {
@@ -128,6 +128,8 @@ internal static class LiveEndpoints
             return TypedResults.Ok(Array.Empty<LivePageAnnotationsResponse>());
         }
 
+        // The page is open: its comments' issues are checked soon, so what's shown keeps up.
+        await sync.WantForCommentsAsync(db, [.. annotations.Select(a => a.Id)], ct);
         var authors = await AnnotationEndpoints.AuthorsAsync(db, annotations.Select(a => a.AuthorUserId), ct);
         var userId = currentUser.Id!.Value;
         var roles = visible.ToDictionary(v => v.Project.Id, v => v.Role);

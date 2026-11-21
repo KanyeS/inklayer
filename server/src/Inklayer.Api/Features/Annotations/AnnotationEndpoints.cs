@@ -224,7 +224,8 @@ internal static partial class AnnotationEndpoints
         return TypedResults.NoContent();
     }
 
-    internal static async Task<IResult> GetAsync(Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<IResult> GetAsync(
+        Guid annotationId, AccessService access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct, Issues.IssueSyncService? sync = null)
     {
         var annotation = await db.Annotations.AsNoTracking().SingleOrDefaultAsync(a => a.Id == annotationId && a.DeletedAt == null, ct);
         if (annotation is null)
@@ -236,6 +237,12 @@ internal static partial class AnnotationEndpoints
         if (!check.IsAllowed)
         {
             return check.Denied!;
+        }
+
+        // Someone has the comment open: its issues are checked soon.
+        if (sync is not null)
+        {
+            await sync.WantForCommentsAsync(db, [annotation.Id], ct);
         }
 
         var projectName = await db.Projects.Where(p => p.Id == annotation.ProjectId).Select(p => p.Name).SingleAsync(ct);

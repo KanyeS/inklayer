@@ -48,7 +48,7 @@ internal static class LivePullRequests
         return TypedResults.Ok(urls);
     }
 
-    private static async Task<IResult> GetAsync(string? url, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetAsync(string? url, CurrentUser currentUser, InklayerDbContext db, IssueSyncService sync, CancellationToken ct)
     {
         if (await LiveEndpoints.VisibleProjectsAsync(currentUser, db, ct) is not { } visible)
         {
@@ -75,6 +75,7 @@ internal static class LivePullRequests
         }
 
         var commentIds = rows.Select(r => r.Comment.Id).Distinct().ToList();
+        await sync.WantForCommentsAsync(db, commentIds, ct);
         var issues = await IssueService.ForAsync(db, commentIds, ct);
         var authorIds = rows.Select(r => r.Comment.AuthorUserId).Distinct().ToList();
         var names = await db.Users.AsNoTracking().Where(u => authorIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.PreferredName ?? u.DisplayName, ct);

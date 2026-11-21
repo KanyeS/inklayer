@@ -19,7 +19,7 @@ People can act as **their own accounts** instead of a shared token, once the ser
 
 Inklayer checks the credentials before it saves them. Tokens are stored encrypted, and only their last four characters are shown again. **Test** on a connection checks it again later, and the connection shows the last error if syncing fails, for example when a token has expired.
 
-Once a tracker is connected, Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The issue includes the comment, its replies, the page address, a link back, and the page details (browser, window size, console errors, failed requests). Inklayer checks linked issues every 5 minutes. Closing an issue in the tracker resolves its comment, and reopening it reopens the comment.
+Once a tracker is connected, Commenters and above choose **Create issue** on a comment, in the extension or on the comment's page. The issue includes the comment, its replies, the page address, a link back, and the page details (browser, window size, console errors, failed requests). Inklayer checks linked issues every 5 minutes, and within about a minute while someone has the comment open (on its page in the extension, or its page in the web app). Issues closed more than 14 days ago are checked once a day. Closing an issue in the tracker resolves its comment, and reopening it reopens the comment.
 
 ### Linking an issue that already exists
 
@@ -58,7 +58,7 @@ A comment can be linked to a **pull request** (a **merge request** in GitLab) in
 ### Following an issue's comments
 
 Comments written on a linked issue in the tracker show in the Inklayer thread, mixed in with the replies by time. Each is marked with the issue it came from, such as "on GitHub #12". They are read-only in Inklayer.
-- They arrive within about 5 minutes, when Inklayer next checks the issue. Linking an issue brings in its earlier comments straight away (up to 100).
+- They arrive within about a minute while the comment is open in the extension or the web app, and within about 5 minutes otherwise. Linking an issue brings in its earlier comments straight away (up to 100).
 - New ones notify the comment's author, the people who replied, and whoever created or linked the issue.
 - Comments are read while the issue is open, and for 14 days after it closes.
 - Edits made in the tracker are picked up. Deletions aren't yet: a comment deleted in the tracker stays in Inklayer.

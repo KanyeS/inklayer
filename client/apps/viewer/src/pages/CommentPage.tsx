@@ -16,6 +16,8 @@ import { queries } from "@/lib/queries";
 import { useAction } from "@/lib/query";
 import { Link } from "@/lib/router";
 
+const COMMENT_REFRESH_MS = 60_000;
+
 type PageContext = AnnotationContextResponse;
 
 /**
@@ -24,7 +26,8 @@ type PageContext = AnnotationContextResponse;
  */
 export function CommentPage({ commentId }: { commentId: string }) {
   const { me } = useMe();
-  const comment = useQuery(queries.comment(commentId));
+  // Reloaded every minute while open, so replies and the tracker's comments on its issues show up by themselves.
+  const comment = useQuery({ ...queries.comment(commentId), refetchInterval: COMMENT_REFRESH_MS });
   const deleteReply = useAction();
   const [copied, setCopied] = useState(false);
 
