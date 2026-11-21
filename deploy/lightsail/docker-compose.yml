@@ -47,8 +47,10 @@ services:
         condition: service_completed_successfully
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      # Hard heap cap (192 MB) keeps the server within the instance's memory.
-      DOTNET_GCHeapHardLimit: "0xC000000"
+      # Hard heap cap (256 MB) inside the 448 MB container limit below. On the 1 GB plan the box has about 330 MB free
+      # with everything running at 320 MB, so this leaves the OS about 200 MB. The server idles at about 190 MB, and
+      # load tests showed the container limit (not the heap) is what's hit first. See docs/load-testing.md.
+      DOTNET_GCHeapHardLimit: "0x10000000"
       ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
       Inklayer__Auth__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
       Inklayer__Auth__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
@@ -111,7 +113,7 @@ services:
       - ./certs:/certs:ro
     expose:
       - "8080"
-    mem_limit: 320m
+    mem_limit: 448m
     logging: &logging
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
