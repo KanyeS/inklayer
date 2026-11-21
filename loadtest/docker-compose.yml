@@ -1,0 +1,129 @@
+# Inklayer load test: the server, sized like the production Lightsail box, plus a stand-in sign-in provider and k6.
+#
+#   INKLAYER_IMAGE=inklayer-server:local docker compose -f loadtest/docker-compose.yml up -d caddy
+#   docker compose -f loadtest/docker-compose.yml run --rm k6               # PROFILE=ci by default
+#   docker compose -f loadtest/docker-compose.yml down -v
+#
+# Nothing here talks to production: no Litestream, no real sign-in, a throwaway database volume.
+# See docs/load-testing.md.
+
+name: inklayer-loadtest
+
+services:
+  # Stand-in OpenID Connect provider. It signs anyone straight in (no login form) as the one load-test user, so the
+  # test signs in through the server's normal OIDC code path: no test-only login exists in the server.
+  oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:7.0.1
+    environment:
+      SERVER_PORT: "8080"
+      JSON_CONFIG: >-
+        {"interactiveLogin": false,
+         "tokenCallbacks": [{"issuerId": "loadtest", "tokenExpiry": 3600,
+           "requestMappings": [{"requestParam": "client_id", "match": "*",
+             "claims": {"sub": "loadtest-user", "email": "loadtest@loadtest.example", "email_verified": true, "name": "Load Test"}}]}]}
+    # The server and k6 must reach it at the same address, because the issuer in its tokens comes from that address.
+    # Locally both use http://oidc:8080. On Lightsail k6 runs on another instance, so both use the host's private IP.
+    ports:
+      - "${INKLAYER_LOADTEST_BIND:-127.0.0.1}:${INKLAYER_LOADTEST_OIDC_PORT:-18081}:8080"
+
+  server:
+    image: ${INKLAYER_IMAGE:?set INKLAYER_IMAGE to the server image under test}
+    depends_on:
+      - oidc
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ForwardedHeaders__KnownNetworks__0: 172.16.0.0/12
+      # The same limits as deploy/lightsail/docker-compose.yml (256 MB heap inside a 448 MB container).
+      DOTNET_GCHeapHardLimit: "0x10000000"
+      # Only for the stand-in provider's plain-HTTP address. People reach the server over HTTPS, through Caddy.
+      Inklayer__Auth__AllowInsecureHttp: "true"
+      Inklayer__Auth__BootstrapAdmins: loadtest@loadtest.example
+      Inklayer__Auth__Oidc__0__Id: loadtest
+      Inklayer__Auth__Oidc__0__DisplayName: Load test
+      Inklayer__Auth__Oidc__0__Authority: ${INKLAYER_LOADTEST_OIDC_URL:-http://oidc:8080}/loadtest
+      Inklayer__Auth__Oidc__0__ClientId: inklayer
+      Inklayer__Auth__Oidc__0__ClientSecret: not-a-secret
+      Inklayer__Auth__Oidc__0__Scopes: openid email profile
+      # Every k6 virtual user is the same person, so allow them all a live connection, and room to sign in.
+      Inklayer__Presence__MaxConnectionsPerUser: "100000"
+      Inklayer__Auth__AuthRequestsPerMinute: "1000"
+      # Trust only the fake GitLab's certificate (Caddy's own CA): the server reaches nothing else over HTTPS here.
+      SSL_CERT_FILE: /tracker-ca/ca/root.crt
+    expose:
+      - "8080"
+    volumes:
+      - loadtest-data:/data
+      - fake-gitlab-tls:/tracker-ca:ro
+    # Production box: Lightsail micro (2 vCPU, 1 GB) with the server capped at 448 MB.
+    cpus: ${INKLAYER_LOADTEST_CPUS:-2}
+    mem_limit: 448m
+
+  # Production's own Caddyfile in front, as on the Lightsail box: HTTPS (the sign-in cookies are HTTPS-only) and compression.
+  # A *.internal name gets a certificate from Caddy's own CA instead of Let's Encrypt.
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - server
+    environment:
+      INKLAYER_DOMAIN: inklayer.internal
+      ACME_EMAIL: loadtest@loadtest.example
+    volumes:
+      - ../deploy/lightsail/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        aliases: [inklayer.internal]
+    ports:
+      - "${INKLAYER_LOADTEST_BIND:-127.0.0.1}:${INKLAYER_LOADTEST_PORT:-18443}:443"
+
+  # A stand-in GitLab for the media scenario's issues: takes the comment's files and the issue, and throws them away.
+  # GitLab connections must use https, so it's behind its own Caddy as https://gitlab.internal.
+  fake-gitlab:
+    image: python:3.13-alpine
+    command: ["python3", "-I", "/app/fake-gitlab.py", "8080"]
+    volumes:
+      - ./fake-gitlab.py:/app/fake-gitlab.py:ro
+
+  fake-gitlab-tls:
+    image: caddy:2-alpine
+    depends_on:
+      - fake-gitlab
+    # Caddy keeps its CA readable by root only; a copy of the root certificate (public) goes where the server can read it.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        caddy reverse-proxy --from gitlab.internal --to fake-gitlab:8080 --internal-certs &
+        until [ -f /data/caddy/pki/authorities/local/root.crt ]; do sleep 1; done
+        mkdir -p /data/ca && cp /data/caddy/pki/authorities/local/root.crt /data/ca/root.crt && chmod 755 /data/ca && chmod 644 /data/ca/root.crt
+        wait
+    volumes:
+      - fake-gitlab-tls:/data
+    networks:
+      default:
+        aliases: [gitlab.internal]
+
+  k6:
+    image: grafana/k6:2.4.0
+    profiles: [tools]
+    depends_on:
+      - caddy
+      - fake-gitlab-tls
+    # Your own user, so the results it writes stay yours (export LOADTEST_UID=$(id -u) if it isn't 1000).
+    user: "${LOADTEST_UID:-1000}"
+    working_dir: /loadtest
+    environment:
+      BASE_URL: https://inklayer.internal
+      # Caddy's own CA; nothing else is reachable from here.
+      K6_INSECURE_SKIP_TLS_VERIFY: "true"
+      PROFILE: ${PROFILE:-ci}
+      K6_NO_USAGE_REPORT: "true"
+    env_file:
+      - path: k6.env
+        required: false
+    volumes:
+      - ./k6:/loadtest:ro
+      - ./results:/results
+    command: ["run", "--summary-export=/results/summary.json", "--out", "csv=/results/metrics.csv.gz", "/loadtest/inklayer.js"]
+
+volumes:
+  loadtest-data:
+  fake-gitlab-tls:

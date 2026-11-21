@@ -43,3 +43,7 @@ Thumbs.db
 
 # Built web viewer and overlay (produced by client/ builds)
 server/src/Inklayer.Api/wwwroot/
+
+# Load test output
+loadtest/results/
+loadtest/k6.env

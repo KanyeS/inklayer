@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CreateTaggedLoadTestInstancesAndKeys",
+      "Effect": "Allow",
+      "Action": ["lightsail:CreateInstances", "lightsail:CreateKeyPair", "lightsail:TagResource"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestTag/inklayer-loadtest": "true" } }
+    },
+    {
+      "Sid": "DeleteOnlyLoadTestResources",
+      "Effect": "Allow",
+      "Action": ["lightsail:DeleteInstance", "lightsail:DeleteKeyPair"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:ResourceTag/inklayer-loadtest": "true" } }
+    },
+    {
+      "Sid": "ReadInstancesAndMetrics",
+      "Effect": "Allow",
+      "Action": ["lightsail:GetInstance", "lightsail:GetInstanceMetricData"],
+      "Resource": "*"
+    }
+  ]
+}

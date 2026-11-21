@@ -1,0 +1,259 @@
+name: Load test (Lightsail)
+
+# On demand: the real limits of a Lightsail box, CPU credits included.
+# Creates two throwaway instances in the region, runs the given server image on one (same plan as production,
+# same limits, production's Caddyfile) and k6 on the other, steps the load up, then deletes both, even on failure.
+# Production is not touched: new instances, a new empty database, no Litestream, no real sign-in.
+# Setup (AWS role and the AWS_LOADTEST_ROLE_ARN secret): docs/load-testing.md.
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Server image to test
+        default: ghcr.io/kanyes/inklayer-server:latest
+      profile:
+        description: "capacity: step up until it breaks. soak: hold one load for a long time (CPU credits, memory)."
+        type: choice
+        options: [capacity, soak]
+        default: capacity
+      bundle:
+        description: Lightsail plan for the server (production is micro_3_0, 1 GB)
+        default: micro_3_0
+      region:
+        default: ap-southeast-2
+      steps:
+        description: "capacity: number of steps"
+        default: "10"
+      step_seconds:
+        description: "capacity: seconds per step"
+        default: "60"
+      max_read_rps:
+        description: "capacity: reads/s at the last step"
+        default: "300"
+      max_write_rps:
+        description: "capacity: writes/s at the last step"
+        default: "30"
+      max_live:
+        description: "capacity: live connections at the last step"
+        default: "300"
+      max_doc_editors:
+        description: "capacity: people typing in docs at the last step"
+        default: "60"
+      max_media:
+        description: "capacity: at the last step, people playing recordings, and recorded comments and issues with attachments a minute (each)"
+        default: "20"
+      soak_duration:
+        description: "soak: how long, e.g. 60m"
+        default: 60m
+      soak_read_rps:
+        description: "soak: reads/s (try about 70% of the capacity figure)"
+        default: "100"
+      soak_write_rps:
+        default: "10"
+      soak_doc_editors:
+        description: "soak: people typing in docs"
+        default: "10"
+      seed_comments:
+        description: Comments created before the test starts
+        default: "2000"
+
+permissions:
+  contents: read
+  id-token: write   # AWS sign-in (OIDC)
+  packages: read    # pull a private image from ghcr.io
+
+concurrency:
+  group: loadtest-lightsail
+  cancel-in-progress: false
+
+jobs:
+  loadtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      AWS_REGION: ${{ inputs.region }}
+      NAME: inklayer-loadtest-${{ github.run_id }}
+      SSH: ssh -i key.pem -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ConnectTimeout=10
+      SCP: scp -i key.pem -o StrictHostKeyChecking=accept-new
+      IMAGE: ${{ inputs.image }}
+      PROFILE: ${{ inputs.profile }}
+      BUNDLE: ${{ inputs.bundle }}
+      STEPS: ${{ inputs.steps }}
+      STEP_SECONDS: ${{ inputs.step_seconds }}
+      MAX_READ_RPS: ${{ inputs.max_read_rps }}
+      MAX_WRITE_RPS: ${{ inputs.max_write_rps }}
+      MAX_LIVE: ${{ inputs.max_live }}
+      MAX_DOC_EDITORS: ${{ inputs.max_doc_editors }}
+      MAX_MEDIA: ${{ inputs.max_media }}
+      SOAK_DURATION: ${{ inputs.soak_duration }}
+      SOAK_READ_RPS: ${{ inputs.soak_read_rps }}
+      SOAK_WRITE_RPS: ${{ inputs.soak_write_rps }}
+      SOAK_DOC_EDITORS: ${{ inputs.soak_doc_editors }}
+      SEED_COMMENTS: ${{ inputs.seed_comments }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The inputs end up in commands run on the instances: only accept the shapes they should have.
+      - name: Check inputs
+        run: |
+          set -euo pipefail
+          ok() { [[ "$2" =~ $3 ]] || { echo "::error::$1 '$2' isn't valid"; exit 1; }; }
+          ok image "$IMAGE" '^[a-z0-9./_:@-]+$'
+          ok region "$AWS_REGION" '^[a-z]{2}-[a-z]+-[0-9]$'
+          ok bundle "$BUNDLE" '^[a-z0-9_]+$'
+          ok soak_duration "$SOAK_DURATION" '^[0-9]+[smh]$'
+          for v in STEPS STEP_SECONDS MAX_READ_RPS MAX_WRITE_RPS MAX_LIVE MAX_DOC_EDITORS MAX_MEDIA SOAK_READ_RPS SOAK_WRITE_RPS SOAK_DOC_EDITORS SEED_COMMENTS; do
+            ok "$v" "${!v}" '^[0-9]+$'
+          done
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_LOADTEST_ROLE_ARN }}
+          aws-region: ${{ inputs.region }}
+
+      - name: Create instances
+        run: |
+          set -euo pipefail
+          aws lightsail create-key-pair --key-pair-name "$NAME" --tags key=inklayer-loadtest,value=true \
+            --query privateKeyBase64 --output text > key.pem
+          chmod 600 key.pem
+          cat > user-data.sh <<'EOF'
+          #!/bin/bash
+          apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2
+          usermod -aG docker ubuntu
+          EOF
+          create() {
+            aws lightsail create-instances --instance-names "$1" --bundle-id "$2" --blueprint-id ubuntu_24_04 \
+              --availability-zone "${AWS_REGION}a" --key-pair-name "$NAME" --user-data file://user-data.sh \
+              --tags key=inklayer-loadtest,value=true > /dev/null
+          }
+          create "$NAME-server" "$BUNDLE"
+          # k6 gets more room than the server, so the load generator is never what runs out first.
+          create "$NAME-k6" medium_3_0
+
+      - name: Wait until both are up
+        run: |
+          set -euo pipefail
+          for role in server k6; do
+            for _ in $(seq 60); do
+              state="$(aws lightsail get-instance --instance-name "$NAME-$role" --query instance.state.name --output text)"
+              [[ "$state" == running ]] && break
+              sleep 5
+            done
+            public="$(aws lightsail get-instance --instance-name "$NAME-$role" --query instance.publicIpAddress --output text)"
+            private="$(aws lightsail get-instance --instance-name "$NAME-$role" --query instance.privateIpAddress --output text)"
+            echo "${role^^}_IP=$public" >> "$GITHUB_ENV"
+            echo "${role^^}_PRIVATE_IP=$private" >> "$GITHUB_ENV"
+            for _ in $(seq 60); do
+              $SSH "ubuntu@$public" true 2>/dev/null && break
+              sleep 5
+            done
+            # Docker is installed by the user data script.
+            $SSH "ubuntu@$public" 'cloud-init status --wait > /dev/null; docker --version'
+          done
+
+      - name: Start the server
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          $SSH "ubuntu@$SERVER_IP" 'mkdir -p inklayer/loadtest/results inklayer/deploy/lightsail'
+          $SCP loadtest/docker-compose.yml loadtest/stats.sh loadtest/fake-gitlab.py "ubuntu@$SERVER_IP:inklayer/loadtest/"
+          $SCP deploy/lightsail/Caddyfile "ubuntu@$SERVER_IP:inklayer/deploy/lightsail/"
+          echo "$GHCR_TOKEN" | $SSH "ubuntu@$SERVER_IP" "docker login ghcr.io -u '${{ github.actor }}' --password-stdin > /dev/null"
+          # Ports are published on the private address only: k6 reaches them from the other instance, the internet can't.
+          $SSH "ubuntu@$SERVER_IP" "cd inklayer/loadtest && \
+            export INKLAYER_IMAGE='$IMAGE' INKLAYER_LOADTEST_BIND='$SERVER_PRIVATE_IP' \
+              INKLAYER_LOADTEST_PORT=443 INKLAYER_LOADTEST_OIDC_PORT=8081 \
+              INKLAYER_LOADTEST_OIDC_URL='http://$SERVER_PRIVATE_IP:8081' INKLAYER_LOADTEST_CPUS=2 && \
+            docker compose pull --quiet && docker compose up -d caddy fake-gitlab-tls && \
+            docker image inspect --format '{{index .RepoDigests 0}}' \"\$INKLAYER_IMAGE\" && \
+            (nohup ./stats.sh inklayer-loadtest-server-1 3 < /dev/null > results/stats.csv 2>/dev/null &)"
+
+      - name: Run k6
+        id: k6
+        run: |
+          set -euo pipefail
+          $SSH "ubuntu@$K6_IP" 'mkdir -p loadtest/results && chmod 777 loadtest/results'
+          $SCP -r loadtest/k6 "ubuntu@$K6_IP:loadtest/"
+          if [[ "$PROFILE" == capacity ]]; then
+            vars="-e STEPS=$STEPS -e STEP_SECONDS=$STEP_SECONDS -e MAX_READ_RPS=$MAX_READ_RPS \
+                  -e MAX_WRITE_RPS=$MAX_WRITE_RPS -e MAX_LIVE_CONNECTIONS=$MAX_LIVE -e MAX_DOC_EDITORS=$MAX_DOC_EDITORS \
+                  -e MAX_PLAYERS=$MAX_MEDIA -e MAX_UPLOADS_PER_MIN=$MAX_MEDIA -e MAX_ISSUES_PER_MIN=$MAX_MEDIA"
+          else
+            vars="-e DURATION=$SOAK_DURATION -e READ_RPS=$SOAK_READ_RPS -e WRITE_RPS=$SOAK_WRITE_RPS -e DOC_EDITORS=$SOAK_DOC_EDITORS"
+          fi
+          date +%s > started-at
+          $SSH "ubuntu@$K6_IP" "docker run --rm --network host --ulimit nofile=65535:65535 \
+            --add-host 'inklayer.internal:$SERVER_PRIVATE_IP' \
+            -v \"\$HOME/loadtest/k6:/loadtest:ro\" -v \"\$HOME/loadtest/results:/results\" \
+            -e BASE_URL=https://inklayer.internal -e K6_INSECURE_SKIP_TLS_VERIFY=true -e K6_NO_USAGE_REPORT=true \
+            -e OIDC_METADATA='http://$SERVER_PRIVATE_IP:8081/loadtest/.well-known/openid-configuration' \
+            -e PROFILE=$PROFILE -e SEED_COMMENTS=$SEED_COMMENTS $vars \
+            grafana/k6:2.4.0 run --summary-export=/results/summary.json --out csv=/results/metrics.csv.gz /loadtest/inklayer.js" \
+            2>&1 | tee k6.log | { grep -v 'running (' || true; }
+
+      - name: Collect results
+        if: always() && env.SERVER_IP != ''
+        run: |
+          mkdir -p results
+          mv k6.log results/ 2>/dev/null || true
+          $SCP "ubuntu@$K6_IP:loadtest/results/*" results/ || true
+          $SCP "ubuntu@$SERVER_IP:inklayer/loadtest/results/stats.csv" results/ || true
+          $SSH "ubuntu@$SERVER_IP" 'cd inklayer/loadtest && INKLAYER_IMAGE=x docker compose logs --no-color server caddy fake-gitlab; \
+            docker inspect -f "restarts={{.RestartCount}} oomkilled={{.State.OOMKilled}}" inklayer-loadtest-server-1' \
+            > results/server.log 2>&1 || true
+          # CPU credits: below 100% the box has been bursting; near 0% it is down to its baseline speed.
+          if [[ -f started-at ]]; then
+            aws lightsail get-instance-metric-data --instance-name "$NAME-server" --metric-name BurstCapacityPercentage \
+              --period 300 --unit Percent --statistics Minimum \
+              --start-time "$(cat started-at)" --end-time "$(date +%s)" \
+              --query 'sort_by(metricData, &timestamp)[].[timestamp, minimum]' --output text > results/cpu-credits.txt || true
+          fi
+
+      - name: Summary
+        if: always() && env.SERVER_IP != ''
+        run: |
+          {
+            echo "## Load test on Lightsail ($PROFILE)"
+            echo
+            echo "Server: \`$BUNDLE\` in $AWS_REGION, image \`$IMAGE\`. k6 on a separate instance in the same zone."
+            echo
+            if [[ -f results/metrics.csv.gz ]]; then
+              if [[ "$PROFILE" == capacity ]]; then
+                python3 loadtest/report.py results/metrics.csv.gz --step-seconds "$STEP_SECONDS" --steps "$STEPS" --stats results/stats.csv
+              else
+                python3 loadtest/report.py results/metrics.csv.gz --step-seconds 300 --stats results/stats.csv | sed '/^\*\*Capacity/,$d'
+              fi
+            else
+              echo "k6 produced no results: see the k6 step and k6.log in the artifact."
+            fi
+            echo
+            echo "### CPU credits (BurstCapacityPercentage, lowest per 5 minutes)"
+            echo
+            echo "Near 0% means the box was down to its baseline CPU: numbers from that point on are what it can sustain."
+            echo
+            echo '```'
+            cat results/cpu-credits.txt 2>/dev/null || echo "(not available)"
+            echo '```'
+            echo
+            echo "Server container: $(tail -n 1 results/server.log 2>/dev/null)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: loadtest-lightsail-results
+          path: results
+          retention-days: 30
+
+      # Always runs, even when an earlier step failed or the run was cancelled, so nothing is left running (and billing).
+      - name: Delete instances
+        if: always()
+        run: |
+          for role in server k6; do
+            aws lightsail delete-instance --instance-name "$NAME-$role" --force-delete-add-ons > /dev/null 2>&1 \
+              && echo "Deleted $NAME-$role" || echo "No $NAME-$role to delete"
+          done
+          aws lightsail delete-key-pair --key-pair-name "$NAME" > /dev/null 2>&1 || true
+          rm -f key.pem

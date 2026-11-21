@@ -28,7 +28,7 @@ docker compose up -d          # serves on http://localhost:8080
 
 All data (a SQLite database) lives on the `inklayer-data` volume. Run a single replica on local disk, and put a TLS reverse proxy in front (see `deploy/Caddyfile.example`).
 
-**Production on AWS for about $7/month:** see [docs/deploy-aws-lightsail.md](docs/deploy-aws-lightsail.md). It covers Lightsail with Caddy HTTPS and continuous Litestream backups to S3.
+**Production on AWS for about $7/month:** see [docs/deploy-aws-lightsail.md](docs/deploy-aws-lightsail.md). It covers Lightsail with Caddy HTTPS and continuous Litestream backups to S3. To find out how much load that box can take, see [docs/load-testing.md](docs/load-testing.md).
 
 ## Development
 
