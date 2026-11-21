@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Paths are relative to this folder (npm runs workspace scripts here).
+// Paths are relative to this folder (pnpm runs workspace scripts here).
 // Two builds into dist/:
 //  - default: the module service worker (background.js) and the popup page (React + the shared shadcn theme)
 //  - live: the script that shows comments on pages, as one self-contained IIFE (live.js), because content scripts

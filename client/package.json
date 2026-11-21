@@ -2,17 +2,13 @@
   "name": "inklayer-client",
   "private": true,
   "license": "Apache-2.0",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "scripts": {
-    "build": "npm run build -w @inklayer/extension && npm run build -w @inklayer/viewer",
+    "build": "pnpm --filter @inklayer/extension build && pnpm --filter @inklayer/viewer build",
     "test": "vitest run",
-    "api:generate": "npx -y openapi-typescript@7.13.0 packages/api/openapi.json -o packages/api/src/schema.d.ts --root-types --root-types-no-schema-prefix --default-non-nullable false",
+    "api:generate": "pnpm dlx openapi-typescript@7.13.0 packages/api/openapi.json -o packages/api/src/schema.d.ts --root-types --root-types-no-schema-prefix --default-non-nullable false",
     "typecheck": "tsc -p packages/api && tsc -p packages/overlay && tsc -p packages/ui && tsc -p packages/docs && tsc -p apps/extension && tsc -p apps/viewer && tsc -p apps/site && tsc -p test",
-    "licenses": "license-checker-rseidelsohn --excludePrivatePackages --onlyAllow \"MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;BlueOak-1.0.0;CC0-1.0;MPL-2.0;CC-BY-3.0;OFL-1.1;Unlicense;EPL-2.0\" --excludePackages \"fetch-cookie@2.2.0;argparse@3.0.4\" --summary",
-    "build:site": "npm run build -w @inklayer/site",
+    "licenses": "node scripts/check-licenses.mjs",
+    "build:site": "pnpm --filter @inklayer/site build",
     "lint": "biome ci .",
     "format": "biome check --write ."
   },
@@ -20,18 +16,15 @@
     "@biomejs/biome": "2.6.8",
     "@types/chrome": "0.3.7",
     "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.6",
     "jsdom": "31.0.1",
-    "license-checker-rseidelsohn": "5.0.1",
     "typescript": "7.0.2",
     "vite": "8.3.8",
     "vitest": "5.1.1"
   },
   "type": "module",
   "engines": {
-    "node": ">=26"
-  },
-  "overrides": {
-    "minimatch": "^11.0.1",
-    "glob": "^14.0.2"
+    "node": ">=26",
+    "pnpm": "12.21.0"
   }
 }

@@ -28,5 +28,9 @@
     "y-codemirror.next": "0.3.6",
     "y-protocols": "1.0.7",
     "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "@types/markdown-it-emoji": "^3.0.1",
+    "@types/markdown-it-footnote": "^3.0.4"
   }
 }

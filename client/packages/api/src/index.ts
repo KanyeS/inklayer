@@ -3,7 +3,7 @@ import type { HttpMethod, MediaType, PathsWithMethod, RequiredKeysOf } from "ope
 import type { paths } from "./schema";
 
 /**
- * The server's API, typed from its OpenAPI document. The types come from `schema.d.ts`, which `npm run api:generate`
+ * The server's API, typed from its OpenAPI document. The types come from `schema.d.ts`, which `pnpm api:generate`
  * writes from `openapi.json`; a server test keeps that file in step with the server, so a change on one side that the
  * other doesn't expect fails a build instead of a user's request.
  */

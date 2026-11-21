@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@fontsource-variable/outfit": "5.3.0",
-    "@inklayer/api": "*",
-    "@inklayer/overlay": "*",
-    "@inklayer/ui": "*",
+    "@inklayer/api": "workspace:*",
+    "@inklayer/overlay": "workspace:*",
+    "@inklayer/ui": "workspace:*",
     "@microsoft/signalr": "10.0.11",
     "preact": "11.2.0",
     "react": "19.3.1",

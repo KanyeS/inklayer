@@ -5,8 +5,9 @@
 FROM --platform=$BUILDPLATFORM node:26-alpine AS client
 WORKDIR /src/client
 COPY client/ ./
-RUN npm ci --no-audit --no-fund \
- && npm run build -w @inklayer/viewer
+RUN npm install -g --no-audit --no-fund "pnpm@$(node -p 'require("./package.json").engines.pnpm')" \
+ && pnpm install --frozen-lockfile \
+ && pnpm --filter @inklayer/viewer build
 
 # The SDK stage runs on the build machine's own architecture and cross-compiles for the
 # target (amd64/arm64). Multi-arch images build fast, with no QEMU emulation.
