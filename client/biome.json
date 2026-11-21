@@ -12,7 +12,7 @@
       "**",
       "!**/dist",
       "!**/node_modules",
-      "!**/package-lock.json",
+      "!**/pnpm-lock.yaml",
       "!apps/site/public",
       "!packages/api/openapi.json",
       "!packages/api/src/schema.d.ts"

@@ -7,7 +7,7 @@ namespace Inklayer.Tests.Api;
 /// <summary>
 /// The client generates its API types from a copy of the OpenAPI document (<c>client/packages/api/openapi.json</c>).
 /// This test fails when the server's document no longer matches that copy, so the two can't drift apart.
-/// Run it with <c>INKLAYER_UPDATE_OPENAPI=1</c> to rewrite the copy, then run <c>npm run api:generate</c> in <c>client/</c>.
+/// Run it with <c>INKLAYER_UPDATE_OPENAPI=1</c> to rewrite the copy, then run <c>pnpm api:generate</c> in <c>client/</c>.
 /// </summary>
 [Collection(ApiTestGroup.Name)]
 public sealed class OpenApiContractTests(InklayerApiFactory factory)
@@ -34,7 +34,7 @@ public sealed class OpenApiContractTests(InklayerApiFactory factory)
         var committed = File.Exists(path) ? (await File.ReadAllTextAsync(path)).ReplaceLineEndings("\n") : "";
         Assert.True(
             committed == current,
-            "client/packages/api/openapi.json is out of date. Run the server tests with INKLAYER_UPDATE_OPENAPI=1, then `npm run api:generate` in client/.");
+            "client/packages/api/openapi.json is out of date. Run the server tests with INKLAYER_UPDATE_OPENAPI=1, then `pnpm api:generate` in client/.");
     }
 
     private static string RepositoryRoot()

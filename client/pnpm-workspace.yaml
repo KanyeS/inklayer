@@ -1,0 +1,38 @@
+# pnpm workspace and supply-chain settings (pnpm 12, pinned by engines.pnpm in package.json: not packageManager, which
+# makes pnpm 12 write a two-document lockfile that Dependabot cannot read for security alerts yet).
+packages:
+  - packages/*
+  - apps/*
+
+# Refuse any package version (direct or transitive) published less than 3 days ago: most hijacked releases are
+# found and pulled within that window. Dependabot waits 7 days before proposing version updates (.github/dependabot.yml);
+# for an urgent fix that is younger, add the package to minimumReleaseAgeExclude for as long as needed.
+minimumReleaseAge: 4320
+# Exact versions let through early. pnpm drops entries once they are no longer needed (minimumReleaseAgeExcludePrune).
+# These were already pinned in the npm lockfile when the repo moved to pnpm (2026-11-21).
+minimumReleaseAgeExclude:
+  - "@tanstack/query-core@5.108.1"
+  - "@tanstack/react-query@5.108.1"
+  - "@vitest/mocker@5.1.1"
+  - "@vitest/spy@5.1.1"
+  - lucide@1.76.0
+  - vitest@5.1.1
+minimumReleaseAgeExcludePrune: true
+
+# Fail when a package version drops the trust evidence earlier versions had (trusted publishing or provenance), a
+# common sign of a stolen publish token.
+trustPolicy: no-downgrade
+
+# Install scripts of dependencies never run unless listed here (strictDepBuilds, on by default, fails the install
+# when an unlisted package wants to run one).
+allowBuilds: {}
+
+# Under npm's flat node_modules these type packages saw markdown-it 15's own types; pnpm isolates them with the stale
+# @types/markdown-it 14 instead. Resolving markdown-it as a peer gives them the real one again.
+packageExtensions:
+  "@types/markdown-it-emoji":
+    peerDependencies:
+      markdown-it: "*"
+  "@types/markdown-it-footnote":
+    peerDependencies:
+      markdown-it: "*"

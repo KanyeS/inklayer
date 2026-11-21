@@ -24,8 +24,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: client/.nvmrc
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+      # pnpm at the exact version package.json's engines.pnpm names (pnpm refuses to run at any other).
+      - run: npm install -g "pnpm@$(node -p 'require("./package.json").engines.pnpm')"
 
       - id: version
         run: |
@@ -45,10 +45,10 @@ jobs:
             m.version = process.env.VERSION.split("-")[0];
             fs.writeFileSync(p, JSON.stringify(m, null, 2) + "\n");'
 
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm test
+      - run: pnpm run build
 
       - name: Zip the builds
         env:

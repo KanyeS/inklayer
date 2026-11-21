@@ -66,21 +66,21 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: client/.nvmrc
-          cache: npm
-          cache-dependency-path: client/package-lock.json
-      - run: npm ci
+      # pnpm at the exact version package.json's engines.pnpm names (pnpm refuses to run at any other).
+      - run: npm install -g "pnpm@$(node -p 'require("./package.json").engines.pnpm')"
+      - run: pnpm install --frozen-lockfile
       # Shipped dependencies only: dev tools (Vite, Vitest, Biome) never reach users.
-      - name: Known vulnerabilities (npm, high and critical)
-        run: npm audit --omit=dev --audit-level=high
-      - run: npm run lint
+      - name: Known vulnerabilities (npm registry, high and critical)
+        run: pnpm audit --prod --audit-level high
+      - run: pnpm run lint
       - name: API types match openapi.json (the server tests keep openapi.json in step with the server)
-        run: npm run api:generate && git diff --exit-code packages/api/src/schema.d.ts
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npm run build:site
+        run: pnpm run api:generate && git diff --exit-code packages/api/src/schema.d.ts
+      - run: pnpm run typecheck
+      - run: pnpm test
+      - run: pnpm run build
+      - run: pnpm run build:site
       - name: Dependency licence check (permissive only)
-        run: npm run licenses
+        run: pnpm run licenses
       - uses: actions/upload-artifact@v7
         with:
           name: inklayer-extension

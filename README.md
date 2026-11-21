@@ -16,7 +16,7 @@ Comment on any web page, right on the page, with the browser extension (Chrome o
 | `client/packages/overlay/` | Annotation overlay drawn on pages: anchoring, drawing tools, and the small DOM helpers the extension and site share |
 | `client/packages/docs/` | Docs core shared by the viewer and the site: Markdown rendering, the live editor, formatting |
 | `client/packages/ui/` | The theme and shadcn components |
-| `client/apps/site/` | The showcase at [inklayer.online](https://inklayer.online), built on the overlay package (`npm run build:site`) |
+| `client/apps/site/` | The showcase at [inklayer.online](https://inklayer.online), built on the overlay package (`pnpm build:site`) |
 | `deploy/` | Dockerfile, docker-compose, reverse-proxy examples |
 
 ## Self-hosting
@@ -43,7 +43,7 @@ dotnet run --project src/Inklayer.Api        # app on http://localhost:5048 (dat
 Build the web app into the server's `wwwroot` first (once, or after client changes):
 
 ```bash
-cd client && npm ci && npm run build
+cd client && pnpm install && pnpm build
 ```
 
 To sign in locally, create a Google OAuth client (type "Web application") with redirect URI `http://localhost:5048/auth/callback/google`, then:
@@ -75,15 +75,15 @@ Then open <http://localhost:5048/auth/login>.
 
 ### Browser extension
 
-Requires Node.js 26 (LTS; `client/.nvmrc`).
+Requires Node.js 26 (LTS; `client/.nvmrc`) and pnpm (`npm install -g pnpm@<version>`, with the version in `client/package.json` under `engines.pnpm`).
 
 ```bash
 cd client
-npm ci
-npm run lint         # Biome: lint and formatting (npm run format fixes what it can)
-npm run typecheck
-npm test             # unit tests, plus architecture tests (client/test/) that check the code's structure
-npm run build        # Chrome: client/apps/extension/dist, Firefox: client/apps/extension/dist-firefox
+pnpm install
+pnpm lint            # Biome: lint and formatting (pnpm format fixes what it can)
+pnpm typecheck
+pnpm test            # unit tests, plus architecture tests (client/test/) that check the code's structure
+pnpm build           # Chrome: client/apps/extension/dist, Firefox: client/apps/extension/dist-firefox
 ```
 
 To install it:
