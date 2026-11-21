@@ -275,10 +275,12 @@ describe("making a comment", () => {
         busy: false,
         attachContext: true,
         onAttachContext,
+        issueTitleHint: true,
         onSave,
         onCancel: vi.fn(),
       }),
     );
+    expect(box.textContent).toContain("The first line becomes the title of any issue made from it.");
     clickButton(box, "Save");
     expect(onSave).toHaveBeenCalledOnce();
     const attach = box.querySelector<HTMLInputElement>(".attach input") as HTMLInputElement;
@@ -295,11 +297,13 @@ describe("making a comment", () => {
         busy: true,
         attachContext: null,
         onAttachContext: vi.fn(),
+        issueTitleHint: false,
         onSave: vi.fn(),
         onCancel: vi.fn(),
       }),
     );
     expect(box.querySelector(".attach")).toBeNull();
+    expect(box.textContent).not.toContain("becomes the title");
     expect(box.querySelector<HTMLButtonElement>(".primary")?.textContent).toBe("Saving…");
     expect(box.querySelector<HTMLButtonElement>(".primary")?.disabled).toBe(true);
   });

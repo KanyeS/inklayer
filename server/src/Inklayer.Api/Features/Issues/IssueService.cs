@@ -438,8 +438,19 @@ internal sealed partial class IssueService(
             {
                 body.AppendLine($"- {n.Method} {n.Url} → {(n.Status == 0 ? "failed" : n.Status)}");
             }
+        }
 
-            if (await db.AnnotationScreenshots.AnyAsync(s => s.AnnotationId == comment.Id, ct))
+        // Shown in the issue from its public address; the comment's page has it too.
+        if (await db.AnnotationScreenshots.SingleOrDefaultAsync(s => s.AnnotationId == comment.Id, ct) is { } screenshot)
+        {
+            if (origin.Length > 0)
+            {
+                screenshot.PublicToken ??= PublicMediaEndpoints.NewToken();
+                await db.SaveChangesAsync(ct);
+                body.AppendLine("**Screenshot:**");
+                body.AppendLine($"![Screenshot]({origin}{PublicMediaEndpoints.PathPrefix}/{screenshot.PublicToken}.{PublicMediaEndpoints.Extension(screenshot.ContentType)})");
+            }
+            else
             {
                 body.AppendLine($"**Screenshot:** {origin}/comments/{comment.Id}");
             }

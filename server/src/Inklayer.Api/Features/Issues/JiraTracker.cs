@@ -120,7 +120,8 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIss
     {
         type = "doc",
         version = 1,
-        content = text.Split('\n').Select(line => line.Length == 0
+        // Markdown images become their address: Jira can't show an image from elsewhere in an API-made issue.
+        content = text.Split('\n').Select(line => Regex.Replace(line, @"^!\[([^\]]*)\]\((https?://[^)\s]+)\)$", "$1: $2")).Select(line => line.Length == 0
             ? (object)new { type = "paragraph", content = Array.Empty<object>() }
             : new { type = "paragraph", content = new object[] { new { type = "text", text = line } } }).ToArray(),
     };

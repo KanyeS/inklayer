@@ -209,6 +209,8 @@ internal sealed class Trackers(IHttpClientFactory httpClients)
     {
         var html = string.Join("<br>", text.Split('\n').Select(WebUtility.HtmlEncode));
         html = Regex.Replace(html, @"\*\*(.+?)\*\*", "<b>$1</b>");
+        // Images before links: an image's markdown contains a link's.
+        html = Regex.Replace(html, @"!\[([^\]]*)\]\((https?://[^)\s]+)\)", "<img src=\"$2\" alt=\"$1\">");
         return Regex.Replace(html, @"\[([^\]]+)\]\((https?://[^)\s]+)\)", "<a href=\"$2\">$1</a>");
     }
 

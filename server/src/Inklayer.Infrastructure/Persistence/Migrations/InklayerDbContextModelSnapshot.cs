@@ -248,10 +248,17 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<int>("Height")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("PublicToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Width")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("AnnotationId");
+
+                    b.HasIndex("PublicToken")
+                        .IsUnique();
 
                     b.ToTable("AnnotationScreenshots");
                 });

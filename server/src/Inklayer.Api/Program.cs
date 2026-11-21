@@ -59,6 +59,7 @@ try
     app.MapAdminEndpoints();
     app.MapAnnotationEndpoints();
     app.MapContextEndpoints();
+    app.MapPublicMediaEndpoints();
     app.MapNotificationEndpoints();
     app.MapIssueEndpoints();
     app.MapTrackerAccountEndpoints();

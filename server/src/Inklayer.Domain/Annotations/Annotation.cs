@@ -186,4 +186,10 @@ public sealed class AnnotationScreenshot
     public int Height { get; set; }
 
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// A long random token for the screenshot's public address (<c>/media/&lt;token&gt;.png</c>), made when it's first put in
+    /// an issue, so trackers can show it. Null until then.
+    /// </summary>
+    public string? PublicToken { get; set; }
 }

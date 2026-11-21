@@ -56,6 +56,8 @@ internal sealed class AnnotationScreenshotConfiguration : IEntityTypeConfigurati
     {
         builder.HasKey(s => s.AnnotationId);
         builder.Property(s => s.ContentType).HasMaxLength(32);
+        builder.Property(s => s.PublicToken).HasMaxLength(64);
+        builder.HasIndex(s => s.PublicToken).IsUnique();
         builder.HasOne<Annotation>().WithOne().HasForeignKey<AnnotationScreenshot>(s => s.AnnotationId).OnDelete(DeleteBehavior.Cascade);
     }
 }

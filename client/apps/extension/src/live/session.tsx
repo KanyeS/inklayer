@@ -711,6 +711,7 @@ export class LiveSession {
       }),
       busy: this.#busy,
       attachContext: this.#init.features.bugContext ? this.#attachContext : null,
+      issueTitleHint: this.#init.features.issueTrackers,
       onAttachContext: (attach) => {
         this.#attachContext = attach;
         remember({ attachContext: attach });

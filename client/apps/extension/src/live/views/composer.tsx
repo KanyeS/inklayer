@@ -120,6 +120,8 @@ export interface DraftBoxOptions {
   /** Null when bug context is turned off for this server. */
   attachContext: boolean | null;
   onAttachContext(attach: boolean): void;
+  /** Issue trackers are on: say that the first line becomes an issue's title. */
+  issueTitleHint: boolean;
   onSave(): void;
   onCancel(): void;
 }
@@ -130,6 +132,7 @@ export function draftBox(o: DraftBoxOptions): ComponentChild {
     <div className="draft">
       <strong>New comment</strong>
       {o.input}
+      {o.issueTitleHint && <p className="hint">The first line becomes the title of any issue made from it.</p>}
       {o.scope}
       {o.attachContext !== null && (
         <label
