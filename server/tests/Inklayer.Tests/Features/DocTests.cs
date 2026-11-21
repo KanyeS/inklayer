@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Inklayer.Api.Features.Docs;
 using Inklayer.Infrastructure.Persistence;
 using Inklayer.Tests.Infrastructure;
@@ -173,6 +174,41 @@ public sealed class DocTests(InklayerApiFactory factory)
         await commenter.DeleteAsync(new Uri($"/api/orgs/{orgId}/docs/folders?path=Empty", UriKind.Relative)).ExpectAsync(HttpStatusCode.NoContent);
         using var treeResponse = await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs", UriKind.Relative));
         Assert.Equal(["Plans", "Plans/2026"], (await treeResponse.ReadAsync<DocTreeDto>()).Folders);
+        admin.Dispose();
+        commenter.Dispose();
+        viewer.Dispose();
+    }
+
+    [Fact]
+    public async Task A_folder_with_more_docs_than_a_batch_moves_whole_with_history()
+    {
+        // The move loads its docs a batch at a time (20); each one must still move, get its history entry, and keep its links.
+        var (admin, orgId, commenter, viewer) = await OrgAsync();
+        var docs = new List<DocSummaryDto>();
+        for (var i = 0; i < 45; i++)
+        {
+            docs.Add(await CreateAsync(commenter, orgId, $"Spec {i:00}", i % 3 == 0 ? "Big/Deeper" : "Big"));
+        }
+
+        var outside = await CreateAsync(commenter, orgId, "Index", "Elsewhere");
+        await WriteAsync(outside.Id, "[[Big/Spec 07]]");
+
+        // The doc outside that links one of them is named for the client to rewrite its link.
+        using (var moved = await commenter.PatchJsonAsync($"/api/orgs/{orgId}/docs/folders", new { from = "Big", to = "Archive" }))
+        {
+            var relink = (await moved.ReadAsync<JsonElement>()).GetProperty("relinkDocs").EnumerateArray().Select(e => e.GetGuid());
+            Assert.Equal([outside.Id], relink);
+        }
+
+        for (var i = 0; i < docs.Count; i++)
+        {
+            var doc = await GetAsync(viewer, docs[i].Id);
+            Assert.Equal(i % 3 == 0 ? "Archive/Deeper" : "Archive", doc.Folder);
+            using var history = await viewer.GetAsync(new Uri($"/api/docs/{docs[i].Id}/history", UriKind.Relative));
+            Assert.Equal("moved", (await history.ReadAsync<List<DocRevisionDto>>()).First().Action);
+        }
+
+        Assert.Equal("Elsewhere", (await GetAsync(viewer, outside.Id)).Folder);
         admin.Dispose();
         commenter.Dispose();
         viewer.Dispose();

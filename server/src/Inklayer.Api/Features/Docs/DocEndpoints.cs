@@ -366,6 +366,9 @@ internal static class DocEndpoints
         return TypedResults.Created($"/api/orgs/{orgId}/docs", new DocFolderResponse(path));
     }
 
+    /// <summary>Docs loaded at a time when a folder moves.</summary>
+    private const int MoveBatchSize = 20;
+
     private static async Task<IResult> MoveFolderAsync(
         Guid orgId, MoveFolderRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
@@ -390,15 +393,17 @@ internal static class DocEndpoints
             return Invalid("to", "A folder can't go inside itself.");
         }
 
-        var moving = await db.Docs.Where(d => d.OrganizationId == orgId && d.DeletedAt == null).ToListAsync(ct);
-        moving = [.. moving.Where(d => DocPaths.IsWithin(d.Folder, from))];
-        var others = await db.Docs.AsNoTracking().Where(d => d.OrganizationId == orgId && d.DeletedAt == null).Select(d => new { d.Id, d.PathKey }).ToListAsync(ct);
+        // Only where each doc is, for the whole organisation: its text and editing state (up to a few MB a doc) are
+        // loaded just for the docs that move, a batch at a time, so a big organisation can't run the server out of memory.
+        var all = await db.Docs.AsNoTracking().Where(d => d.OrganizationId == orgId && d.DeletedAt == null)
+            .Select(d => new { d.Id, d.Folder, d.Title, d.PathKey }).ToListAsync(ct);
+        var moving = all.Where(d => DocPaths.IsWithin(d.Folder, from)).ToList();
         var renamedFolder = (string f) => to + f[from.Length..];
         var movingIds = moving.Select(d => d.Id).ToHashSet();
         foreach (var doc in moving)
         {
             var key = DocPaths.Key(renamedFolder(doc.Folder), doc.Title);
-            if (others.Any(o => o.PathKey == key && !movingIds.Contains(o.Id)))
+            if (all.Any(o => o.PathKey == key && !movingIds.Contains(o.Id)))
             {
                 return Taken(renamedFolder(doc.Folder), doc.Title);
             }
@@ -410,19 +415,26 @@ internal static class DocEndpoints
         var moves = new List<DocMove>();
         var relink = new HashSet<Guid>();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        foreach (var doc in moving)
+        foreach (var batch in moving.Select(d => d.Id).Chunk(MoveBatchSize))
         {
-            keys.Add(doc.PathKey);
-            relink.UnionWith(await db.DocLinks.Where(l => l.TargetDocId == doc.Id && l.SourceDocId != null && !movingIds.Contains(l.SourceDocId.Value))
-                .Select(l => l.SourceDocId!.Value).ToListAsync(ct));
-            var oldPathKey = doc.PathKey;
-            doc.Place(renamedFolder(doc.Folder), doc.Title);
-            moves.Add(new DocMove(doc.Id, oldPathKey, doc.TitleKey, doc.Folder, doc.Title));
-            doc.Version++;
-            doc.UpdatedAt = now;
-            doc.UpdatedByUserId = userId;
-            keys.Add(doc.PathKey);
-            db.DocRevisions.Add(Revision(doc, DocActions.Moved, userId, now));
+            foreach (var doc in await db.Docs.Where(d => batch.Contains(d.Id)).ToListAsync(ct))
+            {
+                keys.Add(doc.PathKey);
+                relink.UnionWith(await db.DocLinks.Where(l => l.TargetDocId == doc.Id && l.SourceDocId != null && !movingIds.Contains(l.SourceDocId.Value))
+                    .Select(l => l.SourceDocId!.Value).ToListAsync(ct));
+                var oldPathKey = doc.PathKey;
+                doc.Place(renamedFolder(doc.Folder), doc.Title);
+                moves.Add(new DocMove(doc.Id, oldPathKey, doc.TitleKey, doc.Folder, doc.Title));
+                doc.Version++;
+                doc.UpdatedAt = now;
+                doc.UpdatedByUserId = userId;
+                keys.Add(doc.PathKey);
+                db.DocRevisions.Add(Revision(doc, DocActions.Moved, userId, now));
+            }
+
+            // Saved within the transaction, then let go of.
+            await db.SaveChangesAsync(ct);
+            db.ChangeTracker.Clear();
         }
 
         var folderRows = await db.DocFolders.Where(f => f.OrganizationId == orgId).ToListAsync(ct);

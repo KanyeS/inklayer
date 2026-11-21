@@ -11,13 +11,19 @@ namespace Inklayer.Api.Hosting;
 /// </summary>
 internal static class OpenApiSchemaRules
 {
-    public static OpenApiOptions UseInklayerSchemaRules(this OpenApiOptions options) =>
-        options.AddSchemaTransformer((schema, context, _) =>
+    public static OpenApiOptions UseInklayerSchemaRules(this OpenApiOptions options)
+    {
+        // Stored JSON passed through as it is: any JSON value, as JsonElement always was.
+        options.CreateSchemaReferenceId = info => info.Type == typeof(Features.Annotations.RawJson)
+            ? "JsonElement"
+            : OpenApiOptions.CreateDefaultSchemaReferenceId(info);
+        return options.AddSchemaTransformer((schema, context, _) =>
         {
             Apply(schema, context.JsonTypeInfo);
             ListAllowedValues(schema, context.JsonPropertyInfo?.AttributeProvider);
             return Task.CompletedTask;
         });
+    }
 
     private static void Apply(OpenApiSchema schema, System.Text.Json.Serialization.Metadata.JsonTypeInfo info)
     {

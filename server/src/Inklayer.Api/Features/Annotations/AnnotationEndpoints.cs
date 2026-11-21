@@ -540,7 +540,7 @@ internal static partial class AnnotationEndpoints
     }
 
     internal static AnnotationResponse ToResponse(Annotation a, Dictionary<Guid, AuthorSummary> authors, Role role, Guid userId) => new(
-        a.Id, a.ProjectId, a.PageUrl, a.Kind, a.Status, a.Body, a.Color, Parse(a.Anchor), Parse(a.Geometry), a.ViewportWidth, a.Version,
+        a.Id, a.ProjectId, a.PageUrl, a.Kind, a.Status, a.Body, a.Color, new RawJson(a.Anchor), new RawJson(a.Geometry), a.ViewportWidth, a.Version,
         authors.GetValueOrDefault(a.AuthorUserId) ?? new AuthorSummary(a.AuthorUserId, "", null),
         a.CreatedAt, a.UpdatedAt, a.ResolvedAt, a.ResolvedByUserId,
         CanEdit(a, role, userId), CanEdit(a, role, userId), a.OrganizationId);

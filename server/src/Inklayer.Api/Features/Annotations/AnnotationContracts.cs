@@ -40,7 +40,7 @@ public sealed record CreateLiveAnnotationRequest(
 /// <param name="MentionedIn">Docs that link this comment.</param>
 public sealed record AnnotationResponse(
     Guid Id, Guid ProjectId, string PageUrl, AnnotationKind Kind, AnnotationStatus Status, string Body, string Color,
-    JsonElement Anchor, JsonElement Geometry, int ViewportWidth, int Version,
+    RawJson Anchor, RawJson Geometry, int ViewportWidth, int Version,
     AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ResolvedAt, Guid? ResolvedByUserId,
     bool CanEdit, bool CanDelete, Guid OrganizationId,
     IReadOnlyList<AnnotationDocLink>? DocLinks = null, IReadOnlyList<AnnotationMention>? MentionedIn = null,
