@@ -65,6 +65,8 @@ internal sealed class DocsRegistry(IOptions<PresenceOptions> options)
         return true;
     }
 
+    public int ConnectionCount => _connections.Count;
+
     public DocsConnection? Get(string connectionId) => _connections.GetValueOrDefault(connectionId);
 
     public DocsConnection? Remove(string connectionId) => _connections.TryRemove(connectionId, out var connection) ? connection : null;

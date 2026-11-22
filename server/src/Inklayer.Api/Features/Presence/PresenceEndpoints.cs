@@ -60,11 +60,23 @@ internal static class PresenceEndpoints
         return app;
     }
 
-    private static async Task<IResult> TicketAsync(CurrentUser currentUser, PresenceTickets tickets, IOptions<PresenceOptions> options, CancellationToken ct)
+    private static async Task<IResult> TicketAsync(
+        CurrentUser currentUser, PresenceTickets tickets, PresenceRegistry presence, Docs.DocsRegistry docs, IOptions<PresenceOptions> options,
+        HttpContext context, CancellationToken ct)
     {
         if (await currentUser.GetAsync(ct) is not { IsDisabled: false } user)
         {
             return Results.Unauthorized();
+        }
+
+        // Refused here, before a connection exists: both hubs take these tickets, and the clients retry with a back-off.
+        if (options.Value.MaxConnections > 0 && presence.ConnectionCount + docs.ConnectionCount >= options.Value.MaxConnections)
+        {
+            context.Response.Headers.RetryAfter = "30";
+            return Results.Problem(
+                title: "The server is busy.",
+                detail: "Too many live connections. Try again in a little while.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
         }
 
         var lifetime = options.Value.TicketLifetime;

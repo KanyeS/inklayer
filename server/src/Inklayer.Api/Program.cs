@@ -32,6 +32,7 @@ try
     builder.AddInklayerObservability();
     builder.Services.AddInklayerInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
     builder.Services.AddInklayerHosting(builder.Configuration);
+    builder.Services.AddInklayerLoadShedding(builder.Configuration);
     builder.Services.AddInklayerNetworkAccess(builder.Configuration);
     builder.Services.AddInklayerFeatureSwitches(builder.Configuration);
     builder.Services.AddInklayerMedia(builder.Configuration);
@@ -49,6 +50,7 @@ try
 
     app.UseInklayerHosting();
     app.UseViewerApp();
+    app.UseInklayerLoadShedding();
     app.UseInklayerAuth();
 
     app.MapInklayerHealthChecks();

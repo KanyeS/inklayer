@@ -1,3 +1,4 @@
+import { retryWhenBusy } from "@inklayer/api";
 import { getSettings, type Tokens, updateSettings } from "./settings";
 
 export const CLIENT_ID = "inklayer-extension";
@@ -96,15 +97,22 @@ export async function getAccessToken(forceRefresh = false): Promise<string> {
 
 class TokenError extends Error {}
 
+const tokenFetch = retryWhenBusy((request) => fetch(request));
+
 async function tokenRequest(serverUrl: string, form: Record<string, string>): Promise<Tokens> {
-  const response = await fetch(new URL("/connect/token", serverUrl), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(form),
-  });
+  const response = await tokenFetch(
+    new Request(new URL("/connect/token", serverUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(form),
+    }),
+  );
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  const message = String(body.error_description ?? body.error ?? `Token request failed (${response.status}).`);
+  // Only a refusal (such as an expired or revoked refresh token) signs out. A busy, restarting or unreachable server
+  // (5xx, or 429 from the sign-in rate limit) is temporary: stay signed in and try again on the next request.
   if (!response.ok)
-    throw new TokenError(String(body.error_description ?? body.error ?? `Token request failed (${response.status}).`));
+    throw response.status >= 500 || response.status === 429 ? new Error(message) : new TokenError(message);
   return {
     accessToken: String(body.access_token),
     refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,

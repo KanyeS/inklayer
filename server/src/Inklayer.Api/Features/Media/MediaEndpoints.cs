@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Annotations;
+using Inklayer.Api.Hosting;
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Infrastructure.Persistence;
@@ -27,6 +28,7 @@ internal static class MediaEndpoints
         var annotations = app.MapGroup("/api/annotations").WithTags("Annotations").RequireAuthorization();
         annotations.MapPut("/{annotationId:guid}/media/{kind}", PutAsync).Produces(StatusCodes.Status204NoContent)
             .WithMetadata(new RequestSizeLimitAttribute(AnnotationMedia.MaxVideoBytes + (1024 * 1024)))
+            .NotLoadLimited() // streamed to a temporary file for as long as the upload takes; holding a turn that long would lock others out
             .WithSummary("Add a file to your comment: kind fullpage (a WebP, JPEG or PNG, at most 15 MB), video (WebM or MP4, at most 40 MB), or thumbnail (the video's still, at most 2 MB)");
         annotations.MapGet("/{annotationId:guid}/media/{kind}", GetAsync).WithSummary("A comment's full-page screenshot (fullpage) or recording (video)");
         return app;

@@ -1,4 +1,4 @@
-import { ApiError, createApi } from "@inklayer/api";
+import { ApiError, createApi, retryWhenBusy } from "@inklayer/api";
 import { getAccessToken, NotSignedInError } from "./auth";
 import { getSettings } from "./settings";
 
@@ -36,9 +36,12 @@ async function authorizedFetch(request: Request): Promise<Response> {
 /** The Inklayer API, typed from the server's OpenAPI document (see @inklayer/api). */
 export const api = createApi({ baseUrl: PLACEHOLDER, fetch: authorizedFetch });
 
+/** For requests made outside `api`: sent again, after a wait, when the server is too busy to take them. */
+const busyAwareFetch = retryWhenBusy(authorizedFetch);
+
 /** Sends raw bytes (such as a screenshot) to `path`. */
 export async function putBytes(path: string, body: Blob): Promise<void> {
-  const response = await authorizedFetch(
+  const response = await busyAwareFetch(
     new Request(new URL(path, PLACEHOLDER), { method: "PUT", headers: { "Content-Type": body.type }, body }),
   );
   if (!response.ok) throw new ApiError(response.status, `Request failed (${response.status})`, null);
@@ -46,7 +49,7 @@ export async function putBytes(path: string, body: Blob): Promise<void> {
 
 /** Fetches binary content (such as a screenshot). Null if there's none (404). */
 export async function apiBytes(path: string): Promise<{ bytes: ArrayBuffer; type: string } | null> {
-  const response = await authorizedFetch(new Request(new URL(path, PLACEHOLDER)));
+  const response = await busyAwareFetch(new Request(new URL(path, PLACEHOLDER)));
   if (response.status === 404) return null;
   if (!response.ok) throw new ApiError(response.status, `Request failed (${response.status})`, null);
   return { bytes: await response.arrayBuffer(), type: response.headers.get("Content-Type") ?? "image/webp" };

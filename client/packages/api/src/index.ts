@@ -43,8 +43,34 @@ export type ResponseOf<P extends PathsWithMethod<paths, M>, M extends HttpMethod
   FetchResponse<NonNullable<paths[P][M]>, unknown, MediaType>["data"]
 >;
 
+/** How many times a request the server was too busy to take is sent again, and the longest wait between tries. */
+const BUSY_RETRIES = 3;
+const BUSY_MAX_WAIT_MS = 30_000;
+
+/**
+ * Wraps `fetch` so that a request the server was too busy to take (503 with Retry-After) is sent again after the wait it
+ * asks for, with some jitter so refused clients don't all come back at once. The server refuses before a request reaches
+ * its endpoint, so any request can be retried, writes included. Other failures are returned as they are. Unit-tested.
+ */
+export function retryWhenBusy(
+  send: (request: Request) => Promise<Response>,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    for (let attempt = 0; ; attempt++) {
+      // A request's body can only be sent once: send a copy while another try may follow.
+      const response = await send(attempt < BUSY_RETRIES ? request.clone() : request);
+      const retryAfter = Number(response.headers.get("Retry-After"));
+      if (response.status !== 503 || !(retryAfter > 0) || attempt >= BUSY_RETRIES) return response;
+      await response.body?.cancel();
+      await sleep(Math.min(retryAfter * 1000, BUSY_MAX_WAIT_MS) * (1 + Math.random() * 0.5));
+    }
+  };
+}
+
 export function createApi(options: ClientOptions): Api {
-  const client = createClient<paths>(options);
+  const send = options.fetch ?? ((request: Request) => globalThis.fetch(request));
+  const client = createClient<paths>({ ...options, fetch: retryWhenBusy(send) });
   const call =
     (send: (url: never, init?: never) => Promise<{ data?: unknown; error?: unknown; response: Response }>) =>
     async (url: string, init?: object) => {

@@ -240,4 +240,45 @@ public sealed class PresenceNetworkTests(InklayerApiFactory factory)
 
         member.Dispose();
     }
+
+    /// <summary>Changes a server-wide limit, so it's in this group: its tests run alone.</summary>
+    [Fact]
+    public async Task Past_the_server_wide_limit_new_live_connections_are_refused_until_one_closes()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var options = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<PresenceOptions>>().Value;
+        var registry = factory.Services.GetRequiredService<PresenceRegistry>();
+        var before = options.MaxConnections;
+        try
+        {
+            options.MaxConnections = registry.ConnectionCount + 1;
+            var first = await PresenceProbe.ConnectAsync(factory, admin);
+            await WaitUntilAsync(() => registry.ConnectionCount >= options.MaxConnections); // registered just after the handshake
+
+            using (var refused = await admin.PostJsonAsync("/api/presence/ticket", new { }))
+            {
+                Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+                Assert.Equal("30", refused.Headers.RetryAfter?.ToString());
+            }
+
+            await first.DisposeAsync();
+            await WaitUntilAsync(() => registry.ConnectionCount < options.MaxConnections);
+            await using var second = await PresenceProbe.ConnectAsync(factory, admin);
+            Assert.Equal(HubConnectionState.Connected, second.Connection.State);
+        }
+        finally
+        {
+            options.MaxConnections = before;
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        for (var i = 0; i < 100 && !condition(); i++)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.True(condition());
+    }
 }

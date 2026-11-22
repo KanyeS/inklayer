@@ -15,6 +15,13 @@ public sealed class PresenceOptions
     /// <summary>Open connections per user, across their browsers.</summary>
     public int MaxConnectionsPerUser { get; set; } = 5;
 
+    /// <summary>
+    /// Open live connections (presence and docs together) across everyone. Past this, new connections are refused with 503
+    /// and the clients try again later; each one costs memory, and on a small server they are what fills it.
+    /// 0 means no limit.
+    /// </summary>
+    public int MaxConnections { get; set; } = 300;
+
     /// <summary>Pages (tabs) one connection can be live on at once.</summary>
     public int MaxPagesPerConnection { get; set; } = 20;
 

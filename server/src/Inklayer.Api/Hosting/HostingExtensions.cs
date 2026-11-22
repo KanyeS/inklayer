@@ -46,7 +46,9 @@ internal static partial class HostingExtensions
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseSerilogRequestLogging(o =>
-            o.GetLevel = (ctx, _, ex) => ex is not null || ctx.Response.StatusCode >= 500
+            o.GetLevel = (ctx, _, ex) => ctx.Items.ContainsKey(LoadShedding.RefusedItem)
+                ? Serilog.Events.LogEventLevel.Debug // one warning a minute says it's refusing; a line per refusal would add to the load
+                : ex is not null || ctx.Response.StatusCode >= 500
                 ? Serilog.Events.LogEventLevel.Error
                 : ctx.Request.Path.StartsWithSegments("/health", StringComparison.Ordinal)
                     ? Serilog.Events.LogEventLevel.Verbose
