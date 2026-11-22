@@ -121,6 +121,8 @@ jobs:
           #!/bin/bash
           apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2
           usermod -aG docker ubuntu
+          # A 1 GB swap file, as on the production box: without it, a full 1 GB machine kills its biggest process.
+          fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
           EOF
           create() {
             aws lightsail create-instances --instance-names "$1" --bundle-id "$2" --blueprint-id ubuntu_24_04 \
@@ -219,6 +221,10 @@ jobs:
           $SSH "ubuntu@$SERVER_IP" 'cd inklayer/loadtest && INKLAYER_IMAGE=x docker compose logs --no-color server caddy; \
             docker inspect -f "restarts={{.RestartCount}} oomkilled={{.State.OOMKilled}}" inklayer-loadtest-server-1' \
             > results/server.log 2>&1 || true
+          # Why the server stopped, if it did: its exit, the kernel's out-of-memory kills, and the machine's memory and swap.
+          $SSH "ubuntu@$SERVER_IP" 'docker inspect -f "status={{.State.Status}} exit={{.State.ExitCode}} oomkilled={{.State.OOMKilled}} error={{.State.Error}} finished={{.State.FinishedAt}}" inklayer-loadtest-server-1; \
+            echo; free -m; swapon --show; echo; sudo dmesg -T | grep -iE "out of memory|oom|killed process" | tail -n 20' \
+            > results/server-exit.txt 2>&1 || true
           # CPU credits: below 100% the box has been bursting; near 0% it is down to its baseline speed.
           if [[ -f started-at ]]; then
             aws lightsail get-instance-metric-data --instance-name "$NAME-server" --metric-name BurstCapacityPercentage \
@@ -254,6 +260,10 @@ jobs:
             echo '```'
             echo
             echo "Server container: $(tail -n 1 results/server.log 2>/dev/null)"
+            echo
+            echo '```'
+            cat results/server-exit.txt 2>/dev/null || echo "(not available)"
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
