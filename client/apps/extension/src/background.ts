@@ -1,5 +1,6 @@
 import { api, type Me } from "./lib/api";
 import { NotSignedInError, redirectUri, signIn, signOut } from "./lib/auth";
+import { helperStatus } from "./lib/claude-helper";
 import { handleLive, isLiveRequest, type LiveRequest, openLiveInTab, stopLive, syncLiveScript } from "./lib/live";
 import type { Request, Response, StateResponse } from "./lib/messages";
 import { inbox, markRead, startNotifications } from "./lib/notifications";
@@ -7,7 +8,7 @@ import { acceptPort, forgetTab, isPresenceOn, PRESENCE_PORT, setPresence, stopPr
 import { isRecorderMessage, type RecorderMessage } from "./lib/recorder-protocol";
 import { handleRecorder, recordingDone, watchRecorderTabs } from "./lib/recorder-session";
 import type { RecordingDone, RecordingSignal } from "./lib/recordings";
-import { getSettings } from "./lib/settings";
+import { getSettings, updateSettings } from "./lib/settings";
 
 // The unread count on the toolbar icon.
 startNotifications();
@@ -121,6 +122,11 @@ async function handle(request: Request): Promise<unknown> {
       return null;
     case "connectedApps":
       return (await api.get("/api/me/apps")).length;
+    case "claudeStatus":
+      return helperStatus();
+    case "setClaudeImprove":
+      await updateSettings({ claudeImprove: request.on });
+      return helperStatus();
   }
 }
 

@@ -6,7 +6,7 @@ import { type FormEvent, useState } from "react";
 import { type StateResponse, send } from "@/lib/messages";
 import { normaliseServerUrl, updateSettings } from "@/lib/settings";
 import { requestSiteAccess } from "./browser";
-import { ErrorText, ServerLine } from "./parts";
+import { ClaudeImprove, ErrorText, ServerLine } from "./parts";
 
 /** Connecting to a server and signing in to it. */
 
@@ -96,6 +96,7 @@ export function Settings({
   return (
     <>
       <ServerLine url={state.serverUrl} />
+      {state.signedIn && <ClaudeImprove />}
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => void onBack()}>
           Back

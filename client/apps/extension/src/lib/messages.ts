@@ -1,4 +1,5 @@
 import type { Me } from "./api";
+import type { HelperStatus } from "./claude-helper";
 import type { Inbox } from "./notifications";
 
 /** Messages from the popup to the background worker, and what each one returns. */
@@ -11,7 +12,9 @@ export type Request =
   | { type: "setPresence"; tabId: number; on: boolean }
   | { type: "notifications" }
   | { type: "notificationsRead"; ids?: string[] }
-  | { type: "connectedApps" };
+  | { type: "connectedApps" }
+  | { type: "claudeStatus" }
+  | { type: "setClaudeImprove"; on: boolean };
 
 export interface StateResponse {
   serverUrl: string | null;
@@ -33,6 +36,9 @@ export interface ResponseMap {
   notificationsRead: null;
   /** How many AI assistants (MCP clients) the person has connected; the extension itself isn't one. */
   connectedApps: number;
+  /** The local Claude helper: turned on, allowed, installed. */
+  claudeStatus: HelperStatus;
+  setClaudeImprove: HelperStatus;
 }
 
 export async function send<K extends Request["type"]>(request: Extract<Request, { type: K }>): Promise<ResponseMap[K]> {

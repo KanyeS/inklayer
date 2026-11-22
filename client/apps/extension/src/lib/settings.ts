@@ -9,9 +9,11 @@ export interface Tokens {
 export interface Settings {
   serverUrl: string | null;
   tokens: Tokens | null;
+  /** The Improve button in the comment box, which uses the local Claude helper (see claude-helper.ts). */
+  claudeImprove: boolean;
 }
 
-const DEFAULTS: Settings = { serverUrl: null, tokens: null };
+const DEFAULTS: Settings = { serverUrl: null, tokens: null, claudeImprove: false };
 
 export async function getSettings(): Promise<Settings> {
   const stored = await chrome.storage.local.get(Object.keys(DEFAULTS));

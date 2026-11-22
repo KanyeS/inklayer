@@ -260,6 +260,18 @@ To start with features off, set them when the server starts. These are starting 
 
 For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the environment variable `Inklayer__Features__Mcp=false`.
 
+### Improving comments with Claude
+
+The comment box can have an **Improve** button that rewrites a rough draft ("button broke") into a clear comment the team can act on. It keeps your meaning, @mentions, [[doc links]] and #tags. It uses the [Claude Code](https://claude.com/claude-code) CLI already signed in on your computer, so it runs on your own Claude plan. The draft goes from the browser to Claude Code and back into the box, and nothing reaches the Inklayer server until you click Save. **Undo** puts your words back.
+
+It's off by default, and works in Chromium browsers (Chrome, Edge, Brave) on Linux and macOS:
+
+1. Install Claude Code and sign in (`claude`, then `/login`).
+2. From this repository, run `node client/apps/extension/native-host/install.mjs`. It registers a small helper the extension can talk to ([native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)).
+3. In the extension popup, open **Settings** and click **Improve comments with Claude**. Allow the permission it asks for. The popup says **Ready** once it finds the helper.
+
+See [native-host/README.md](client/apps/extension/native-host/README.md) for what the helper runs, and how to remove it.
+
 ### Using Inklayer from Claude (MCP)
 Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs in as you and can do what your role allows:
 - **Read:** comments and replies on a page, pages with comments, docs (search, read, links and backlinks), tags, history and activity.

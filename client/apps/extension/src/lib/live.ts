@@ -2,6 +2,7 @@ import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-
 import { api } from "./api";
 import { NotSignedInError } from "./auth";
 import { bytesToBase64 } from "./base64";
+import { helperEnabled, improveDraft } from "./claude-helper";
 import type { LiveInit, LiveRequest, PullRequestPage } from "./live-types";
 import { inbox, markRead } from "./notifications";
 import {
@@ -427,6 +428,12 @@ const HANDLERS: Handlers = {
     return null;
   },
   "live.font": () => panelFont(),
+
+  /* ---------------- the local Claude helper: the draft goes to Claude Code on this computer, not the server */
+  "live.improve": async ({ url, text, selector, elementText }) => {
+    if (!(await signedIn())) throw new NotSignedInError();
+    return improveDraft({ url, text, selector, elementText });
+  },
 };
 
 /* -------------------------------------------------------------- helpers */
@@ -452,13 +459,14 @@ function panelFont(): Promise<string> {
 
 /** Everything the panel needs to start on a page: the user's projects, the page's comments, and settings. */
 async function init(url: string): Promise<LiveInit> {
-  const [all, pages, stored, settings, on, pullRequest] = await Promise.all([
+  const [all, pages, stored, settings, on, pullRequest, claudeImprove] = await Promise.all([
     projects.get(),
     pageComments(url),
     chrome.storage.local.get(["lastLiveProjectId", SITE_PRODUCTS_KEY]),
     getSettings(),
     features.get(),
     pullRequestOf(url),
+    helperEnabled(),
   ]);
   const last = stored.lastLiveProjectId as string | undefined;
   return {
@@ -469,6 +477,7 @@ async function init(url: string): Promise<LiveInit> {
     serverUrl: new URL(settings.serverUrl ?? "").origin,
     features: on,
     pullRequest,
+    claudeImprove,
   };
 }
 

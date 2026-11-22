@@ -513,6 +513,18 @@ textarea::placeholder {
   gap: 6px;
   align-items: center;
 }
+/* Improve (the local Claude helper), at the end of a comment box's buttons, and its note under them. */
+.row > button.improve {
+  margin-left: auto;
+}
+.improve-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.improve-note.error {
+  color: var(--destructive);
+}
 .list {
   list-style: none;
   margin: 0;

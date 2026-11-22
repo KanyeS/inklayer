@@ -11,6 +11,9 @@ const PINNED_HINT = "Pinned in place. Click the pin icon to unpin, then drag the
  * Where the live panel sits, and dragging it there. The place and whether it's pinned are remembered in the
  * extension's storage, so they're the same on every site (and follow when another tab changes them).
  */
+/** How long after the last resize the panel redraws. */
+const RESIZE_REDRAW_MS = 200;
+
 export class PanelMover {
   readonly #host: HTMLElement;
   readonly #onNote: (text: string) => void;
@@ -25,7 +28,7 @@ export class PanelMover {
   /**
    * @param host The panel's host element, positioned with `right` and `bottom`.
    * @param onNote Shows a short message in the panel (how to move it while pinned).
-   * @param onChange The pinned state changed: redraw.
+   * @param onChange The pinned state changed, or the window was resized: redraw.
    */
   constructor(host: HTMLElement, onNote: (text: string) => void, onChange: () => void) {
     this.#host = host;
@@ -57,6 +60,16 @@ export class PanelMover {
       this.place();
     }
     return changed;
+  }
+
+  /** Resized: stay inside the window, and redraw once it settles, since "Made at …px wide" depends on the width. */
+  followWindowSize(): void {
+    let resizeTimer = 0;
+    window.addEventListener("resize", () => {
+      this.place();
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => this.#onChange(), RESIZE_REDRAW_MS);
+    });
   }
 
   /** Puts the panel at its position, kept inside the window. */

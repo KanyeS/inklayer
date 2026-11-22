@@ -1,0 +1,216 @@
+import { anchorFor, type Draft } from "@inklayer/overlay";
+import { h } from "preact";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type ImproveBoxes, Improver, improveContext } from "../src/live/improve";
+import { EMPTY_DRAFT, type TextDraft } from "../src/live/suggestions";
+import { draftBox } from "../src/live/views/composer";
+import { clickButton, fakeChrome, mountOne } from "./live-fixtures";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  document.body.replaceChildren();
+});
+
+/** One comment box with the Improve button, re-rendered on every change like the session does. */
+function box(answer: (message: { type: string; text?: string }) => unknown, text = "button broke") {
+  const fake = fakeChrome(answer as (message: { type: string }) => unknown);
+  vi.stubGlobal("chrome", fake.chrome);
+  let draft: TextDraft = { text, picked: new Map([["Sam", "u1"]]) };
+  let root: HTMLElement | null = null;
+  const show = () => {
+    root?.remove();
+    root = mountOne(
+      draftBox({
+        input: h("textarea", { value: draft.text }),
+        scope: null,
+        busy: false,
+        attachContext: null,
+        onAttachContext: vi.fn(),
+        fullPage: null,
+        onFullPage: vi.fn(),
+        recording: null,
+        recorderOpen: false,
+        onRecord: vi.fn(),
+        onRecordInWindow: vi.fn(),
+        onCloseRecorder: vi.fn(),
+        onRemoveRecording: vi.fn(),
+        issueTitleHint: false,
+        improve: improver.controls(
+          "draft:1",
+          () => draft,
+          (d) => {
+            draft = d;
+          },
+          () => ({ url: "https://site.example/" }),
+        ),
+        onSave: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+  };
+  const improver = new Improver(boxes({ render: show }));
+  show();
+  return {
+    fake,
+    get root() {
+      return root as unknown as HTMLElement;
+    },
+    get draft() {
+      return draft;
+    },
+    reset() {
+      improver.reset();
+    },
+    type(next: string) {
+      draft = { ...draft, text: next };
+      show();
+    },
+  };
+}
+
+/** The session's comment boxes, as Improver sees them: nothing written unless a test says so. */
+function boxes(o: Partial<ImproveBoxes>): ImproveBoxes {
+  return {
+    enabled: () => true,
+    render: () => undefined,
+    draft: () => null,
+    setDraftText: vi.fn(),
+    editing: () => null,
+    setEditing: vi.fn(),
+    ...o,
+  };
+}
+
+/** A new comment on `el`. */
+function draftOn(el: Element): Draft {
+  return { kind: "pin", anchor: anchorFor(el), geometry: {}, viewportWidth: 1000 } as unknown as Draft;
+}
+
+const settle = () => new Promise((r) => setTimeout(r, 0));
+
+describe("Improve button", () => {
+  it("isn't there unless the helper is on", () => {
+    const root = mountOne(
+      draftBox({
+        input: null,
+        scope: null,
+        busy: false,
+        attachContext: null,
+        onAttachContext: vi.fn(),
+        fullPage: null,
+        onFullPage: vi.fn(),
+        recording: null,
+        recorderOpen: false,
+        onRecord: vi.fn(),
+        onRecordInWindow: vi.fn(),
+        onCloseRecorder: vi.fn(),
+        onRemoveRecording: vi.fn(),
+        issueTitleHint: false,
+        improve: null,
+        onSave: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    expect(root.textContent).not.toContain("Improve");
+  });
+
+  it("puts Claude's rewrite in the box, keeping picked people, and Undo puts the draft back", async () => {
+    const b = box(() => "The Save button does nothing when clicked. @Sam");
+    clickButton(b.root, "Improve");
+    expect(b.root.textContent).toContain("Improving…");
+    await settle();
+    expect(b.fake.sendMessage).toHaveBeenCalledWith({
+      type: "live.improve",
+      url: "https://site.example/",
+      text: "button broke",
+    });
+    expect(b.draft.text).toBe("The Save button does nothing when clicked. @Sam");
+    expect(b.draft.picked.get("Sam")).toBe("u1");
+    expect(b.root.textContent).toContain("Rewritten by Claude.");
+    clickButton(b.root, "Undo");
+    expect(b.draft.text).toBe("button broke");
+    expect(b.root.textContent).not.toContain("Rewritten by Claude.");
+  });
+
+  it("drops Undo once the person edits the rewrite", async () => {
+    const b = box(() => "Better.");
+    clickButton(b.root, "Improve");
+    await settle();
+    b.type("Better, edited.");
+    expect(b.root.textContent).not.toContain("Undo");
+  });
+
+  it("shows what went wrong", async () => {
+    const fake = fakeChrome();
+    fake.sendMessage.mockResolvedValue({ ok: false, error: "Claude took too long to answer." } as never);
+    const b = box(() => null);
+    vi.stubGlobal("chrome", fake.chrome);
+    clickButton(b.root, "Improve");
+    await settle();
+    expect(b.root.querySelector(".improve-note.error")?.textContent).toBe("Claude took too long to answer.");
+    expect(b.draft.text).toBe("button broke");
+  });
+
+  it("asks for some text first", () => {
+    const b = box(() => "x", "  ");
+    clickButton(b.root, "Improve");
+    expect(b.fake.sendMessage).not.toHaveBeenCalled();
+    expect(b.root.textContent).toContain("Write something first.");
+  });
+
+  it("doesn't overwrite what the person typed while Claude was working", async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    const b = box(() => null);
+    b.fake.sendMessage.mockReturnValue(new Promise((r) => (finish = r)) as never);
+    clickButton(b.root, "Improve");
+    b.type("button broke on Firefox");
+    finish({ ok: true, value: "Rewritten." });
+    await settle();
+    expect(b.draft.text).toBe("button broke on Firefox");
+    expect(b.root.textContent).toContain("changed while Claude was working");
+  });
+
+  it("forgets the box when it's reset", async () => {
+    const b = box(() => "Better.");
+    clickButton(b.root, "Improve");
+    await settle();
+    expect(b.root.textContent).toContain("Undo");
+    b.reset();
+    b.type("Better.");
+    expect(b.root.textContent).not.toContain("Undo");
+  });
+
+  it("is only offered when the helper is on", () => {
+    const draft = { draft: draftOn(document.body), text: EMPTY_DRAFT, url: "https://site.example/", number: 1 };
+    expect(new Improver(boxes({ enabled: () => false, draft: () => draft })).forDraft()).toBeNull();
+    expect(new Improver(boxes({ draft: () => draft })).forDraft()).not.toBeNull();
+    // No draft being written: nothing to improve.
+    expect(new Improver(boxes({})).forDraft()).toBeNull();
+  });
+
+  it("works on a comment being edited", async () => {
+    vi.stubGlobal("chrome", fakeChrome(() => "Clearer.").chrome);
+    let editing = { id: "c1", draft: { text: "meh", picked: new Map<string, string>() } };
+    const setEditing = vi.fn((e: typeof editing) => {
+      editing = e;
+    });
+    const improver = new Improver(boxes({ editing: () => editing, setEditing }));
+    expect(improver.forEdit("c2")?.busy).toBe(false);
+    improver.forEdit("c1")?.onImprove();
+    await settle();
+    expect(editing.draft.text).toBe("Clearer.");
+    expect(improver.forEdit("c1")?.canUndo).toBe(true);
+    improver.forEdit("c1")?.onUndo();
+    expect(editing.draft.text).toBe("meh");
+  });
+});
+
+describe("Improve's page context", () => {
+  it("names the comment's element by its label or text", () => {
+    document.body.innerHTML = `<form><button id="save" aria-label="Save changes">💾</button><p id="msg">  Saved
+      at noon </p></form>`;
+    const save = document.getElementById("save") as Element;
+    expect(improveContext(draftOn(save))).toEqual({ selector: expect.any(String), elementText: "Save changes" });
+    expect(improveContext(draftOn(document.getElementById("msg") as Element)).elementText).toBe("Saved at noon");
+  });
+});

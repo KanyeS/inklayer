@@ -20,8 +20,10 @@ import { Captures } from "./captures";
 import { Carry, scopeFor } from "./carry";
 import { commentActions } from "./comment-actions";
 import type { PageAnnotation, PanelContext, View } from "./context";
+import { FlashNote } from "./flash-note";
 import type { Scope } from "./format";
 import { HoverBubbles } from "./hover-bubbles";
+import { Improver } from "./improve";
 import { COLORS } from "./labels";
 import { NextFrame } from "./next-frame";
 import { panelHost } from "./page-io";
@@ -48,8 +50,6 @@ const REANCHOR_DELAY_MS = 400;
 const REANCHOR_MAX_WAIT_MS = 1500;
 const REFRESH_EVERY_MS = 60_000;
 const WATCH_ADDRESS_MS = 1000;
-const NOTE_SHOWN_MS = 8000;
-const RESIZE_REDRAW_MS = 200;
 
 /** Settings remembered in the extension's storage, the same on every site. */
 const STORED_KEYS = ["bubblesOpen", "attachContext", "panelPosition", "panelPinned", "unreadCount", "fullPage"];
@@ -91,6 +91,16 @@ export class LiveSession {
   /** Counts drafts, so each new one gets a fresh (and focused) comment box. */
   #draftNumber = 0;
   #editing: { id: string; draft: TextDraft } | null = null;
+  /** The Improve button in comment boxes: the local Claude helper rewrites what's written (see improve.ts). */
+  readonly #improver = new Improver({
+    enabled: () => this.#init.claudeImprove === true,
+    render: () => this.#render(),
+    draft: () =>
+      this.#draft && { draft: this.#draft, text: this.#draftText, url: this.#carry.url, number: this.#draftNumber },
+    setDraftText: (text) => this.#setDraftText(text),
+    editing: () => this.#editing,
+    setEditing: (editing) => this.#setEditing(editing),
+  });
   #tool: Tool = "select";
   #color: string = COLORS[0];
   #scope: Scope = { query: false, hash: false };
@@ -105,10 +115,9 @@ export class LiveSession {
   readonly #captures = new Captures(
     () => this.#init.features.bugContext,
     () => this.#render(),
-    (note) => this.#flashNote(note),
+    (note) => this.#note.show(note),
     () => this.#carry.start(),
   );
-  /** The comment being written, kept with the tab's recording so it can be picked up on the next page. */
   /** The comment being written, kept with the tab's recording so it can be picked up on the next page. */
   readonly #carry = new Carry(() => this.#draft && this.#target && { draft: this.#draft, ...this.#writing() });
 
@@ -125,12 +134,12 @@ export class LiveSession {
   #busy = false;
   #error = "";
   /** A short message under the header (sharing results, how to move the panel). */
-  #note = "";
+  readonly #note = new FlashNote(() => this.#render());
   /** The last "Share this page" link, shown until closed. */
   #shared: SharedLink | null = null;
   /** This window resized to a commenter's size; "Back to my size" puts it back. */
   readonly #size = new SizeMatcher(
-    (text) => this.#flashNote(text),
+    (text) => this.#note.show(text),
     () => this.#render(),
   );
 
@@ -160,7 +169,7 @@ export class LiveSession {
     this.#ctx = this.#panelContext();
     this.#mover = new PanelMover(
       this.#host,
-      (text) => this.#flashNote(text),
+      (text) => this.#note.show(text),
       () => this.#render(),
     );
     this.#parts = new CommentParts(this.#ctx, {
@@ -199,7 +208,7 @@ export class LiveSession {
     document.documentElement.append(this.#host);
     this.#restoreSettings();
     this.#followSettings();
-    this.#followWindowSize();
+    this.#mover.followWindowSize();
   }
 
   /** What the views in views/ may see and do. */
@@ -212,7 +221,7 @@ export class LiveSession {
       },
       render: () => this.#render(),
       mutate: (action) => void this.#mutate(action),
-      flashNote: (text) => this.#flashNote(text),
+      flashNote: (text) => this.#note.show(text),
       showError: (message) => {
         this.#error = message;
         this.#render();
@@ -340,26 +349,6 @@ export class LiveSession {
     });
   }
 
-  /** Resized: stay inside the window, and redraw once it settles, since "Made at …px wide" depends on the width. */
-  #followWindowSize(): void {
-    let resizeTimer = 0;
-    window.addEventListener("resize", () => {
-      this.#mover.place();
-      clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => this.#render(), RESIZE_REDRAW_MS);
-    });
-  }
-
-  #flashNote(text: string): void {
-    this.#note = text;
-    this.#render();
-    window.setTimeout(() => {
-      if (this.#note !== text) return;
-      this.#note = "";
-      this.#render();
-    }, NOTE_SHOWN_MS);
-  }
-
   #setBubblesOpen(open: boolean): void {
     this.#bubblesOpen = open;
     remember({ bubblesOpen: open });
@@ -463,8 +452,8 @@ export class LiveSession {
     return commentActions(a, {
       mutate: (action) => void this.#mutate(action),
       setEditing: (editing) => {
-        this.#editing = editing;
-        this.#render();
+        this.#improver.reset();
+        this.#setEditing(editing);
       },
     });
   }
@@ -531,6 +520,7 @@ export class LiveSession {
   }
 
   #cancelDraft(): void {
+    this.#improver.reset();
     this.#captures.closeRecorder();
     this.#captures.discardRecording();
     this.#carry.clear();
@@ -561,10 +551,11 @@ export class LiveSession {
       });
       const note = await this.#captures.attach(created.id, draft, [this.#host, this.#bubbles.host], !from);
       this.#carry.clear();
-      if (note) this.#flashNote(note);
+      if (note) this.#note.show(note);
       else await this.#load(); // the screenshot and recording are there: show them
       this.#draft = null;
       this.#draftText = EMPTY_DRAFT;
+      this.#improver.reset();
       this.#selected = created.id;
       this.#overlay.handle({ type: "clearDraft" });
       this.#setTool("select");
@@ -577,7 +568,7 @@ export class LiveSession {
       this.#shared = await sharePage(this.#target);
       this.#render();
     } catch (e) {
-      this.#flashNote(`Couldn't share: ${messageOf(e)}`);
+      this.#note.show(`Couldn't share: ${messageOf(e)}`);
     }
   }
 
@@ -677,7 +668,7 @@ export class LiveSession {
           this.#shared = null;
           this.#render();
         }),
-      this.#note && <p className="hint">{this.#note}</p>,
+      this.#note.text && <p className="hint">{this.#note.text}</p>,
     ];
   }
 
@@ -720,15 +711,22 @@ export class LiveSession {
     });
   }
 
+  #setEditing(editing: { id: string; draft: TextDraft } | null): void {
+    this.#editing = editing;
+    this.#render();
+  }
+
+  #setDraftText(draft: TextDraft): void {
+    this.#draftText = draft;
+    this.#carry.keepSoon();
+    this.#render(false);
+  }
+
   #draftBox(): ComponentChild {
     const input = draftInput({
       number: this.#draftNumber,
       draft: this.#draftText,
-      onChange: (draft) => {
-        this.#draftText = draft;
-        this.#carry.keepSoon();
-        this.#render(false);
-      },
+      onChange: (draft) => this.#setDraftText(draft),
       organizationId: () => this.#target?.organizationId ?? null,
       docsOn: this.#init.features.docs,
       onSave: () => void this.#saveDraft(),
@@ -742,6 +740,7 @@ export class LiveSession {
       }),
       busy: this.#busy,
       issueTitleHint: this.#init.features.issueTrackers,
+      improve: this.#improver.forDraft(),
       ...this.#captures.options(),
       onSave: () => void this.#saveDraft(),
       onCancel: () => this.#cancelDraft(),
@@ -782,11 +781,9 @@ export class LiveSession {
       canComment: this.#canCommentIn(a.projectId),
       editing: editing && {
         draft: editing.draft,
-        onChange: (draft) => {
-          this.#editing = { id: a.id, draft };
-          this.#render();
-        },
+        onChange: (draft) => this.#setEditing({ id: a.id, draft }),
         organizationId: () => this.#organizationOf(a.projectId),
+        improve: this.#improver.forEdit(a.id),
       },
       onSelect: () => {
         this.#selected = a.id;

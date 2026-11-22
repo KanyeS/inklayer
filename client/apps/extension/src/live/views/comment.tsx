@@ -5,9 +5,11 @@ import { personTitle } from "../../lib/people";
 import { docUrl, type PageAnnotation, type PanelContext } from "../context";
 import { addressOf, plural, timeAgo } from "../format";
 import { icon } from "../icons";
+import type { ImproveControls } from "../improve";
 import { SuggestBox, type TextDraft } from "../suggestions";
 import { copyButton } from "./chrome";
 import type { CommentParts } from "./comment-parts";
+import { improveButton, improveNote } from "./improve";
 
 /** A comment as it's shown: its entry in the panel's list, and its bubble next to the mark on the page. */
 
@@ -31,7 +33,13 @@ export interface ListEntryOptions {
   showAddress: boolean;
   canComment: boolean;
   /** The text being edited (kept by the session), while this comment is being edited. */
-  editing: { draft: TextDraft; onChange(draft: TextDraft): void; organizationId(): string | null } | null;
+  editing: {
+    draft: TextDraft;
+    onChange(draft: TextDraft): void;
+    organizationId(): string | null;
+    /** The Improve button (the local Claude helper); null when it's off. */
+    improve?: ImproveControls | null;
+  } | null;
   onSelect(): void;
   actions: CommentActions;
 }
@@ -110,7 +118,9 @@ export function listEntry(
               run={() => o.editing && o.actions.saveEdit(o.editing.draft)}
             />
             <LinkButton label="Cancel" className="" run={o.actions.cancelEdit} />
+            {o.editing.improve && improveButton(o.editing.improve)}
           </div>
+          {o.editing.improve && improveNote(o.editing.improve)}
         </>
       ) : (
         <>
