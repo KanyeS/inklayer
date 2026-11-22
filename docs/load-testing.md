@@ -52,7 +52,7 @@ In Actions → **Load test (Lightsail)** → Run workflow:
 - `capacity` steps the load from a tenth of the maximums to the maximums (default 300 reads/s, 30 comment writes/s, 300 live connections, 60 people typing in docs, and 20 people playing recordings, 20 recorded comments and 20 issues with attachments a minute, in 10 one-minute steps). If every step holds, the summary says to raise the maximums and run again.
 - `soak` holds one rate (default 100 reads/s, 10 comment writes/s, 10 people typing) for an hour. Run it at about 70% of the capacity figure. It shows what `capacity` can't: the box running out of **CPU credits** (Lightsail plans are burstable), memory growing over time, and the database's WAL file growing.
 
-The workflow creates `inklayer-loadtest-<run id>-server` (your chosen plan, `micro_3_0` = production's 1 GB plan) and `-k6` (`medium_3_0`, so k6 is never the bottleneck) in the same zone. k6 reaches the server over its private address; nothing is published to the internet. The last step deletes both instances and the key pair, even if the run fails or is cancelled.
+The workflow creates `inklayer-loadtest-<run id>-server` (your chosen plan, `micro_3_2` = production's 1 GB plan) and `-k6` (`medium_3_2`, so k6 is never the bottleneck) in the same zone. k6 reaches the server over its private address; nothing is published to the internet. The last step deletes both instances and the key pair, even if the run fails or is cancelled.
 
 **Check after a cancelled run:** in the Lightsail console, look for instances named `inklayer-loadtest-*`. If one is left, delete it by hand.
 
@@ -78,7 +78,7 @@ The workflow signs in to AWS with GitHub's OpenID Connect, so no AWS key is stor
 
 1. **Add GitHub as an identity provider** (once per AWS account). IAM → Identity providers → Add provider → OpenID Connect, provider URL `https://token.actions.githubusercontent.com`, audience `sts.amazonaws.com`.
 2. **Create a policy.** IAM → Policies → Create policy → JSON. Paste [`loadtest/aws-iam-policy.json`](../loadtest/aws-iam-policy.json) and name it `inklayer-loadtest`. It can only delete instances and key pairs tagged `inklayer-loadtest=true`, which the workflow tags its own with. It can't delete the production instance.
-3. **Create a role.** IAM → Roles → Create role → Web identity, choose `token.actions.githubusercontent.com` and audience `sts.amazonaws.com`, and limit it to your repository (`KanyeS/inklayer`). Attach `inklayer-loadtest`. Name it `inklayer-loadtest`.
+3. **Create a role.** IAM → Roles → Create role → Web identity, choose `token.actions.githubusercontent.com` and audience `sts.amazonaws.com`, and limit it to your repository (`KanyeS/inklayer`). Attach `inklayer-loadtest`. Name it `inklayer-loadtest`. Then check the role's trust policy: this repository sends GitHub's immutable subject, which includes the owner's and repository's IDs, so the `sub` condition must be `repo:KanyeS@61439481/inklayer@1462808344:*`, not `repo:KanyeS/inklayer:*`. Otherwise sign-in fails with "Not authorized to perform sts:AssumeRoleWithWebIdentity". `gh api repos/KanyeS/inklayer/actions/oidc/customization/sub` shows the prefix.
 4. **Add the secret.** GitHub → repository Settings → Secrets and variables → Actions → New repository secret: `AWS_LOADTEST_ROLE_ARN` = the role's ARN.
 
 If the server image is private on ghcr.io, the workflow signs the instance in to ghcr.io with the run's own token, so nothing else is needed.

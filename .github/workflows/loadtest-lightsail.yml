@@ -17,8 +17,8 @@ on:
         options: [capacity, soak]
         default: capacity
       bundle:
-        description: Lightsail plan for the server (production is micro_3_0, 1 GB)
-        default: micro_3_0
+        description: Lightsail plan for the server (production is micro_3_2, 1 GB)
+        default: micro_3_2
       region:
         default: ap-southeast-2
       steps:
@@ -129,7 +129,7 @@ jobs:
           }
           create "$NAME-server" "$BUNDLE"
           # k6 gets more room than the server, so the load generator is never what runs out first.
-          create "$NAME-k6" medium_3_0
+          create "$NAME-k6" medium_3_2
 
       - name: Wait until both are up
         run: |
