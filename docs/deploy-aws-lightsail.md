@@ -187,7 +187,7 @@ If no instance administrator can sign in, add an email address that can sign in 
 free -m
 docker stats --no-stream
 ```
-The server is capped at a 256 MB heap and a 448 MB container limit, which leaves the 1 GB plan about 200 MB for everything else. If `docker compose ps` shows the server restarting with exit code 137 (killed for running out of memory), or swap use stays high, move to a larger plan: stop the stack (`docker compose stop`), take an instance snapshot, create a new instance from it on the larger plan, and move the static IP over.
+The server is capped at a 256 MB heap and a 448 MB container limit, which leaves the 1 GB plan about 200 MB for everything else. The server isn't allowed to swap (`memswap_limit`): under extreme load it's killed and restarts in about 10 seconds, rather than stalling for minutes while it swaps. If `docker compose ps` shows the server restarting with exit code 137 (killed for running out of memory), or swap use stays high, move to a larger plan: stop the stack (`docker compose stop`), take an instance snapshot, create a new instance from it on the larger plan, and move the static IP over.
 
 ### Disk
 Inklayer stores only its database, which stays small. Check with `df -h /`; Docker images are the main use of disk, and `docker image prune` clears old ones.

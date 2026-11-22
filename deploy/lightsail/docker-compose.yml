@@ -114,6 +114,9 @@ services:
     expose:
       - "8080"
     mem_limit: 448m
+    # No swap for the server itself (the box still swaps everything else): past its limit it's killed and restarts in
+    # about 10 seconds, instead of stalling for minutes while it swaps. Docker's default lets it swap another 448 MB.
+    memswap_limit: 448m
     logging: &logging
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

@@ -57,6 +57,7 @@ services:
     # Production box: Lightsail micro (2 vCPU, 1 GB) with the server capped at 448 MB.
     cpus: ${INKLAYER_LOADTEST_CPUS:-2}
     mem_limit: 448m
+    memswap_limit: 448m
 
   # Production's own Caddyfile in front, as on the Lightsail box: HTTPS (the sign-in cookies are HTTPS-only) and compression.
   # A *.internal name gets a certificate from Caddy's own CA instead of Let's Encrypt.
