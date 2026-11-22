@@ -105,6 +105,13 @@ internal static class AuthEndpoints
             return Forbid(Errors.InvalidTarget, $"The only resource this server issues tokens for is {McpResource.Uri(context.Request)}.");
         }
 
+        // Apps that register themselves (MCP clients) are for the MCP endpoint only. Without the resource their tokens would
+        // have no audience, like the extension's, and work on the whole API: they have to ask for the MCP endpoint.
+        if (request.ClientId?.StartsWith(McpResource.DynamicClientPrefix, StringComparison.Ordinal) == true && resources.IsDefaultOrEmpty)
+        {
+            return Forbid(Errors.InvalidTarget, $"Ask for a token for {McpResource.Uri(context.Request)} (the resource parameter): it's what apps that register themselves can use.");
+        }
+
         var principal = PrincipalFactory.CreateTokenPrincipal(user, request.GetScopes());
         principal.SetResources(resources);
         var signIn = Results.SignIn(principal, properties: null, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);

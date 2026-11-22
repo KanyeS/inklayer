@@ -229,7 +229,7 @@ internal static partial class AuthenticationSetup
                 ServerKeys.LoadOrCreate(paths, "token-encryption"), SecurityAlgorithms.RsaOAEP, SecurityAlgorithms.Aes256CbcHmacSha512));
         });
 
-        services.AddHostedService<ExtensionClientSeeder>();
+        services.AddHostedService<FirstPartyClientSeeder>();
         services.AddHostedService<TokenPruningService>();
 
         services.AddRateLimiter(o =>

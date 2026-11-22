@@ -1,0 +1,15 @@
+{
+  "name": "@inklayer/review",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "A local MCP server that lets Claude Code try pages in a browser and leave Inklayer comments with screenshots and recordings.",
+  "scripts": {
+    "build": "vite build --mode page && vite build"
+  },
+  "dependencies": {
+    "@inklayer/overlay": "workspace:*",
+    "playwright-core": "1.65.1"
+  }
+}

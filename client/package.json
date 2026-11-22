@@ -3,10 +3,10 @@
   "private": true,
   "license": "Apache-2.0",
   "scripts": {
-    "build": "pnpm --filter @inklayer/extension build && pnpm --filter @inklayer/viewer build",
+    "build": "pnpm --filter @inklayer/extension build && pnpm --filter @inklayer/viewer build && pnpm --filter @inklayer/review build",
     "test": "vitest run",
     "api:generate": "pnpm dlx openapi-typescript@7.13.0 packages/api/openapi.json -o packages/api/src/schema.d.ts --root-types --root-types-no-schema-prefix --default-non-nullable false",
-    "typecheck": "tsc -p packages/api && tsc -p packages/overlay && tsc -p packages/ui && tsc -p packages/docs && tsc -p apps/extension && tsc -p apps/viewer && tsc -p apps/site && tsc -p test",
+    "typecheck": "tsc -p packages/api && tsc -p packages/overlay && tsc -p packages/ui && tsc -p packages/docs && tsc -p apps/extension && tsc -p apps/viewer && tsc -p apps/site && tsc -p apps/review && tsc -p test",
     "licenses": "node scripts/check-licenses.mjs",
     "build:site": "pnpm --filter @inklayer/site build",
     "lint": "biome ci .",

@@ -120,12 +120,32 @@ public sealed partial class McpTests(InklayerApiFactory factory)
         api.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
         await api.GetAsync(new Uri("/api/me", UriKind.Relative)).ExpectAsync(HttpStatusCode.Unauthorized);
 
-        // …and a token without the MCP audience (like the extension's) can't use MCP.
-        var plain = await SignInAppAsync(member, resource: null);
-        using var mcp = factory.CreateClient();
-        mcp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", plain.AccessToken);
-        using var refused = await mcp.PostAsJsonAsync("/api/mcp", new { jsonrpc = "2.0", id = 1, method = "ping" });
-        Assert.True(refused.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Unauthorized, refused.StatusCode.ToString());
+        admin.Dispose();
+        member.Dispose();
+    }
+
+    [Fact]
+    public async Task Apps_that_register_themselves_only_get_tokens_for_mcp()
+    {
+        var (admin, _, member) = await MemberAsync("Commenter");
+        var clientId = await RegisterAsync("Claude (test)");
+
+        // Leaving the resource out would give a token with no audience, good for the whole API: refused, with no code.
+        using var response = await member.GetAsync(new Uri(QueryHelpers.AddQueryString("/connect/authorize", new Dictionary<string, string?>
+        {
+            ["client_id"] = clientId,
+            ["redirect_uri"] = Redirect,
+            ["response_type"] = "code",
+            ["scope"] = "mcp offline_access",
+            ["code_challenge"] = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes("verifier-verifier-verifier-verifier-verifier"))),
+            ["code_challenge_method"] = "S256",
+            ["state"] = "s1",
+        }), UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var query = QueryHelpers.ParseQuery(response.Headers.Location!.Query);
+        Assert.Equal("invalid_target", query["error"].ToString());
+        Assert.False(query.ContainsKey("code"));
         admin.Dispose();
         member.Dispose();
     }

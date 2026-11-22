@@ -36,7 +36,7 @@ internal static class AppsEndpoints
                 || await authorizations.GetApplicationIdAsync(authorization, ct) is not { } applicationId
                 || await applications.FindByIdAsync(applicationId, ct) is not { } application
                 || await applications.GetClientIdAsync(application, ct) is not { } clientId
-                || clientId == ExtensionClientSeeder.ClientId)
+                || clientId == FirstPartyClientSeeder.ExtensionClientId)
             {
                 continue;
             }
@@ -55,7 +55,7 @@ internal static class AppsEndpoints
         string clientId, CurrentUser currentUser, IOpenIddictApplicationManager applications, IOpenIddictAuthorizationManager authorizations,
         IOpenIddictTokenManager tokens, AuditLog audit, InklayerDbContext db, CancellationToken ct)
     {
-        if (clientId == ExtensionClientSeeder.ClientId || await applications.FindByClientIdAsync(clientId, ct) is not { } application)
+        if (clientId == FirstPartyClientSeeder.ExtensionClientId || await applications.FindByClientIdAsync(clientId, ct) is not { } application)
         {
             return TypedResults.NotFound();
         }

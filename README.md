@@ -272,6 +272,22 @@ It's off by default, and works in Chromium browsers (Chrome, Edge, Brave) on Lin
 
 See [native-host/README.md](client/apps/extension/native-host/README.md) for what the helper runs, and how to remove it.
 
+### Reviewing pages with Claude
+
+Claude Code can try a page or feature in a real browser and leave Inklayer comments on what it finds, as you. Each comment is anchored to the element it's about, with a screenshot of it, the page's details (console errors, failed requests) and, if Claude recorded the steps, a video.
+
+This runs on your computer through the review helper in [client/apps/review](client/apps/review/README.md), a small MCP server that drives Playwright's Chromium. It uses Claude Code's own plan. It signs in to Inklayer as a built-in app ("Inklayer review helper"): your browser opens the first time, and you allow it once. It's listed under **Connected apps**, where you can disconnect it.
+
+To set it up (from `client/`, after `pnpm install`):
+
+```sh
+pnpm --filter @inklayer/review build
+npx playwright-core@1.65.1 install chromium   # once, if Playwright's Chromium isn't installed yet
+claude mcp add inklayer-review -e INKLAYER_SERVER=https://<your server> -- node "$PWD/apps/review/dist/server.mjs"
+```
+
+Then ask Claude Code to review a page, for example "review the settings page on staging and comment on anything broken". The repository's `review-feature` skill tells it how.
+
 ### Using Inklayer from Claude (MCP)
 Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs in as you and can do what your role allows:
 - **Read:** comments and replies on a page, pages with comments, docs (search, read, links and backlinks), tags, history and activity.
@@ -288,7 +304,7 @@ More detail: [docs/integrations.md](docs/integrations.md#ai-assistants-mcp).
 How sign-in works:
 - **Signing in:** the app registers itself (OAuth dynamic client registration), your browser opens, you sign in as usual, and Inklayer asks whether to allow the app. You're asked once per app.
 - **Disconnecting:** connected apps are listed on the viewer's home page, where you can disconnect them.
-- **Token scope:** tokens for MCP only work at `/api/mcp`, and the rest of the API refuses them.
+- **Token scope:** apps that register themselves only get tokens for MCP: they must ask for `/api/mcp` as the resource, and those tokens only work there. The rest of the API refuses them.
 - **Network access:** clients that run on your machine, like Claude Code, work through the VPN. claude.ai and Claude Desktop connectors reach the server from Anthropic's cloud, so they can't connect while the network allow list is on.
 
 Licence check: `dotnet tool restore && dotnet nuget-license -i Inklayer.slnx -t -a ../.github/licenses/allowed-licenses.json -override ../.github/licenses/nuget-overrides.json`
