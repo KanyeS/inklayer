@@ -11,6 +11,7 @@ node client/apps/extension/native-host/install.mjs
 ```
 
 The install script does three things:
+
 - It copies `inklayer-claude-host.mjs` to `~/.local/share/inklayer/` on Linux, or `~/Library/Application Support/InkLayer/` on macOS.
 - It writes a `claude-host` wrapper next to it. Browsers start helpers with a minimal `PATH`, so the wrapper records where `node` and `claude` are.
 - It registers `com.inklayer.claude` in the `NativeMessagingHosts` folder of each installed Chromium browser (Chrome, Chromium, Brave, Edge). Only the Inklayer extension (`cihhaaceflhcncmeoiembekghkhbgfio`) may start it. A fork with a different ID can set `INKLAYER_EXTENSION_ID` when installing.
