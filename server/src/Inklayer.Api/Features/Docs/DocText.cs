@@ -15,11 +15,13 @@ public sealed record TextEdit(int Index, int Delete, string Insert);
 /// core, yrs) to merge the stored snapshot and updates, apply an edit as a proper Yjs change, and send it to everyone
 /// editing in the browser, who merge it like any other edit.
 /// </summary>
-internal sealed class DocText(InklayerDbContext db, DocIndexer indexer, IHubContext<DocsHub> hub, TimeProvider clock, Notifications.NotificationService notifications)
+internal sealed class DocText(
+    InklayerDbContext db, DocIndexer indexer, DocEditBuffer edits, IHubContext<DocsHub> hub, TimeProvider clock, Notifications.NotificationService notifications)
 {
     /// <summary>The doc's current text, including live edits not yet in a snapshot. Null if the doc doesn't exist.</summary>
     public async Task<string?> ReadAsync(Guid docId, CancellationToken ct)
     {
+        await edits.FlushAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var doc = await db.Docs.AsNoTracking().Where(d => d.Id == docId && d.DeletedAt == null)
             .Select(d => new { d.State, d.SnapshotSeq }).SingleOrDefaultAsync(ct);
@@ -41,21 +43,27 @@ internal sealed class DocText(InklayerDbContext db, DocIndexer indexer, IHubCont
     /// </summary>
     public async Task<string?> EditAsync(Guid docId, Guid userId, Func<string, IReadOnlyList<TextEdit>> plan, CancellationToken ct)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-
-        // Taking the next update number first takes SQLite's write lock, so no edit can arrive between loading and saving.
-        if (await db.Docs.Where(d => d.Id == docId && d.DeletedAt == null).ExecuteUpdateAsync(s => s.SetProperty(d => d.LastSeq, d => d.LastSeq + 1), ct) == 0)
+        // Everything numbered so far is in the database after this, up to the doc's LastSeq there. Browser edits that arrive
+        // while this works are numbered after it, and Yjs merges them with this edit like any two people typing at once.
+        await edits.FlushAsync(ct);
+        long includedSeq;
+        byte[]? storedState;
+        List<byte[]> updates;
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
         {
-            return null;
+            var stored = await db.Docs.AsNoTracking().Where(d => d.Id == docId && d.DeletedAt == null)
+                .Select(d => new { d.State, d.SnapshotSeq, d.LastSeq }).SingleOrDefaultAsync(ct);
+            if (stored is null)
+            {
+                return null;
+            }
+
+            (includedSeq, storedState) = (stored.LastSeq, stored.State);
+            updates = await db.DocUpdates.AsNoTracking().Where(u => u.DocId == docId && u.Seq > stored.SnapshotSeq).OrderBy(u => u.Seq).Select(u => u.Bytes).ToListAsync(ct);
+            await tx.CommitAsync(ct);
         }
 
-        // Reload: the doc may already be tracked from earlier in this request (e.g. just created), with the old number.
-        var doc = await db.Docs.SingleAsync(d => d.Id == docId, ct);
-        await db.Entry(doc).ReloadAsync(ct);
-        var seq = doc.LastSeq;
-        var updates = await db.DocUpdates.AsNoTracking().Where(u => u.DocId == docId && u.Seq > doc.SnapshotSeq).OrderBy(u => u.Seq).Select(u => u.Bytes).ToListAsync(ct);
-
-        using var ydoc = Load(doc.State, updates);
+        using var ydoc = Load(storedState, updates);
         var text = ydoc.Text("content");
         string before;
         byte[] stateVector;
@@ -65,16 +73,16 @@ internal sealed class DocText(InklayerDbContext db, DocIndexer indexer, IHubCont
             stateVector = read.StateVectorV1();
         }
 
-        var edits = plan(before);
-        if (edits.Count == 0)
+        var changes = plan(before);
+        if (changes.Count == 0)
         {
-            return before; // nothing to do; the transaction rolls back, so the number isn't used
+            return before;
         }
 
         // Apply from the end, so earlier offsets stay valid.
         using (var write = ydoc.WriteTransaction())
         {
-            foreach (var edit in edits.OrderByDescending(e => e.Index))
+            foreach (var edit in changes.OrderByDescending(e => e.Index))
             {
                 if (edit.Delete > 0)
                 {
@@ -104,22 +112,37 @@ internal sealed class DocText(InklayerDbContext db, DocIndexer indexer, IHubCont
             throw new InvalidOperationException("That would make the doc too large. Split it into smaller docs.");
         }
 
-        // Saved as a snapshot that includes this update, so the update itself needn't be stored.
-        var now = clock.GetUtcNow().UtcDateTime;
-        doc.State = state;
-        doc.SnapshotSeq = seq;
-        doc.Content = after;
-        doc.UpdatedAt = now;
-        doc.UpdatedByUserId = userId;
-        await db.DocUpdates.Where(u => u.DocId == docId && u.Seq <= seq).ExecuteDeleteAsync(ct);
-        await DocsHub.AddEditRevisionsAsync(db, doc, [userId], now, ct);
-        await db.SaveChangesAsync(ct);
-        await indexer.IndexDocAsync(doc, ct);
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        // Numbered and sent like a browser's edit, so open editors merge it.
+        long seq;
+        try
+        {
+            (seq, _) = await edits.AppendAsync(docId, userId, update, ct);
+        }
+        catch (HubException)
+        {
+            return null; // deleted meanwhile
+        }
 
         await hub.Clients.Group(DocsHub.Group(docId)).SendAsync("update", docId, seq, update, ct);
-        await notifications.DocEditedAsync(doc, before, userId, ct);
+
+        // And saved as a snapshot straight away, so search, links and history see it. The state is what this read (up to
+        // includedSeq) plus this edit. If no one else's edit was numbered in between, the snapshot covers this edit's number
+        // too; otherwise it stops at includedSeq, and this edit's update is kept as well (applying it twice does nothing).
+        var upToSeq = includedSeq;
+        if (seq == includedSeq + 1)
+        {
+            await edits.FlushAsync(ct);
+            upToSeq = seq;
+        }
+
+        var saved = await DocsHub.SaveSnapshotAsync(db, indexer, docId, state, after, upToSeq, userId, clock.GetUtcNow().UtcDateTime, ct, editedBy: userId);
+        if (saved is { } s)
+        {
+            edits.SnapshotSaved(docId, upToSeq);
+            await notifications.DocEditedAsync(s.Doc, before, userId, ct);
+        }
+
+        // Not saved only if an editor saved a newer snapshot meanwhile; theirs then includes this edit, or their next will.
         return after;
     }
 

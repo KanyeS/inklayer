@@ -45,6 +45,9 @@ internal static class PresenceEndpoints
                 o.AddFilter<PresenceRateFilter>();
             });
         services.AddSingleton<Docs.DocsRegistry>();
+        services.Configure<Docs.DocsOptions>(configuration.GetSection(Docs.DocsOptions.SectionName));
+        services.AddSingleton<Docs.DocEditBuffer>();
+        services.AddHostedService(sp => sp.GetRequiredService<Docs.DocEditBuffer>());
         services.AddScoped<Docs.DocIndexer>();
         return services;
     }

@@ -82,7 +82,8 @@ internal sealed class DocsRegistry(IOptions<PresenceOptions> options)
 /// Live co-editing of docs. The server never interprets the Yjs documents: it stores and relays bytes.
 /// <list type="bullet">
 /// <item><c>Open</c>: the last snapshot plus the updates since; joins the doc's group.</item>
-/// <item><c>Update</c>: an edit (Commenters and above). Stored with the next number for the doc, then sent to everyone else.</item>
+/// <item><c>Update</c>: an edit (Commenters and above). Given the next number for the doc and sent to everyone else straight
+/// away; saved with the next batch (see <see cref="DocEditBuffer"/>).</item>
 /// <item><c>Awareness</c>: carets, selections and pointers. Only relayed.</item>
 /// <item><c>Snapshot</c>: an editor's merged copy plus its markdown, replacing the updates it includes. It's accepted only if
 /// it's at least as new as the stored one, so two editors snapshotting at once can't lose edits.</item>
@@ -92,8 +93,8 @@ internal sealed class DocsRegistry(IOptions<PresenceOptions> options)
 /// </summary>
 [Authorize(AuthenticationSchemes = PresenceTicketHandler.SchemeName)]
 internal sealed partial class DocsHub(
-    DocsRegistry registry, InklayerDbContext db, DocIndexer indexer, IOptions<PresenceOptions> options, TimeProvider clock, FeatureSwitches features,
-    Notifications.NotificationService notifications) : Hub
+    DocsRegistry registry, InklayerDbContext db, DocIndexer indexer, DocEditBuffer edits, IOptions<PresenceOptions> options, TimeProvider clock,
+    FeatureSwitches features, Notifications.NotificationService notifications) : Hub
 {
     /// <summary>Ask an editor for a snapshot once this many updates are waiting, and again every <see cref="CompactEvery"/> after.</summary>
     public const int CompactAfter = 100;
@@ -147,6 +148,9 @@ internal sealed partial class DocsHub(
         var canEdit = role.Value.Grants(Permission.Comment);
         me.Docs[docId] = new OpenDoc(orgId!.Value, canEdit, clientId);
 
+        // Edits still waiting to be saved are written first, so they're among the updates read below.
+        await edits.FlushAsync(Context.ConnectionAborted);
+
         // One read transaction, so the snapshot and the updates after it match.
         await using var tx = await db.Database.BeginTransactionAsync();
         var doc = await db.Docs.AsNoTracking().Where(d => d.Id == docId).Select(d => new { d.State, d.Content, d.SnapshotSeq }).SingleAsync();
@@ -169,7 +173,7 @@ internal sealed partial class DocsHub(
         }
     }
 
-    /// <summary>Stores an edit and sends it to everyone else on the doc. Returns its number.</summary>
+    /// <summary>Numbers an edit, sends it to everyone else on the doc and queues it to be saved. Returns its number.</summary>
     public async Task<long> Update(Guid docId, byte[] update)
     {
         var me = Me();
@@ -179,21 +183,7 @@ internal sealed partial class DocsHub(
             throw new HubException("That edit is too large.");
         }
 
-        long seq, snapshotSeq;
-        await using (var tx = await db.Database.BeginTransactionAsync())
-        {
-            // Taking the next number is the transaction's first write, so SQLite gives out numbers one at a time.
-            if (await db.Docs.Where(d => d.Id == docId && d.DeletedAt == null).ExecuteUpdateAsync(s => s.SetProperty(d => d.LastSeq, d => d.LastSeq + 1)) == 0)
-            {
-                throw new HubException("This doc was deleted.");
-            }
-
-            (seq, snapshotSeq) = await db.Docs.Where(d => d.Id == docId).Select(d => ValueTuple.Create(d.LastSeq, d.SnapshotSeq)).SingleAsync();
-            db.DocUpdates.Add(new DocUpdate { DocId = docId, Seq = seq, Bytes = update, UserId = me.Peer.UserId, At = clock.GetUtcNow().UtcDateTime });
-            await db.SaveChangesAsync();
-            await tx.CommitAsync();
-        }
-
+        var (seq, snapshotSeq) = await edits.AppendAsync(docId, me.Peer.UserId, update, Context.ConnectionAborted);
         await Clients.OthersInGroup(Group(docId)).SendAsync("update", docId, seq, update);
         var waiting = seq - snapshotSeq;
         if (waiting >= CompactAfter && (waiting - CompactAfter) % CompactEvery == 0)
@@ -227,42 +217,71 @@ internal sealed partial class DocsHub(
             throw new HubException("This doc is too large to save. Split it into smaller docs.");
         }
 
-        var now = clock.GetUtcNow().UtcDateTime;
-        await using var tx = await db.Database.BeginTransactionAsync();
-
-        // Only if nothing newer was stored meanwhile, and only up to updates that exist.
-        var accepted = await db.Docs.Where(d => d.Id == docId && d.DeletedAt == null && d.SnapshotSeq <= upToSeq && d.LastSeq >= upToSeq)
-            .ExecuteUpdateAsync(s => s.SetProperty(d => d.State, state).SetProperty(d => d.SnapshotSeq, upToSeq));
-        if (accepted == 0)
+        // The edits it includes may still be waiting to be saved.
+        await edits.FlushAsync(Context.ConnectionAborted);
+        var saved = await SaveSnapshotAsync(db, indexer, docId, state, markdown, upToSeq, me.Peer.UserId, clock.GetUtcNow().UtcDateTime, default);
+        if (saved is null)
         {
             return false;
         }
 
-        var editors = await db.DocUpdates.Where(u => u.DocId == docId && u.Seq <= upToSeq).OrderBy(u => u.Seq).Select(u => u.UserId).ToListAsync();
-        await db.DocUpdates.Where(u => u.DocId == docId && u.Seq <= upToSeq).ExecuteDeleteAsync();
+        edits.SnapshotSaved(docId, upToSeq);
+        if (!string.Equals(saved.Value.OldContent, markdown, StringComparison.Ordinal))
+        {
+            await notifications.DocEditedAsync(saved.Value.Doc, saved.Value.OldContent, saved.Value.LastEditor, Context.ConnectionAborted);
+        }
 
-        var doc = await db.Docs.SingleAsync(d => d.Id == docId);
+        return true;
+    }
+
+    /// <summary>
+    /// Saves a snapshot: replaces the stored updates up to <paramref name="upToSeq"/> with <paramref name="state"/>, and saves the
+    /// markdown for search, links and history. Null if a newer snapshot is already stored or the updates don't exist (yet).
+    /// Call <see cref="DocEditBuffer.FlushAsync"/> first.
+    /// </summary>
+    /// <param name="editedBy">Someone whose edit the state includes beyond <paramref name="upToSeq"/> (a server-side edit): recorded as the
+    /// last editor, and in history.</param>
+    internal static async Task<(Doc Doc, string OldContent, Guid LastEditor)?> SaveSnapshotAsync(
+        InklayerDbContext db, DocIndexer indexer, Guid docId, byte[] state, string markdown, long upToSeq, Guid savedBy, DateTime now, CancellationToken ct,
+        Guid? editedBy = null)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // Only if nothing newer was stored meanwhile, and only up to updates that exist.
+        var accepted = await db.Docs.Where(d => d.Id == docId && d.DeletedAt == null && d.SnapshotSeq <= upToSeq && d.LastSeq >= upToSeq)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.State, state).SetProperty(d => d.SnapshotSeq, upToSeq), ct);
+        if (accepted == 0)
+        {
+            return null;
+        }
+
+        var editors = await db.DocUpdates.Where(u => u.DocId == docId && u.Seq <= upToSeq).OrderBy(u => u.Seq).Select(u => u.UserId).ToListAsync(ct);
+        if (editedBy is { } extra)
+        {
+            editors.Add(extra);
+        }
+
+        await db.DocUpdates.Where(u => u.DocId == docId && u.Seq <= upToSeq).ExecuteDeleteAsync(ct);
+
+        var doc = await db.Docs.SingleAsync(d => d.Id == docId, ct);
+        await db.Entry(doc).ReloadAsync(ct); // may be tracked from earlier in the request, from before the update above
         var oldContent = doc.Content;
+        var lastEditor = editors.Count > 0 ? editors[^1] : savedBy;
         if (!string.Equals(doc.Content, markdown, StringComparison.Ordinal))
         {
             doc.Content = markdown;
             doc.UpdatedAt = now;
-            doc.UpdatedByUserId = editors.Count > 0 ? editors[^1] : me.Peer.UserId;
+            doc.UpdatedByUserId = lastEditor;
 
-            await AddEditRevisionsAsync(db, doc, editors.Count > 0 ? [.. editors.Distinct()] : [me.Peer.UserId], now, default);
+            await AddEditRevisionsAsync(db, doc, editors.Count > 0 ? [.. editors.Distinct()] : [savedBy], now, ct);
 
-            await db.SaveChangesAsync();
-            await indexer.IndexDocAsync(doc, default);
+            await db.SaveChangesAsync(ct);
+            await indexer.IndexDocAsync(doc, ct);
         }
 
-        await db.SaveChangesAsync();
-        await tx.CommitAsync();
-        if (!string.Equals(oldContent, markdown, StringComparison.Ordinal))
-        {
-            await notifications.DocEditedAsync(doc, oldContent, editors.Count > 0 ? editors[^1] : me.Peer.UserId, Context.ConnectionAborted);
-        }
-
-        return true;
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return (doc, oldContent, lastEditor);
     }
 
     /// <summary>History: an "edited" entry per person, at most every few minutes each. Call after the doc's content changed.</summary>
