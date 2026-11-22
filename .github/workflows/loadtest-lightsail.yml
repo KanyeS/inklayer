@@ -152,21 +152,37 @@ jobs:
             $SSH "ubuntu@$public" 'cloud-init status --wait > /dev/null; docker --version'
           done
 
+      - name: Start the helpers on the k6 instance
+        run: |
+          set -euo pipefail
+          # The stand-in sign-in provider (a Java server) and the fake GitLab run here, not next to the server: on a 1 GB
+          # box they'd take memory and CPU production doesn't spend.
+          $SSH "ubuntu@$K6_IP" 'mkdir -p helpers'
+          $SCP loadtest/docker-compose.yml loadtest/docker-compose.helpers-apart.yml loadtest/fake-gitlab.py "ubuntu@$K6_IP:helpers/"
+          $SSH "ubuntu@$K6_IP" "cd helpers && \
+            export INKLAYER_IMAGE=unused INKLAYER_LOADTEST_BIND='$K6_PRIVATE_IP' INKLAYER_LOADTEST_HELPERS_IP='$K6_PRIVATE_IP' \
+              INKLAYER_LOADTEST_OIDC_PORT=8081 && \
+            docker compose -f docker-compose.yml -f docker-compose.helpers-apart.yml up -d --quiet-pull oidc fake-gitlab-tls && \
+            for _ in \$(seq 60); do docker compose -f docker-compose.yml -f docker-compose.helpers-apart.yml exec -T fake-gitlab-tls test -f /data/ca/root.crt && break; sleep 2; done && \
+            docker compose -f docker-compose.yml -f docker-compose.helpers-apart.yml exec -T fake-gitlab-tls cat /data/ca/root.crt" > tracker-root.crt
+          test -s tracker-root.crt
+
       - name: Start the server
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          $SSH "ubuntu@$SERVER_IP" 'mkdir -p inklayer/loadtest/results inklayer/deploy/lightsail'
-          $SCP loadtest/docker-compose.yml loadtest/stats.sh loadtest/fake-gitlab.py "ubuntu@$SERVER_IP:inklayer/loadtest/"
+          $SSH "ubuntu@$SERVER_IP" 'mkdir -p inklayer/loadtest/results inklayer/loadtest/tracker-ca/ca inklayer/deploy/lightsail'
+          $SCP loadtest/docker-compose.yml loadtest/docker-compose.helpers-apart.yml loadtest/stats.sh "ubuntu@$SERVER_IP:inklayer/loadtest/"
+          $SCP tracker-root.crt "ubuntu@$SERVER_IP:inklayer/loadtest/tracker-ca/ca/root.crt"
           $SCP deploy/lightsail/Caddyfile "ubuntu@$SERVER_IP:inklayer/deploy/lightsail/"
           echo "$GHCR_TOKEN" | $SSH "ubuntu@$SERVER_IP" "docker login ghcr.io -u '${{ github.actor }}' --password-stdin > /dev/null"
           # Ports are published on the private address only: k6 reaches them from the other instance, the internet can't.
-          $SSH "ubuntu@$SERVER_IP" "cd inklayer/loadtest && \
-            export INKLAYER_IMAGE='$IMAGE' INKLAYER_LOADTEST_BIND='$SERVER_PRIVATE_IP' \
-              INKLAYER_LOADTEST_PORT=443 INKLAYER_LOADTEST_OIDC_PORT=8081 \
-              INKLAYER_LOADTEST_OIDC_URL='http://$SERVER_PRIVATE_IP:8081' INKLAYER_LOADTEST_CPUS=2 && \
-            docker compose pull --quiet && docker compose up -d caddy fake-gitlab-tls && \
+          $SSH "ubuntu@$SERVER_IP" "cd inklayer/loadtest && chmod 644 tracker-ca/ca/root.crt && \
+            export INKLAYER_IMAGE='$IMAGE' INKLAYER_LOADTEST_BIND='$SERVER_PRIVATE_IP' INKLAYER_LOADTEST_HELPERS_IP='$K6_PRIVATE_IP' \
+              INKLAYER_LOADTEST_PORT=443 INKLAYER_LOADTEST_OIDC_URL='http://$K6_PRIVATE_IP:8081' INKLAYER_LOADTEST_CPUS=2 && \
+            docker compose -f docker-compose.yml -f docker-compose.helpers-apart.yml pull --quiet server caddy && \
+            docker compose -f docker-compose.yml -f docker-compose.helpers-apart.yml up -d --no-deps server caddy && \
             docker image inspect --format '{{index .RepoDigests 0}}' \"\$INKLAYER_IMAGE\" && \
             (nohup ./stats.sh inklayer-loadtest-server-1 3 < /dev/null > results/stats.csv 2>/dev/null &)"
 
@@ -188,7 +204,7 @@ jobs:
             --add-host 'inklayer.internal:$SERVER_PRIVATE_IP' \
             -v \"\$HOME/loadtest/k6:/loadtest:ro\" -v \"\$HOME/loadtest/results:/results\" \
             -e BASE_URL=https://inklayer.internal -e K6_INSECURE_SKIP_TLS_VERIFY=true -e K6_NO_USAGE_REPORT=true \
-            -e OIDC_METADATA='http://$SERVER_PRIVATE_IP:8081/loadtest/.well-known/openid-configuration' \
+            -e OIDC_METADATA='http://$K6_PRIVATE_IP:8081/loadtest/.well-known/openid-configuration' \
             -e PROFILE=$PROFILE -e SEED_COMMENTS=$SEED_COMMENTS $vars \
             grafana/k6:2.4.0 run --summary-export=/results/summary.json --out csv=/results/metrics.csv.gz /loadtest/inklayer.js" \
             2>&1 | tee k6.log | { grep -v 'running (' || true; }
@@ -200,7 +216,7 @@ jobs:
           mv k6.log results/ 2>/dev/null || true
           $SCP "ubuntu@$K6_IP:loadtest/results/*" results/ || true
           $SCP "ubuntu@$SERVER_IP:inklayer/loadtest/results/stats.csv" results/ || true
-          $SSH "ubuntu@$SERVER_IP" 'cd inklayer/loadtest && INKLAYER_IMAGE=x docker compose logs --no-color server caddy fake-gitlab; \
+          $SSH "ubuntu@$SERVER_IP" 'cd inklayer/loadtest && INKLAYER_IMAGE=x docker compose logs --no-color server caddy; \
             docker inspect -f "restarts={{.RestartCount}} oomkilled={{.State.OOMKilled}}" inklayer-loadtest-server-1' \
             > results/server.log 2>&1 || true
           # CPU credits: below 100% the box has been bursting; near 0% it is down to its baseline speed.

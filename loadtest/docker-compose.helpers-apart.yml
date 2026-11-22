@@ -1,0 +1,16 @@
+# On Lightsail the helpers (the stand-in sign-in provider and the fake GitLab) run on the k6 instance, so the server's
+# instance holds only what production's does: the server and Caddy. Used with docker-compose.yml on both instances:
+#   k6 instance:     docker compose -f docker-compose.yml -f docker-compose.helpers-apart.yml up -d oidc fake-gitlab-tls
+#   server instance: docker compose -f docker-compose.yml -f docker-compose.helpers-apart.yml up -d --no-deps server caddy
+# INKLAYER_LOADTEST_HELPERS_IP is the k6 instance's private address.
+services:
+  server:
+    # The fake GitLab is on the other instance; its CA certificate is copied here, to ./tracker-ca/ca/root.crt.
+    extra_hosts:
+      - "gitlab.internal:${INKLAYER_LOADTEST_HELPERS_IP:?set INKLAYER_LOADTEST_HELPERS_IP}"
+    volumes:
+      - ./tracker-ca:/tracker-ca:ro
+
+  fake-gitlab-tls:
+    ports:
+      - "${INKLAYER_LOADTEST_HELPERS_IP:?set INKLAYER_LOADTEST_HELPERS_IP}:443:443"
