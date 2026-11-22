@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using Inklayer.Api.Access;
+using Inklayer.Api.Hosting;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Notifications;
 using Inklayer.Infrastructure.Persistence;
@@ -46,7 +47,7 @@ internal static class NotificationEndpoints
     public static IEndpointRouteBuilder MapNotificationEndpoints(this IEndpointRouteBuilder app)
     {
         var inbox = app.MapGroup("/api/notifications").WithTags("Notifications").RequireAuthorization();
-        inbox.MapGet("/", InboxAsync).Produces<InboxResponse>().WithSummary("Your notifications, newest first, with how many are unread: ?before=&limit=");
+        inbox.MapGet("/", InboxAsync).WithChangeStamp(ChangeAreas.Notifications).Produces<InboxResponse>().WithSummary("Your notifications, newest first, with how many are unread: ?before=&limit=");
         inbox.MapPost("/read", MarkReadAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Mark notifications as read");
 
         app.MapGet("/api/orgs/{orgId:guid}/members/lookup", LookupAsync).Produces<List<PersonResponse>>().WithTags("Organizations").RequireAuthorization()

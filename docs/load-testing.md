@@ -123,6 +123,7 @@ Pass these to k6 with `-e NAME=value`, or put them in `loadtest/k6.env`.
 | `EDITED_DOCS` | all | 5 (how many docs the editors share) |
 | `BUSY_DRAWINGS`, `DRAWING_KB`, `BUSY_PAGE_SHARE` | all | 60, 20, 0.1 (the busy page's drawings, their size, and the share of reads that load it; a few seconds of scribbling is 5–30 KB) |
 | `MEDIA` | all | `on` (`off` leaves out uploads, recordings and issues with files) |
+| `REVALIDATE` | all | `on`: reads send back the stamp (ETag) of their last answer, as a browser does, and may get 304 Not Modified. `off` asks afresh every time |
 | `UPLOADS_PER_MIN`, `PLAYERS`, `ISSUES_PER_MIN` | ci, soak | ci 6, 4, 4; soak 3, 3, 2 |
 | `MAX_UPLOADS_PER_MIN`, `MAX_PLAYERS`, `MAX_ISSUES_PER_MIN` | capacity | 30, 30, 30 |
 | `VIDEO_MB`, `FULLPAGE_MB`, `SCREENSHOT_KB` | all | 20, 4, 300 (recordings can be up to 40 MB) |

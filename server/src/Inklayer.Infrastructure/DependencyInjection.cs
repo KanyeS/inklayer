@@ -31,9 +31,11 @@ public static class DependencyInjection
         Directory.CreateDirectory(paths.Keys);
         services.AddSingleton(paths);
 
-        services.AddDbContextPool<InklayerDbContext>(options => options
+        services.AddSingleton<ChangeClock>();
+        services.AddSingleton<ChangeClockInterceptor>();
+        services.AddDbContextPool<InklayerDbContext>((sp, options) => options
             .UseSqlite(connectionString)
-            .AddInterceptors(SqlitePragmaInterceptor.Instance)
+            .AddInterceptors(SqlitePragmaInterceptor.Instance, sp.GetRequiredService<ChangeClockInterceptor>())
             .UseOpenIddict());
 
         services.AddOptions<DatabaseOptions>().Bind(configuration.GetSection(DatabaseOptions.SectionName));

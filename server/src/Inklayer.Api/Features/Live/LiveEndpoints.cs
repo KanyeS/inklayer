@@ -1,8 +1,9 @@
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Annotations;
+using Inklayer.Api.Hosting;
 using Inklayer.Domain.Annotations;
-using Inklayer.Domain.Issues;
 using Inklayer.Domain.Authorization;
+using Inklayer.Domain.Issues;
 using Inklayer.Domain.Projects;
 using Inklayer.Domain.Users;
 using Inklayer.Infrastructure.Persistence;
@@ -41,7 +42,7 @@ internal static class LiveEndpoints
         live.MapGet("/projects", ProjectsAsync).Produces<List<LiveProjectResponse>>().WithSummary("Projects the caller can use on live pages, with their role");
         live.MapGet("/pages", AllPagesAsync).Produces<List<LivePageSummaryResponse>>().WithSummary("Every page with comments in every project the caller can view, most recently active first");
         LivePullRequests.Map(live);
-        live.MapGet("/annotations", ListAsync).Produces<List<LivePageAnnotationsResponse>>().WithSummary("Comments on one live page across the caller's projects: ?url=<the page's address>");
+        live.MapGet("/annotations", ListAsync).WithChangeStamp(ChangeAreas.Comments).Produces<List<LivePageAnnotationsResponse>>().WithSummary("Comments on one live page across the caller's projects: ?url=<the page's address>");
 
         var byProject = app.MapGroup("/api/projects/{projectId:guid}/live").WithTags("Live").RequireAuthorization();
         byProject.MapPost("/annotations", CreateAsync).Produces<AnnotationResponse>(StatusCodes.Status201Created);

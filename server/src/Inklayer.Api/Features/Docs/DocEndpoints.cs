@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Live;
+using Inklayer.Api.Hosting;
 using Inklayer.Domain.Authorization;
 using Inklayer.Domain.Docs;
 using Inklayer.Infrastructure.Persistence;
@@ -78,7 +79,7 @@ internal static class DocEndpoints
     public static IEndpointRouteBuilder MapDocEndpoints(this IEndpointRouteBuilder app)
     {
         var byOrg = app.MapGroup("/api/orgs/{orgId:guid}/docs").WithTags("Docs").RequireAuthorization();
-        byOrg.MapGet("/", TreeAsync).Produces<DocTreeResponse>().WithSummary("Folders and docs, with tags");
+        byOrg.MapGet("/", TreeAsync).WithChangeStamp(ChangeAreas.Docs).Produces<DocTreeResponse>().WithSummary("Folders and docs, with tags");
         byOrg.MapPost("/", CreateAsync).Produces<DocSummaryResponse>(StatusCodes.Status201Created).WithSummary("Create an empty doc (Commenter and above)");
         byOrg.MapPost("/folders", CreateFolderAsync).Produces<DocFolderResponse>(StatusCodes.Status201Created).WithSummary("Create an empty folder");
         byOrg.MapPatch("/folders", MoveFolderAsync).Produces<DocFolderMovedResponse>().WithSummary("Rename or move a folder, with everything in it");
@@ -93,7 +94,7 @@ internal static class DocEndpoints
         app.MapHub<DocsHub>(Presence.PresenceEndpoints.DocsHubPath, o => o.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets);
 
         var docs = app.MapGroup("/api/docs").WithTags("Docs").RequireAuthorization();
-        docs.MapGet("/{docId:guid}", GetAsync).Produces<DocResponse>().WithSummary("A doc's details, links and backlinks (the text comes from the docs hub)");
+        docs.MapGet("/{docId:guid}", GetAsync).WithChangeStamp(ChangeAreas.Docs).Produces<DocResponse>().WithSummary("A doc's details, links and backlinks (the text comes from the docs hub)");
         docs.MapPatch("/{docId:guid}", UpdateAsync).Produces<DocChangedResponse>().WithSummary("Rename or move a doc");
         docs.MapPut("/{docId:guid}/appearance", SetAppearanceAsync).Produces<DocResponse>().WithSummary("Set the doc's icon and colour (Commenter and above)");
         docs.MapDelete("/{docId:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Delete a doc: ?version=");

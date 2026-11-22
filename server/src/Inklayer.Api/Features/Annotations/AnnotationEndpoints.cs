@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Inklayer.Api.Access;
 using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Features.Notifications;
+using Inklayer.Api.Hosting;
 using Inklayer.Domain.Annotations;
 using Inklayer.Domain.Authorization;
 using Inklayer.Infrastructure.Persistence;
@@ -27,7 +28,7 @@ internal static partial class AnnotationEndpoints
     public static IEndpointRouteBuilder MapAnnotationEndpoints(this IEndpointRouteBuilder app)
     {
         var annotations = app.MapGroup("/api/annotations").WithTags("Annotations").RequireAuthorization();
-        annotations.MapGet("/{annotationId:guid}", GetAsync).Produces<AnnotationDetailResponse>().WithSummary("One comment, with its project, page and the docs that mention it");
+        annotations.MapGet("/{annotationId:guid}", GetAsync).WithChangeStamp(ChangeAreas.Comments).Produces<AnnotationDetailResponse>().WithSummary("One comment, with its project, page and the docs that mention it");
         annotations.MapPatch("/{annotationId:guid}", UpdateAsync).Produces<AnnotationResponse>();
         annotations.MapDelete("/{annotationId:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Soft-delete; send ?version= to guard against deleting a changed annotation");
         annotations.MapGet("/{annotationId:guid}/history", HistoryAsync).Produces<List<AnnotationRevisionResponse>>().WithSummary("Every revision, oldest first");

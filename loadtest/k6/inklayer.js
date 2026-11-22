@@ -293,9 +293,17 @@ function headersFor(data) {
   return { Cookie: data.cookie, 'Content-Type': 'application/json', 'X-Inklayer-Csrf': '1' };
 }
 
+// Like a browser: what this VU was last given for a path, sent back so the server can answer 304 if nothing changed.
+// REVALIDATE=off asks afresh every time.
+const REVALIDATE = (__ENV.REVALIDATE || 'on') !== 'off';
+const stamps = {};
+
 function get(data, path, name) {
-  const res = http.get(`${BASE_URL}${path}`, { headers: headersFor(data), tags: { kind: 'read', name } });
-  check(res, { [`${name}: 200`]: (r) => r.status === 200 });
+  const headers = headersFor(data);
+  if (REVALIDATE && stamps[path]) headers['If-None-Match'] = stamps[path];
+  const res = http.get(`${BASE_URL}${path}`, { headers, tags: { kind: 'read', name } });
+  check(res, { [`${name}: 200 or 304`]: (r) => r.status === 200 || r.status === 304 });
+  if (res.status === 200 && res.headers.Etag) stamps[path] = res.headers.Etag;
   return res;
 }
 
