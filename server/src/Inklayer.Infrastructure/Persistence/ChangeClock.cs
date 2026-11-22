@@ -75,17 +75,30 @@ public sealed partial class ChangeClock
         ["AnnotationIssues"] = ChangeAreas.Comments,
         ["IssueComments"] = ChangeAreas.Comments,
         ["PullRequestSummaries"] = ChangeAreas.Comments,
-        ["Docs"] = ChangeAreas.Docs | ChangeAreas.Comments, // a comment shows the docs that mention it
+        ["Docs"] = ChangeAreas.Docs | ChangeAreas.Comments, // a comment shows the docs that mention it (but see DocTextColumns)
         ["DocFolders"] = ChangeAreas.Docs,
         ["DocRevisions"] = ChangeAreas.Docs,
         ["DocLinks"] = ChangeAreas.Docs | ChangeAreas.Comments,
         ["DocTags"] = ChangeAreas.Docs,
         ["DocTagStyles"] = ChangeAreas.Docs,
+        ["DocSearch"] = ChangeAreas.Docs,
         ["Notifications"] = ChangeAreas.Notifications,
     };
 
-    [GeneratedRegex("""(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+"(\w+)"(?:\s+AS\s+"\w+")?\s*(SET\s+"(\w+)"\s*=[^,]*?\s+WHERE)?""", RegexOptions.IgnoreCase)]
+    /// <summary>
+    /// Columns of a doc that change as people type. Comments show docs' titles and links, not their text, so an update that
+    /// only sets these doesn't change comments; one that only sets LastSeq (saving live edits) changes nothing shown.
+    /// </summary>
+    private static readonly HashSet<string> DocTextColumns = new(StringComparer.Ordinal)
+    {
+        "Content", "State", "SnapshotSeq", "LastSeq", "UpdatedAt", "UpdatedByUserId", "Version",
+    };
+
+    [GeneratedRegex("""(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+"(\w+)"(?:\s+AS\s+"\w+")?(?:\s+SET\s+(.*?)(?=\s+WHERE\b|\s+RETURNING\b|;|$))?""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex Writes();
+
+    [GeneratedRegex("\"(\\w+)\"\\s*=(?!=)")]
+    private static partial Regex Assigned();
 
     /// <summary>The areas a command may change. None for reads.</summary>
     public static ChangeAreas AreasOf(string sql)
@@ -99,10 +112,19 @@ public sealed partial class ChangeClock
                 continue;
             }
 
-            // Saving live edits only moves a doc's edit counter: nothing a page shows.
-            if (table == "Docs" && write.Groups[3].Value == "LastSeq")
+            if (table == "Docs" && write.Groups[2].Success)
             {
-                continue;
+                var columns = Assigned().Matches(write.Groups[2].Value).Select(m => m.Groups[1].Value).ToList();
+                if (columns.Count > 0 && columns.All(c => c == "LastSeq"))
+                {
+                    continue;
+                }
+
+                if (columns.Count > 0 && columns.All(DocTextColumns.Contains))
+                {
+                    areas |= ChangeAreas.Docs;
+                    continue;
+                }
             }
 
             areas |= Owned.GetValueOrDefault(table, ChangeAreas.All);

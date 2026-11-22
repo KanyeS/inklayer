@@ -13,27 +13,50 @@ namespace Inklayer.Api.Features.Docs;
 /// </summary>
 public sealed partial class DocIndexer(InklayerDbContext db)
 {
-    /// <summary>Rebuilds a doc's outgoing links, tags and search entry from its <see cref="Doc.Content"/>.</summary>
+    /// <summary>
+    /// Rebuilds a doc's outgoing links, tags and search entry from its <see cref="Doc.Content"/>. Links and tags are only
+    /// rewritten when they changed: saving while someone types mostly changes words, and comments show these links.
+    /// </summary>
     public async Task IndexDocAsync(Doc doc, CancellationToken ct)
     {
-        await db.DocLinks.Where(l => l.SourceDocId == doc.Id).ExecuteDeleteAsync(ct);
-        await db.DocTags.Where(t => t.DocId == doc.Id).ExecuteDeleteAsync(ct);
         var id = doc.Id.ToString();
         await db.Database.ExecuteSqlAsync($"DELETE FROM \"DocSearch\" WHERE \"DocId\" = {id}", ct);
         if (doc.DeletedAt is not null)
         {
+            await db.DocLinks.Where(l => l.SourceDocId == doc.Id).ExecuteDeleteAsync(ct);
+            await db.DocTags.Where(t => t.DocId == doc.Id).ExecuteDeleteAsync(ct);
             return;
         }
 
         var (links, tags) = DocMarkdown.Extract(doc.Content);
-        await AddLinksAsync(doc.OrganizationId, links, l => new DocLink
+        var wanted = await LinksAsync(doc.OrganizationId, links, l => new DocLink
         {
             OrganizationId = doc.OrganizationId, SourceDocId = doc.Id, TargetAnnotationId = l.CommentId, TargetKey = l.Key ?? "", Text = l.Target ?? "",
         }, ct);
-        db.DocTags.AddRange(tags.Where(t => t.Length <= 100).Select(t => new DocTag { DocId = doc.Id, Tag = t, OrganizationId = doc.OrganizationId }));
+        var stored = await db.DocLinks.AsNoTracking().Where(l => l.SourceDocId == doc.Id).ToListAsync(ct);
+        if (!SameLinks(stored, wanted))
+        {
+            await db.DocLinks.Where(l => l.SourceDocId == doc.Id).ExecuteDeleteAsync(ct);
+            db.DocLinks.AddRange(wanted);
+        }
+
+        var wantedTags = tags.Where(t => t.Length <= 100).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        var storedTags = await db.DocTags.AsNoTracking().Where(t => t.DocId == doc.Id).Select(t => t.Tag).ToListAsync(ct);
+        if (!storedTags.Order(StringComparer.Ordinal).SequenceEqual(wantedTags, StringComparer.Ordinal))
+        {
+            await db.DocTags.Where(t => t.DocId == doc.Id).ExecuteDeleteAsync(ct);
+            db.DocTags.AddRange(wantedTags.Select(t => new DocTag { DocId = doc.Id, Tag = t, OrganizationId = doc.OrganizationId }));
+        }
+
         var org = doc.OrganizationId.ToString();
         await db.Database.ExecuteSqlAsync(
             $"INSERT INTO \"DocSearch\" (\"DocId\", \"OrganizationId\", \"Title\", \"Content\") VALUES ({id}, {org}, {doc.Title}, {doc.Content})", ct);
+    }
+
+    private static bool SameLinks(List<DocLink> stored, List<DocLink> wanted)
+    {
+        static string Key(DocLink l) => $"{l.TargetKey}\n{l.TargetAnnotationId}\n{l.TargetDocId}\n{l.Text}";
+        return stored.Select(Key).Order(StringComparer.Ordinal).SequenceEqual(wanted.Select(Key).Order(StringComparer.Ordinal), StringComparer.Ordinal);
     }
 
     /// <summary>Rebuilds a comment's links to docs from its body and its replies. A deleted comment links nothing.</summary>
@@ -102,18 +125,23 @@ public sealed partial class DocIndexer(InklayerDbContext db)
         return [.. rows.Select(r => (Guid.Parse(r.DocId), r.Snippet))];
     }
 
-    private async Task AddLinksAsync(Guid organizationId, IReadOnlyList<WikiLink> links, Func<WikiLink, DocLink> create, CancellationToken ct)
+    private async Task AddLinksAsync(Guid organizationId, IReadOnlyList<WikiLink> links, Func<WikiLink, DocLink> create, CancellationToken ct) =>
+        db.DocLinks.AddRange(await LinksAsync(organizationId, links, create, ct));
+
+    /// <summary>One link row per distinct target, resolved.</summary>
+    private async Task<List<DocLink>> LinksAsync(Guid organizationId, IReadOnlyList<WikiLink> links, Func<WikiLink, DocLink> create, CancellationToken ct)
     {
         var keys = links.Where(l => l.Key is not null).Select(l => l.Key!).Distinct(StringComparer.Ordinal).ToList();
         var targets = keys.Count > 0 ? await ResolveAsync(organizationId, keys, ct) : [];
-
-        // One row per distinct target.
+        var rows = new List<DocLink>();
         foreach (var link in links.DistinctBy(l => (l.Key, l.CommentId)).Take(500))
         {
             var row = create(link);
             row.TargetDocId = link.Key is null ? null : targets.GetValueOrDefault(link.Key);
-            db.DocLinks.Add(row);
+            rows.Add(row);
         }
+
+        return rows;
     }
 
     private sealed record SearchRow(string DocId, string Snippet);
