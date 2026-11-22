@@ -36,19 +36,20 @@ internal static class ObservabilityExtensions
             }
         });
 
-        var otel = builder.Services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService(ServiceName, serviceVersion: AppVersion.Current))
-            .WithTracing(t => t
-                .AddAspNetCoreInstrumentation(o => o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health", StringComparison.Ordinal))
-                .AddHttpClientInstrumentation())
-            .WithMetrics(m => m
-                .AddAspNetCoreInstrumentation()
-                .AddHttpClientInstrumentation()
-                .AddMeter("System.Runtime"));
-
+        // Traces and metrics are only collected when there's somewhere to send them: collecting them for nobody costs
+        // CPU on every request.
         if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
         {
-            otel.UseOtlpExporter();
+            builder.Services.AddOpenTelemetry()
+                .ConfigureResource(r => r.AddService(ServiceName, serviceVersion: AppVersion.Current))
+                .WithTracing(t => t
+                    .AddAspNetCoreInstrumentation(o => o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health", StringComparison.Ordinal))
+                    .AddHttpClientInstrumentation())
+                .WithMetrics(m => m
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddMeter("System.Runtime"))
+                .UseOtlpExporter();
         }
 
         return builder;

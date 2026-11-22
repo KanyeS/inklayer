@@ -45,15 +45,39 @@ internal static partial class HostingExtensions
         app.UseInklayerShareHeaders();
         app.UseExceptionHandler();
         app.UseStatusCodePages();
-        app.UseSerilogRequestLogging(o =>
-            o.GetLevel = (ctx, _, ex) => ctx.Items.ContainsKey(LoadShedding.RefusedItem)
-                ? Serilog.Events.LogEventLevel.Debug // one warning a minute says it's refusing; a line per refusal would add to the load
-                : ex is not null || ctx.Response.StatusCode >= 500
-                ? Serilog.Events.LogEventLevel.Error
-                : ctx.Request.Path.StartsWithSegments("/health", StringComparison.Ordinal)
-                    ? Serilog.Events.LogEventLevel.Verbose
-                    : Serilog.Events.LogEventLevel.Information);
+        // Only failures and slow requests by default: a line per request costs CPU the server is short of when it's busy.
+        // Inklayer:Logging:EveryRequest=true logs them all again, for debugging.
+        var everyRequest = app.Configuration.GetValue("Inklayer:Logging:EveryRequest", false);
+        var slowMs = app.Configuration.GetValue("Inklayer:Logging:SlowRequestMs", 1000);
+        app.UseSerilogRequestLogging(o => o.GetLevel = (ctx, elapsedMs, ex) => RequestLogLevel(ctx, elapsedMs, ex, everyRequest, slowMs));
         return app;
+    }
+
+    /// <summary>The level a finished request is logged at. Below Information, it isn't written (see appsettings.json).</summary>
+    internal static Serilog.Events.LogEventLevel RequestLogLevel(HttpContext context, double elapsedMs, Exception? exception, bool everyRequest, int slowMs)
+    {
+        if (context.Items.ContainsKey(LoadShedding.RefusedItem))
+        {
+            return Serilog.Events.LogEventLevel.Debug; // one warning a minute says it's refusing; a line per refusal would add to the load
+        }
+
+        if (exception is not null || context.Response.StatusCode >= 500)
+        {
+            return Serilog.Events.LogEventLevel.Error;
+        }
+
+        if (context.Request.Path.StartsWithSegments("/health", StringComparison.Ordinal))
+        {
+            return Serilog.Events.LogEventLevel.Verbose;
+        }
+
+        // Live connections stay open for as long as the tab does: their "request" is always slow.
+        if (elapsedMs >= slowMs && !context.WebSockets.IsWebSocketRequest)
+        {
+            return Serilog.Events.LogEventLevel.Warning;
+        }
+
+        return everyRequest ? Serilog.Events.LogEventLevel.Information : Serilog.Events.LogEventLevel.Debug;
     }
 
     private static int _warnedAboutProxy;
