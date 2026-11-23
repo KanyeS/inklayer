@@ -406,6 +406,38 @@ button.link.danger {
   padding: 3px 4px;
   font-size: 13px;
 }
+.filter-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.filter-tools .page-only {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.filter-tools .search-toggle.on {
+  color: var(--foreground);
+}
+.filter-search {
+  margin: 2px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--foreground);
+  background: var(--background);
+  font-size: 13px;
+}
+.filter-search::placeholder {
+  color: var(--muted-foreground);
+}
+.filter-empty {
+  margin: 4px;
+  font-size: 12px;
+}
 .filter-menu .org {
   display: grid;
   gap: 2px;

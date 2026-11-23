@@ -47,6 +47,8 @@ const PATHS = {
     "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143",
     "m2 2 20 20",
   ],
+  /** A magnifying glass: search. */
+  search: ["m21 21-4.34-4.34", "M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof PATHS;

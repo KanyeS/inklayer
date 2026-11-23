@@ -186,7 +186,87 @@ describe("showing some products' comments", () => {
     expect(texts(panel(), ".list .body")).toEqual(["Website note", "Shop note", "Blog note"]);
     expect(showing()).toBe("All products");
     expect(texts(panel(), ".filter-menu .org-name")).toEqual(["Acme", "Beta"]);
-    expect([...panel().querySelectorAll<HTMLInputElement>(".filter-menu input")].every((i) => i.checked)).toBe(true);
+    expect(
+      [...panel().querySelectorAll<HTMLInputElement>(".filter-menu label:not(.page-only) input")].every(
+        (i) => i.checked,
+      ),
+    ).toBe(true);
+  });
+
+  /** The product names the "Showing" checklist lists. */
+  const listed = () =>
+    [...panel().querySelectorAll(".filter-menu .org > .choice:not(.org-name)")].map(
+      (l) => l.textContent?.replace(/\s*\(\d+\)$/, "") ?? "",
+    );
+
+  it("lists only the products with comments on this page when asked", async () => {
+    pages = [pages[0]!, pages[1]!];
+    const session = new LiveSession(init({ pages, projects: [website, shop, blog] }));
+    await session.start(true);
+    expect(listed()).toEqual(["Website", "Shop", "Blog"]);
+
+    tick("On this page only");
+    await settle();
+    expect(listed()).toEqual(["Website", "Shop"]);
+    expect(texts(panel(), ".filter-menu .org-name")).toEqual(["Acme", "Beta"]);
+
+    tick("On this page only");
+    await settle();
+    expect(listed()).toEqual(["Website", "Shop", "Blog"]);
+  });
+
+  it("remembers on this page only and the search for every site", async () => {
+    pages = [pages[0]!, pages[1]!];
+    const session = new LiveSession(init({ pages, projects: [website, shop, blog] }));
+    await session.start(true);
+    tick("On this page only");
+    await settle();
+    expect(fake.stored.productMenu).toEqual({ pageOnly: true, search: null });
+
+    (panel().querySelector(".search-toggle") as HTMLButtonElement).click();
+    await settle();
+    const box = panel().querySelector(".filter-search") as HTMLInputElement;
+    box.value = "acme";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    expect(fake.stored.productMenu).toEqual({ pageOnly: true, search: "acme" });
+  });
+
+  it("starts with the checklist narrowed down as it was left", async () => {
+    pages = [pages[0]!, pages[1]!];
+    fake.stored.productMenu = { pageOnly: true, search: "beta" };
+    const session = new LiveSession(init({ pages, projects: [website, shop, blog] }));
+    await session.start(true);
+    await settle();
+    expect((panel().querySelector(".filter-search") as HTMLInputElement).value).toBe("beta");
+    expect(listed()).toEqual(["Shop"]);
+  });
+
+  it("searches the products by name or organisation from the search icon", async () => {
+    const session = new LiveSession(init({ pages, projects: [website, shop, blog] }));
+    await session.start(true);
+    expect(panel().querySelector(".filter-search")).toBeNull();
+
+    (panel().querySelector(".search-toggle") as HTMLButtonElement).click();
+    await settle();
+    const box = panel().querySelector(".filter-search") as HTMLInputElement;
+    const type = async (text: string) => {
+      box.value = text;
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      await settle();
+    };
+
+    await type("sho");
+    expect(listed()).toEqual(["Shop"]);
+    await type("beta");
+    expect(listed()).toEqual(["Shop", "Blog"]);
+    await type("nothing");
+    expect(panel().querySelector(".filter-empty")?.textContent).toBe("No products match.");
+
+    (panel().querySelector(".search-toggle") as HTMLButtonElement).click();
+    await settle();
+    expect(panel().querySelector(".filter-search")).toBeNull();
+    expect(listed()).toEqual(["Website", "Shop", "Blog"]);
   });
 
   it("shows several products at once and remembers them for this site", async () => {

@@ -38,7 +38,7 @@ import { cornerPin, header, launcher, type SharedLink, sharedBox, sizeBar } from
 import { bubbleContent, type CommentActions, listEntry } from "./views/comment";
 import { CommentParts } from "./views/comment-parts";
 import { cannotComment, draftBox, draftInput, scopeChooser, toolbar } from "./views/composer";
-import { commentList, productFilter } from "./views/filter";
+import { commentList, DEFAULT_PRODUCT_MENU_VIEW, productFilter, readProductMenuView } from "./views/filter";
 import { InboxView } from "./views/inbox";
 import { pullRequestBox } from "./views/pull-request";
 import { SizeMatcher } from "./window-size";
@@ -52,7 +52,15 @@ const REFRESH_EVERY_MS = 60_000;
 const WATCH_ADDRESS_MS = 1000;
 
 /** Settings remembered in the extension's storage, the same on every site. */
-const STORED_KEYS = ["bubblesOpen", "attachContext", "panelPosition", "panelPinned", "unreadCount", "fullPage"];
+const STORED_KEYS = [
+  "bubblesOpen",
+  "attachContext",
+  "panelPosition",
+  "panelPinned",
+  "unreadCount",
+  "fullPage",
+  "productMenu",
+];
 
 /**
  * Live mode on a real page.
@@ -131,6 +139,8 @@ export class LiveSession {
   #marksVisible = true;
   /** Every comment's bubble open, not just on hover (the user's choice, remembered). */
   #bubblesOpen = false;
+  /** How the "Showing" checklist is narrowed down: on this page only, and the search. */
+  #productMenu = DEFAULT_PRODUCT_MENU_VIEW;
   #busy = false;
   #error = "";
   /** A short message under the header (sharing results, how to move the panel). */
@@ -329,6 +339,7 @@ export class LiveSession {
       .then((stored) => {
         this.#inbox.unread = typeof stored.unreadCount === "number" ? stored.unreadCount : 0;
         this.#bubblesOpen = stored.bubblesOpen === true;
+        this.#productMenu = readProductMenuView(stored.productMenu);
         this.#captures.restore(stored);
         this.#mover.restore(stored);
         this.#render();
@@ -758,6 +769,12 @@ export class LiveSession {
         annotations: this.#annotations,
         selected: this.#site.ids,
         onChange: (projectIds) => this.#setFilter(projectIds),
+        view: this.#productMenu,
+        onViewChange: (view) => {
+          this.#productMenu = view;
+          remember({ productMenu: view });
+          this.#render();
+        },
       }),
       entry: (a) => this.#listEntry(a),
       onShowAllProducts: () => this.#setFilter([]),
