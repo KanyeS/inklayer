@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 
 export type {
   AnnotationDetailResponse as CommentInfo,
+  DeletedDocResponse as DeletedDoc,
   DocActor,
   DocCommentLinkResponse as DocCommentLink,
   DocGraphResponse as DocGraph,
@@ -32,6 +33,8 @@ export const docsApi = {
     api.patch("/api/orgs/{orgId}/docs/folders", { ...org(orgId), body: { from, to } }),
   deleteFolder: (orgId: string, path: string) =>
     api.delete("/api/orgs/{orgId}/docs/folders", { params: { path: { orgId }, query: { path } } }),
+  /** Deleted docs, most recently deleted first. */
+  deleted: (orgId: string) => api.get("/api/orgs/{orgId}/docs/deleted", org(orgId)),
   search: (orgId: string, q: string) =>
     api.get("/api/orgs/{orgId}/docs/search", { params: { path: { orgId }, query: { q } } }),
   tags: (orgId: string) => api.get("/api/orgs/{orgId}/docs/tags", org(orgId)),
@@ -47,6 +50,8 @@ export const docsApi = {
     api.patch("/api/docs/{docId}", { ...doc(docId), body }),
   delete: (docId: string, version: number) =>
     api.delete("/api/docs/{docId}", { params: { path: { docId }, query: { version } } }),
+  /** Brings a deleted doc back where it was, with its text, tags and links. */
+  restore: (docId: string) => api.post("/api/docs/{docId}/restore", doc(docId)),
   /** Sets the doc's icon and colour (null for the defaults). Not a change to the doc: no version needed. */
   setAppearance: (docId: string, appearance: { icon: string | null; color: string | null }) =>
     api.put("/api/docs/{docId}/appearance", { ...doc(docId), body: appearance }) as Promise<DocResponse>,

@@ -313,13 +313,14 @@ internal static class InklayerTools
         return ToolResults.ToJson(new { after.Id, after.Folder, after.Title, UpdatedLinksIn = changed.RelinkDocs.Count });
     }
 
-    [McpServerTool(Name = "delete_doc", Destructive = true, OpenWorld = false), Description("Delete a doc. Links to it show as missing; its history is kept.")]
+    [McpServerTool(Name = "delete_doc", Destructive = true, OpenWorld = false), Description("Delete a doc. Links to it show as missing; its history is kept, and it can be restored from Deleted docs in the docs sidebar.")]
     public static async Task<string> DeleteDoc(
-        [Description("Doc id")] Guid docId, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        [Description("Doc id")] Guid docId, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, DocEditBuffer edits, TimeProvider clock,
+        CancellationToken ct)
     {
         var version = await db.Docs.Where(d => d.Id == docId && d.DeletedAt == null).Select(d => (int?)d.Version).SingleOrDefaultAsync(ct)
             ?? throw new McpException("Not found, or you don't have access to it.");
-        ToolResults.Ok(await DocEndpoints.DeleteAsync(docId, version, access, currentUser, db, indexer, clock, ct));
+        ToolResults.Ok(await DocEndpoints.DeleteAsync(docId, version, access, currentUser, db, indexer, edits, clock, ct));
         return "Deleted.";
     }
 

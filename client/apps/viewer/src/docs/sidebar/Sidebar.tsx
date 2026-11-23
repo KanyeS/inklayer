@@ -1,10 +1,12 @@
-import { FilePlus2, FolderPlus, Network, Search } from "lucide-react";
+import { cn } from "@inklayer/ui/lib/utils";
+import { FilePlus2, FolderPlus, Network, Search, Trash2 } from "lucide-react";
 import { type DragEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorText } from "@/components/Layout";
 import { useAction } from "@/lib/query";
 import { Link, navigate } from "@/lib/router";
 import { type DocTagInfo, type DocTree, docPath, docsApi } from "../docsApi";
 import { rewriteLinks } from "../links";
+import { deletedDocsPath } from "../paths";
 import { TagPill, tagOf } from "../tags";
 import { DocRow, DraftInput, FolderChildren, IconButton } from "./FolderTree";
 import {
@@ -29,6 +31,8 @@ export interface SidebarProps {
   tag: string | null;
   onTag: (tag: string | null) => void;
   onSearch: () => void;
+  /** The deleted docs list is open (highlights its link). */
+  showingDeleted?: boolean;
 }
 
 /** Which folders are open, remembered per organisation in the browser. Opens the folders down to the doc shown. */
@@ -66,7 +70,7 @@ function useOpenFolders(orgId: string, tree: DocTree, activeId: string | undefin
  * The docs sidebar: the organisation, search and new-doc buttons, the folder tree (or the docs with one tag), and the
  * tags. Docs and folders can be dragged between folders; moving them rewrites links to them.
  */
-export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch }: SidebarProps) {
+export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch, showingDeleted }: SidebarProps) {
   const root = useMemo(() => buildTree(tree), [tree]);
   const { open, toggle, openFolder } = useOpenFolders(orgId, tree, activeId);
   const [draft, setDraft] = useState<Draft>(null);
@@ -188,6 +192,19 @@ export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch }
       )}
 
       {tags.length > 0 && <TagList tags={tags} active={tag} onTag={onTag} />}
+
+      <div className="border-t px-2 py-2">
+        <Link
+          to={deletedDocsPath(orgId)}
+          className={cn(
+            "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground",
+            showingDeleted && "bg-muted text-foreground",
+          )}
+        >
+          <Trash2 className="size-4" />
+          Deleted docs
+        </Link>
+      </div>
     </aside>
   );
 }

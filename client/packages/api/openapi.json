@@ -3577,6 +3577,40 @@
         }
       }
     },
+    "/api/orgs/{orgId}/docs/deleted": {
+      "get": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Deleted docs, most recently deleted first, for restoring",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeletedDocResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/orgs/{orgId}/docs/search": {
       "get": {
         "tags": [
@@ -3908,6 +3942,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DocResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/docs/{docId}/restore": {
+      "post": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Bring back a deleted doc where it was (Commenter and above)",
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocSummaryResponse"
                 }
               }
             }
@@ -5580,6 +5645,47 @@
           "postRepliesToIssue": {
             "type": "boolean",
             "default": false
+          }
+        }
+      },
+      "DeletedDocResponse": {
+        "required": [
+          "id",
+          "folder",
+          "title",
+          "deletedAt",
+          "deletedBy"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deletedBy": {
+            "$ref": "#/components/schemas/DocActor"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

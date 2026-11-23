@@ -121,6 +121,8 @@ export const queries = {
     }),
 
   docTree: (orgId: string) => queryOptions({ queryKey: ["orgs", orgId, "docs"], queryFn: () => docsApi.tree(orgId) }),
+  deletedDocs: (orgId: string) =>
+    queryOptions({ queryKey: ["orgs", orgId, "docs", "deleted"], queryFn: () => docsApi.deleted(orgId) }),
   docGraph: (orgId: string) =>
     queryOptions({ queryKey: ["orgs", orgId, "docs", "graph"], queryFn: () => docsApi.graph(orgId) }),
   doc: (docId: string) => queryOptions({ queryKey: ["docs", docId], queryFn: () => docsApi.doc(docId) }),

@@ -3620,6 +3620,44 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/orgs/{orgId}/docs/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Deleted docs, most recently deleted first, for restoring */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    orgId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeletedDocResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{orgId}/docs/search": {
         parameters: {
             query?: never;
@@ -3941,6 +3979,44 @@ export interface paths {
             };
         };
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/docs/{docId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring back a deleted doc where it was (Commenter and above) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    docId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocSummaryResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -4398,6 +4474,17 @@ export interface components {
             closeIssueOnResolve?: boolean;
             /** @default false */
             postRepliesToIssue?: boolean;
+        };
+        DeletedDocResponse: {
+            /** Format: uuid */
+            id: string;
+            folder: string;
+            title: string;
+            /** Format: date-time */
+            deletedAt: string;
+            deletedBy: components["schemas"]["DocActor"];
+            icon?: null | string;
+            color?: null | string;
         };
         DocActor: {
             /** Format: uuid */
@@ -5167,6 +5254,7 @@ export type CreateProjectRequest = components['schemas']['CreateProjectRequest']
 export type CreateReplyRequest = components['schemas']['CreateReplyRequest'];
 export type CreateShareRequest = components['schemas']['CreateShareRequest'];
 export type CreateTrackerRequest = components['schemas']['CreateTrackerRequest'];
+export type DeletedDocResponse = components['schemas']['DeletedDocResponse'];
 export type DocActor = components['schemas']['DocActor'];
 export type DocAppearanceRequest = components['schemas']['DocAppearanceRequest'];
 export type DocChangedResponse = components['schemas']['DocChangedResponse'];

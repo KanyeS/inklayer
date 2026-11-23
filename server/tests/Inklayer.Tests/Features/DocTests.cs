@@ -34,6 +34,10 @@ public sealed record DocGraphEdgeDto(string Source, string Target);
 
 public sealed record DocRevisionDto(int Version, string Action, string Title);
 
+public sealed record DeletedDocDto(Guid Id, string Folder, string Title, DateTime DeletedAt, DocActorDto DeletedBy);
+
+public sealed record DocActorDto(Guid Id, string DisplayName);
+
 [Collection(ApiTestGroup.Name)]
 public sealed class DocTests(InklayerApiFactory factory)
 {
@@ -233,6 +237,56 @@ public sealed class DocTests(InklayerApiFactory factory)
         var graph = await graphResponse.ReadAsync<DocGraphDto>();
         Assert.Equal(["Source"], graph.Nodes.Select(n => n.Label));
         Assert.Empty(graph.Edges);
+        admin.Dispose();
+        commenter.Dispose();
+        viewer.Dispose();
+    }
+
+    [Fact]
+    public async Task A_deleted_doc_is_listed_and_restored_where_it_was_with_its_links()
+    {
+        var (admin, orgId, commenter, viewer) = await OrgAsync();
+        var target = await CreateAsync(commenter, orgId, "Target", "Plans");
+        var source = await CreateAsync(commenter, orgId, "Source");
+        await WriteAsync(source.Id, "[[Target]]");
+        await WriteAsync(target.Id, "Kept text #launch");
+        await commenter.DeleteAsync(new Uri($"/api/docs/{target.Id}?version=1", UriKind.Relative)).ExpectAsync(HttpStatusCode.NoContent);
+
+        // Everyone in the organisation sees what was deleted, and by whom; only Commenters and above restore it.
+        using (var listed = await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs/deleted", UriKind.Relative)))
+        {
+            var deleted = Assert.Single(await listed.ReadAsync<List<DeletedDocDto>>());
+            Assert.Equal((target.Id, "Plans", "Target"), (deleted.Id, deleted.Folder, deleted.Title));
+            Assert.NotEqual("Unknown", deleted.DeletedBy.DisplayName);
+        }
+
+        await viewer.PostJsonAsync($"/api/docs/{target.Id}/restore", new { }).ExpectAsync(HttpStatusCode.Forbidden);
+        await commenter.PostJsonAsync($"/api/docs/{source.Id}/restore", new { }).ExpectAsync(HttpStatusCode.NotFound); // not deleted
+
+        // A new doc took its name meanwhile: restoring waits until that one moves.
+        var standIn = await CreateAsync(commenter, orgId, "Target", "Plans");
+        await commenter.PostJsonAsync($"/api/docs/{target.Id}/restore", new { }).ExpectAsync(HttpStatusCode.Conflict);
+        await commenter.DeleteAsync(new Uri($"/api/docs/{standIn.Id}?version=1", UriKind.Relative)).ExpectAsync(HttpStatusCode.NoContent);
+
+        using (var restored = await commenter.PostJsonAsync($"/api/docs/{target.Id}/restore", new { }))
+        {
+            var summary = await restored.ReadAsync<DocSummaryDto>();
+            Assert.Equal(["launch"], summary.Tags);
+        }
+
+        var doc = await GetAsync(viewer, target.Id);
+        Assert.Equal("Plans", doc.Folder);
+        Assert.Equal(target.Id, Assert.Single((await GetAsync(viewer, source.Id)).Links).DocId);
+        using (var history = await viewer.GetAsync(new Uri($"/api/docs/{target.Id}/history", UriKind.Relative)))
+        {
+            Assert.Equal(["restored", "deleted", "created"], (await history.ReadAsync<List<DocRevisionDto>>()).Select(r => r.Action));
+        }
+
+        using (var listed = await viewer.GetAsync(new Uri($"/api/orgs/{orgId}/docs/deleted", UriKind.Relative)))
+        {
+            Assert.Equal([standIn.Id], (await listed.ReadAsync<List<DeletedDocDto>>()).Select(d => d.Id));
+        }
+
         admin.Dispose();
         commenter.Dispose();
         viewer.Dispose();

@@ -131,7 +131,7 @@ function DocTools({
       {canEdit && (
         <ConfirmButton
           title={`Delete "${info.title}"?`}
-          description="Links to it will show as missing. Its history is kept."
+          description="Anyone with it open loses it, and links to it show as missing until it's back. You can restore it, with its text and history, from Deleted docs at the bottom of the sidebar."
           confirmLabel="Delete doc"
           onConfirm={() => void remove()}
         >

@@ -106,6 +106,7 @@ public static class DocActions
     public const string Renamed = "renamed";
     public const string Moved = "moved";
     public const string Deleted = "deleted";
+    public const string Restored = "restored";
 }
 
 /// <summary>History: the doc's title, folder and text after a change, and who made it.</summary>

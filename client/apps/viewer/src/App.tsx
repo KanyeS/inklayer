@@ -78,6 +78,11 @@ function routes(me: Me): Route<(params: Params) => ReactNode>[] {
     { pattern: "/pages", page: () => <PagesPage /> },
     { pattern: "/orgs/:orgId", page: (p) => <OrganizationPage orgId={param(p, "orgId")} /> },
     { pattern: "/orgs/:orgId/docs", enabled: docsOn, page: (p) => <DocsPage orgId={param(p, "orgId")} /> },
+    {
+      pattern: "/orgs/:orgId/docs/deleted",
+      enabled: docsOn,
+      page: (p) => <DocsPage key={p.orgId} orgId={param(p, "orgId")} deleted />,
+    },
     { pattern: "/orgs/:orgId/graph", enabled: docsOn, page: (p) => <GraphPage orgId={param(p, "orgId")} /> },
     {
       pattern: "/orgs/:orgId/docs/:docId",

@@ -58,6 +58,9 @@ public sealed record DocRevisionResponse(Guid Id, int Version, string Action, Do
 
 public sealed record DocRevisionContentResponse(Guid Id, int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title, string Content);
 
+/// <param name="DeletedBy">Who deleted it.</param>
+public sealed record DeletedDocResponse(Guid Id, string Folder, string Title, DateTime DeletedAt, DocActor DeletedBy, string? Icon = null, string? Color = null);
+
 public sealed record DocSearchResultResponse(Guid Id, string Folder, string Title, string Snippet);
 
 /// <param name="Icon">The tag's Lucide icon, or null for none.</param>
@@ -84,6 +87,7 @@ internal static class DocEndpoints
         byOrg.MapPost("/folders", CreateFolderAsync).Produces<DocFolderResponse>(StatusCodes.Status201Created).WithSummary("Create an empty folder");
         byOrg.MapPatch("/folders", MoveFolderAsync).Produces<DocFolderMovedResponse>().WithSummary("Rename or move a folder, with everything in it");
         byOrg.MapDelete("/folders", DeleteFolderAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Delete an empty folder: ?path=");
+        byOrg.MapGet("/deleted", DeletedAsync).Produces<List<DeletedDocResponse>>().WithSummary("Deleted docs, most recently deleted first, for restoring");
         byOrg.MapGet("/search", SearchAsync).Produces<List<DocSearchResultResponse>>().WithSummary("Full-text search: ?q=");
         byOrg.MapGet("/lookup", LookupAsync).Produces<List<DocSummaryResponse>>().WithSummary("Docs whose title matches ?q=, for link suggestions");
         byOrg.MapGet("/tags", TagsAsync).Produces<List<DocTagCountResponse>>().WithSummary("Tags with how many docs have each, and each tag's icon and colour");
@@ -98,6 +102,7 @@ internal static class DocEndpoints
         docs.MapPatch("/{docId:guid}", UpdateAsync).Produces<DocChangedResponse>().WithSummary("Rename or move a doc");
         docs.MapPut("/{docId:guid}/appearance", SetAppearanceAsync).Produces<DocResponse>().WithSummary("Set the doc's icon and colour (Commenter and above)");
         docs.MapDelete("/{docId:guid}", DeleteAsync).Produces(StatusCodes.Status204NoContent).WithSummary("Delete a doc: ?version=");
+        docs.MapPost("/{docId:guid}/restore", RestoreAsync).Produces<DocSummaryResponse>().WithSummary("Bring back a deleted doc where it was (Commenter and above)");
         docs.MapGet("/{docId:guid}/history", HistoryAsync).Produces<List<DocRevisionResponse>>();
         docs.MapGet("/{docId:guid}/history/{revisionId:guid}", RevisionAsync).Produces<DocRevisionContentResponse>();
         return app;
@@ -277,8 +282,11 @@ internal static class DocEndpoints
     }
 
     internal static async Task<IResult> DeleteAsync(
-        Guid docId, int version, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        Guid docId, int version, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, DocEditBuffer edits, TimeProvider clock,
+        CancellationToken ct)
     {
+        // Save what was typed just before, so restoring it brings back every word.
+        await edits.FlushAsync(ct);
         var doc = await db.Docs.SingleOrDefaultAsync(d => d.Id == docId && d.DeletedAt == null, ct);
         if (doc is null)
         {
@@ -308,10 +316,69 @@ internal static class DocEndpoints
         await db.SaveChangesAsync(ct);
         await indexer.IndexDocAsync(doc, ct);
         await indexer.RelinkAsync(doc.OrganizationId, [doc.PathKey, doc.TitleKey], ct);
-        await db.DocUpdates.Where(u => u.DocId == doc.Id).ExecuteDeleteAsync(ct);
+
+        // Its live edits since the last snapshot are kept with it, for a restore.
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>Docs that can be restored, newest deletion first.</summary>
+    private const int DeletedListLimit = 200;
+
+    internal static async Task<IResult> DeletedAsync(Guid orgId, AccessService access, InklayerDbContext db, CancellationToken ct)
+    {
+        var check = await access.CheckOrganizationAsync(orgId, Permission.View, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        var rows = await db.Docs.AsNoTracking().Where(d => d.OrganizationId == orgId && d.DeletedAt != null)
+            .OrderByDescending(d => d.DeletedAt).Take(DeletedListLimit)
+            .Select(d => new { d.Id, d.Folder, d.Title, DeletedAt = d.DeletedAt!.Value, d.UpdatedByUserId, d.Icon, d.Color }).ToListAsync(ct);
+        var actors = await ActorsAsync(db, rows.Select(r => r.UpdatedByUserId), ct);
+        return TypedResults.Ok(rows.Select(r => new DeletedDocResponse(r.Id, r.Folder, r.Title, r.DeletedAt, actors[r.UpdatedByUserId], r.Icon, r.Color)).ToList());
+    }
+
+    internal static async Task<IResult> RestoreAsync(
+        Guid docId, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+    {
+        var doc = await db.Docs.SingleOrDefaultAsync(d => d.Id == docId && d.DeletedAt != null, ct);
+        if (doc is null)
+        {
+            return TypedResults.NotFound();
+        }
+
+        var check = await access.CheckOrganizationAsync(doc.OrganizationId, Permission.Comment, ct);
+        if (!check.IsAllowed)
+        {
+            return check.Denied!;
+        }
+
+        if (await db.Docs.AnyAsync(d => d.OrganizationId == doc.OrganizationId && d.DeletedAt == null && d.PathKey == doc.PathKey, ct))
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict,
+                title: (doc.Folder.Length > 0 ? $"There's a doc called \"{doc.Title}\" in {doc.Folder} again." : $"There's a doc called \"{doc.Title}\" again.")
+                    + " Rename or move that one, then restore this.");
+        }
+
+        var userId = currentUser.Id!.Value;
+        var now = clock.GetUtcNow().UtcDateTime;
+        doc.DeletedAt = null;
+        doc.Version++;
+        doc.UpdatedAt = now;
+        doc.UpdatedByUserId = userId;
+        db.DocRevisions.Add(Revision(doc, DocActions.Restored, userId, now));
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await db.SaveChangesAsync(ct);
+        await indexer.IndexDocAsync(doc, ct);
+        await indexer.RelinkAsync(doc.OrganizationId, [doc.PathKey, doc.TitleKey], ct);
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        var tags = await db.DocTags.AsNoTracking().Where(t => t.DocId == doc.Id).Select(t => t.Tag).OrderBy(t => t).ToListAsync(ct);
+        return TypedResults.Ok(new DocSummaryResponse(doc.Id, doc.Folder, doc.Title, doc.UpdatedAt, tags, doc.Icon, doc.Color));
     }
 
     internal static async Task<IResult> HistoryAsync(Guid docId, AccessService access, InklayerDbContext db, CancellationToken ct)

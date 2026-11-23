@@ -23,6 +23,7 @@ export const DOC_VERBS: Readonly<Record<string, string>> = {
   renamed: "renamed a doc",
   moved: "moved a doc",
   deleted: "deleted a doc",
+  restored: "restored a doc",
 };
 
 /** The activity filter's names for each kind of entry. */

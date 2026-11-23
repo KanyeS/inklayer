@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ErrorText, Loading } from "@/components/Layout";
 import { queries } from "@/lib/queries";
 import { Link } from "@/lib/router";
+import { DeletedDocs } from "./DeletedDocs";
 import { DocView } from "./DocView";
 import { DocIcon } from "./docIcons";
 import { type DocTree, docPath } from "./docsApi";
@@ -19,7 +20,7 @@ const TREE_REFRESH_MS = 30_000;
  * The docs area of an organisation, laid out like Obsidian: folders and tags on the left, the doc in the middle, its
  * links and history on the right. Ctrl/Cmd+K opens the quick switcher.
  */
-export function DocsPage({ orgId, docId }: { orgId: string; docId?: string }) {
+export function DocsPage({ orgId, docId, deleted }: { orgId: string; docId?: string; deleted?: boolean }) {
   const org = useQuery(queries.org(orgId));
   // Others add and rename docs too: refresh the tree now and then (only while the tab is visible).
   const tree = useQuery({ ...queries.docTree(orgId), refetchInterval: TREE_REFRESH_MS });
@@ -60,8 +61,11 @@ export function DocsPage({ orgId, docId }: { orgId: string; docId?: string }) {
         tag={tag}
         onTag={setTag}
         onSearch={() => setSwitcherOpen(true)}
+        showingDeleted={deleted}
       />
-      {docId ? (
+      {deleted ? (
+        <DeletedDocs orgId={orgId} canEdit={tree.data.canEdit} />
+      ) : docId ? (
         <DocView key={docId} orgId={orgId} docId={docId} tree={tree.data} onTag={setTag} />
       ) : (
         <Welcome orgId={orgId} tree={tree.data} onSearch={() => setSwitcherOpen(true)} />
