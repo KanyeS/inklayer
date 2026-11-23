@@ -10,6 +10,7 @@ import { DocBody } from "./doc-view/DocBody";
 import { DocHeader, type Mode } from "./doc-view/DocHeader";
 import { DocInfoPanel } from "./doc-view/DocInfoPanel";
 import { HistoryDialog } from "./doc-view/HistoryDialog";
+import { scrollToPointer } from "./doc-view/usePresence";
 import { useSessionState } from "./doc-view/useSessionState";
 import type { DocTree } from "./docsApi";
 import { MarkdownGuide } from "./MarkdownGuide";
@@ -105,6 +106,7 @@ export function DocView({ orgId, docId, tree, onTag }: DocViewProps) {
             onHistory={() => setHistoryOpen(true)}
             onGuide={() => setGuideOpen(true)}
             onTag={onTag}
+            onFollow={liveCursors ? (peerId) => scrollToPointer(session, editorRef.current?.view, peerId) : undefined}
           />
           {snapshot?.loaded ? (
             <DocBody

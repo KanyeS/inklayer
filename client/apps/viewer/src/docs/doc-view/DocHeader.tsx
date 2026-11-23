@@ -1,3 +1,4 @@
+import { initials, safeColor } from "@inklayer/overlay";
 import { Button } from "@inklayer/ui/components/button";
 import { cn } from "@inklayer/ui/lib/utils";
 import { BookOpen, History, Info, PenLine, Trash2 } from "lucide-react";
@@ -10,7 +11,7 @@ import { timeAgo } from "@/lib/format";
 import { personTitle } from "@/lib/people";
 import { refreshAll } from "@/lib/query";
 import { navigate } from "@/lib/router";
-import type { DocSession, SessionStatus } from "../collab";
+import type { DocSession, Peer, SessionStatus } from "../collab";
 import { DocIcon } from "../docIcons";
 import { type DocInfo, type DocTree, docsApi } from "../docsApi";
 import { type Appearance, IconPicker } from "../IconPicker";
@@ -32,6 +33,8 @@ export interface DocHeaderProps {
   onTag: (tag: string) => void;
   onHistory: () => void;
   onGuide: () => void;
+  /** Scrolls to someone's pointer; left out when live cursors are off. */
+  onFollow?: (peerId: string) => void;
 }
 
 /** The doc's folder, save status and tools, then its icon, title, tags and who edited it last. */
@@ -46,6 +49,7 @@ export function DocHeader(props: DocHeaderProps) {
         <span className="truncate">{info.folder ? info.folder.split("/").join(" / ") : "Docs"}</span>
         <div className="flex items-center gap-1">
           <SaveStatus status={state?.status ?? "connecting"} canEdit={canEdit} />
+          <PeopleHere peers={state?.peers ?? []} onFollow={props.onFollow} />
           <DocTools {...props} onError={setError} />
         </div>
       </div>
@@ -75,6 +79,46 @@ function SaveStatus({ status, canEdit }: { status: SessionStatus; canEdit: boole
     >
       <span className={cn("size-2 rounded-full", statusDotClass(status))} />
       {statusLabel(status, canEdit)}
+    </span>
+  );
+}
+
+/** Faces shown before the rest are counted as "+N". */
+const MAX_FACES = 5;
+
+/** The faces of others with the doc open; clicking one scrolls to their pointer. */
+function PeopleHere({ peers, onFollow }: { peers: Peer[]; onFollow?: (peerId: string) => void }) {
+  if (peers.length === 0) return null;
+  const shown = peers.slice(0, MAX_FACES);
+  const rest = peers.slice(shown.length);
+  const face =
+    "-ml-1.5 grid size-6 place-items-center rounded-full border-2 border-background text-[10px] font-bold text-white";
+  return (
+    <span className="mr-2 flex pl-1.5">
+      {shown.map((peer) =>
+        onFollow ? (
+          <button
+            key={peer.id}
+            type="button"
+            className={cn(face, "cursor-pointer")}
+            style={{ background: safeColor(peer.color) }}
+            title={`${peer.name}: show their cursor`}
+            aria-label={`${peer.name}: show their cursor`}
+            onClick={() => onFollow(peer.id)}
+          >
+            {initials(peer.name)}
+          </button>
+        ) : (
+          <span key={peer.id} className={face} style={{ background: safeColor(peer.color) }} title={peer.name}>
+            {initials(peer.name)}
+          </span>
+        ),
+      )}
+      {rest.length > 0 && (
+        <span className={cn(face, "bg-muted-foreground")} title={rest.map((p) => p.name).join(", ")}>
+          +{rest.length}
+        </span>
+      )}
     </span>
   );
 }

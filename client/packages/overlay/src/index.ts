@@ -47,6 +47,6 @@ export {
 export { fromFraction, toFraction } from "./geometry";
 export { Overlay, type OverlayOptions } from "./overlay";
 export { browserOf, elementHtml, osOf, type Rect, screenshotArea } from "./pageDetails";
-export { initials, type PresencePeerView } from "./people";
+export { initials, type PresencePeerView, safeColor } from "./people";
 export { PresenceLayer } from "./presence";
 export * from "./types";
