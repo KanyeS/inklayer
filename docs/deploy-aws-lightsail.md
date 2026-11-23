@@ -3,7 +3,7 @@
 This guide runs Inklayer on a single Lightsail instance:
 - **HTTPS:** automatic, through Caddy and Let's Encrypt.
 - **Database:** a SQLite file on the instance's SSD.
-- **Backup:** continuous, to S3 through [Litestream](https://litestream.io). It is about one second behind, with 7 days of point-in-time history.
+- **Backup:** to S3 through [Litestream](https://litestream.io), uploading changes every 15 minutes, with 7 days of point-in-time history. Change how often with `LITESTREAM_SYNC_INTERVAL` in `.env`: more often loses less if the disk dies, but each upload is a billed S3 request.
 
 ```
             Internet
@@ -195,4 +195,4 @@ Inklayer stores only its database, which stays small. Check with `df -h /`; Dock
 ## Limits of this setup
 - **One instance.** SQLite allows one writer, so don't run two servers against the same database or the same Litestream bucket path.
 - **Downtime during updates and instance maintenance.** It is usually seconds.
-- **Data-loss window.** The last ~1 second of writes can be lost if the instance dies abruptly; Lightsail snapshots add a daily fallback.
+- **Data-loss window.** Up to the last 15 minutes of writes (`LITESTREAM_SYNC_INTERVAL`) can be lost if the instance's disk is lost; a normal restart or redeploy loses nothing. Lightsail snapshots add a daily fallback.
