@@ -254,6 +254,36 @@ export function copyButton(
   return <CopyButton label={label} text={text} {...options} />;
 }
 
+/** Before a share link is made: what it gives away, to whom and for how long, with Create link and Cancel. */
+export function shareConfirmBox(
+  projectName: string,
+  busy: boolean,
+  onConfirm: () => void,
+  onCancel: () => void,
+): ComponentChild {
+  return (
+    <div className="shared share-confirm" role="alertdialog" aria-labelledby="share-confirm-title">
+      <strong id="share-confirm-title">Make this page's comments public?</strong>
+      <p className="hint">
+        Anyone with the link can read this page's open comments in {projectName}, with no account needed: what they say,
+        their replies, their screenshots and who wrote them (shown names only). It's copied for you to send.
+      </p>
+      <p className="hint">
+        The link works for 30 days, or until someone turns it off from the project's Sharing tab. If this page already
+        has one, you get the same link.
+      </p>
+      <div className="row actions-row">
+        <button type="button" className="link" onClick={onCancel}>
+          Cancel
+        </button>
+        <button type="button" className="primary" disabled={busy} onClick={onConfirm}>
+          Create link
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** The share link, with what it shows and until when; stays until closed. */
 export function sharedBox(shared: SharedLink, onClose: () => void): ComponentChild {
   const until = shared.expiresAt ? `until ${shortDate(shared.expiresAt)}` : "with no end date";

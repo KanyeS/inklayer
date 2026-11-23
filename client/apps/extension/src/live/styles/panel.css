@@ -148,6 +148,14 @@ button.link.danger {
 .shared .link-row {
   gap: 6px;
 }
+.share-confirm {
+  background: color-mix(in oklch, var(--destructive) 9%, transparent);
+}
+.share-confirm .actions-row {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
 .share-url {
   flex: 1;
   min-width: 0;

@@ -29,13 +29,13 @@ import { NextFrame } from "./next-frame";
 import { panelHost } from "./page-io";
 import { PanelMover } from "./panel-mover";
 import { SettleTimer } from "./settle-timer";
-import { sharePage } from "./share";
+import { ShareFlow } from "./share";
 import { SiteProduct } from "./site-product";
 import { type SettingChanges, type StoredSettings, watchSettings } from "./stored-settings";
 import panelCss from "./styles/panel.css?inline";
 import { draftBody, EMPTY_DRAFT, type TextDraft } from "./suggestions";
 import { ActivityView } from "./views/activity";
-import { cornerPin, header, launcher, type SharedLink, sharedBox, sizeBar } from "./views/chrome";
+import { cornerPin, header, launcher, sizeBar } from "./views/chrome";
 import { bubbleContent, type CommentActions, listEntry } from "./views/comment";
 import { CommentParts } from "./views/comment-parts";
 import { cannotComment, draftBox, draftInput, scopeChooser, toolbar } from "./views/composer";
@@ -137,7 +137,10 @@ export class LiveSession {
   /** A short message under the header (sharing results, how to move the panel). */
   readonly #note = new FlashNote(() => this.#render());
   /** The last "Share this page" link, shown until closed. */
-  #shared: SharedLink | null = null;
+  readonly #share = new ShareFlow(
+    () => this.#render(),
+    (text) => this.#note.show(text),
+  );
   /** This window resized to a commenter's size; "Back to my size" puts it back. */
   readonly #size = new SizeMatcher(
     (text) => this.#note.show(text),
@@ -558,16 +561,6 @@ export class LiveSession {
     });
   }
 
-  async #sharePage(): Promise<void> {
-    if (!this.#target) return;
-    try {
-      this.#shared = await sharePage(this.#target);
-      this.#render();
-    } catch (e) {
-      this.#note.show(`Couldn't share: ${messageOf(e)}`);
-    }
-  }
-
   /* ------------------------------------------------------------------ views */
 
   #setView(view: View): void {
@@ -644,7 +637,7 @@ export class LiveSession {
         pinned: this.#mover.pinned,
         justDragged: () => this.#mover.justDragged,
         onView: (view) => this.#setView(view),
-        onShare: () => void this.#sharePage(),
+        onShare: () => this.#share.ask(),
         onBubblesOpen: (open) => this.#setBubblesOpen(open),
         onMarksVisible: (visible) => {
           this.#marksVisible = visible;
@@ -659,11 +652,7 @@ export class LiveSession {
         onResetPosition: () => this.#mover.reset(),
       }),
       this.#size.matched && sizeBar(this.#size.matched, () => void this.#size.restore()),
-      this.#shared &&
-        sharedBox(this.#shared, () => {
-          this.#shared = null;
-          this.#render();
-        }),
+      this.#share.parts(this.#target, this.#busy),
       this.#note.text && <p className="hint">{this.#note.text}</p>,
     ];
   }
