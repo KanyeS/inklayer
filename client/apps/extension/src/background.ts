@@ -2,7 +2,7 @@ import { api, type Me } from "./lib/api";
 import { NotSignedInError, redirectUri, signIn, signOut } from "./lib/auth";
 import { helperStatus } from "./lib/claude-helper";
 import { handleLive, isLiveRequest, type LiveRequest, openLiveInTab, stopLive, syncLiveScript } from "./lib/live";
-import type { Request, Response, StateResponse } from "./lib/messages";
+import { isOwnPage, type Request, type Response, type StateResponse } from "./lib/messages";
 import { inbox, markRead, startNotifications } from "./lib/notifications";
 import { acceptPort, forgetTab, isPresenceOn, PRESENCE_PORT, setPresence, stopPresence } from "./lib/presence";
 import { isRecorderMessage, type RecorderMessage } from "./lib/recorder-protocol";
@@ -60,8 +60,9 @@ chrome.runtime.onMessage.addListener(
       }
     }
 
-    // From the live content script on a web page: only live requests, checked against the page's real origin.
-    if (sender.tab) {
+    // From the live content script on a web page: only live requests, checked against the page's real origin. The
+    // extension's own pages can be open in a tab too (the Improve setup page): they're answered like the popup below.
+    if (sender.tab && !isOwnPage(sender.url, chrome.runtime.getURL(""))) {
       // After a reload: was presence on in this tab?
       if (request.type === "presence.status") {
         respond(isPresenceOn(sender.tab.id ?? -1), sendResponse);
@@ -72,7 +73,7 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
-    // From the extension's own pages (the popup).
+    // From the extension's own pages (the popup, the Improve setup page).
     if (isLiveRequest(request) || request.type === "presence.status") return false;
     respond(handle(request), sendResponse);
     return true; // respond asynchronously

@@ -41,8 +41,19 @@ export interface ResponseMap {
   setClaudeImprove: HelperStatus;
 }
 
+/**
+ * The extension's pages that send these requests, also when open in a tab (where the background would otherwise take
+ * them for a web page's content script). A content script's sender is always its web page, never one of these.
+ */
+const OWN_PAGES = ["popup.html", "improve.html"];
+
+export function isOwnPage(senderUrl: string | undefined, extensionRoot: string): boolean {
+  return OWN_PAGES.some((page) => senderUrl?.startsWith(extensionRoot + page) === true);
+}
+
 export async function send<K extends Request["type"]>(request: Extract<Request, { type: K }>): Promise<ResponseMap[K]> {
-  const response = (await chrome.runtime.sendMessage(request)) as Response<ResponseMap[K]>;
+  const response = (await chrome.runtime.sendMessage(request)) as Response<ResponseMap[K]> | undefined;
+  if (!response) throw new Error("Inklayer didn't answer. Close this and try again.");
   if (!response.ok) throw Object.assign(new Error(response.error), { notSignedIn: response.notSignedIn ?? false });
   return response.value;
 }
