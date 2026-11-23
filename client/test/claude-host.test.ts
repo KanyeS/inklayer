@@ -54,20 +54,36 @@ describe("Claude helper host", () => {
     const seen = join(dir, "seen");
     const claude = fakeClaude(
       "improve",
-      `cat > ${seen}.in; printf '%s\\n' "$@" > ${seen}.args; echo '{"type":"result","is_error":false,"result":"  Clear comment.  "}'`,
+      `cat > ${seen}.in; printf '%s\\n' "$@" > ${seen}.args; echo '{"type":"result","is_error":false,"result":"  Clear comment.  ","total_cost_usd":0.02,"duration_ms":4200,"usage":{"input_tokens":12,"cache_creation_input_tokens":3000,"cache_read_input_tokens":100,"output_tokens":80},"modelUsage":{"claude-haiku-4-5-20251001":{"inputTokens":1182,"outputTokens":12,"canonicalModel":"claude-haiku-4-5"},"claude-sonnet-4-6":{"inputTokens":12,"cacheCreationInputTokens":3000,"cacheReadInputTokens":100,"outputTokens":80,"canonicalModel":"claude-sonnet-4-6"}}}'`,
     );
     const reply = await ask(claude, {
       type: "improve",
       text: "it broke",
       url: "https://site.example/",
-      elementText: "Save",
+      page: {
+        title: "Settings",
+        outline: ["Account", "Email"],
+        section: "Email me@example.com Save",
+        element: { tag: "button", selector: "form > button", text: "Save" },
+        quote: "Save",
+      },
     });
-    expect(reply).toEqual({ ok: true, text: "Clear comment." });
+    // With what it used: tokens in (cached or not) and out, cost at API prices, model and time.
+    expect(reply).toEqual({
+      ok: true,
+      text: "Clear comment.",
+      // Both models' tokens, named after the one that wrote the answer.
+      usage: { inputTokens: 4294, outputTokens: 92, costUsd: 0.02, model: "claude-sonnet-4-6", durationMs: 4200 },
+    });
     const input = readFileSync(`${seen}.in`, "utf8");
-    expect(input).toContain("<draft>it broke</draft>");
-    expect(input).toContain("<page_url>https://site.example/</page_url>");
+    expect(input).toContain("<draft>\nit broke\n</draft>");
+    expect(input).toContain("<page_url>\nhttps://site.example/\n</page_url>");
+    expect(input).toContain("<page_headings>\nAccount\nEmail\n</page_headings>");
+    expect(input).toContain("<element>\ntag: button\nselector: form > button\n</element>");
+    expect(input).toContain("<highlighted_text>\nSave\n</highlighted_text>");
     const args = readFileSync(`${seen}.args`, "utf8").split("\n");
     expect(args).toContain("-p");
+    expect(args[args.indexOf("--model") + 1]).toBe("sonnet");
     expect(args[args.indexOf("--tools") + 1]).toBe("");
     expect(args).toContain("--strict-mcp-config");
     // The system prompt goes in a file next to it, not on the command line.

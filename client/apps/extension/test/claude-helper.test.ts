@@ -59,17 +59,32 @@ describe("local Claude helper", () => {
       on: true,
       permission: true,
       host: (m) =>
-        m.type === "ping" ? { ok: true, version: "1", claude: "2.1 (Claude Code)" } : { ok: true, text: "Better." },
+        m.type === "ping"
+          ? { ok: true, version: "1", claude: "2.1 (Claude Code)" }
+          : {
+              ok: true,
+              text: "Better.",
+              usage: { inputTokens: 9, outputTokens: 3, costUsd: 0.01, model: "m", durationMs: 5 },
+            },
     });
     expect(await helperStatus()).toEqual({ enabled: true, permission: true, ready: true, claude: "2.1 (Claude Code)" });
     expect(await helperEnabled()).toBe(true);
-    expect(await improveDraft({ text: "bad", url: "https://site.example/", elementText: "x".repeat(5000) })).toBe(
-      "Better.",
-    );
+    const page = {
+      title: "Settings",
+      outline: ["a", "b"],
+      element: { tag: "p", selector: "p", text: "x".repeat(5000) },
+    };
+    expect(await improveDraft({ text: "bad", url: "https://site.example/", page })).toEqual({
+      text: "Better.",
+      usage: { inputTokens: 9, outputTokens: 3, costUsd: 0.01, model: "m", durationMs: 5 },
+    });
     const [host, message] = sendNativeMessage.mock.calls[1] ?? [];
     expect(host).toBe(HOST);
     expect(message).toMatchObject({ type: "improve", text: "bad", url: "https://site.example/" });
-    expect((message as unknown as { elementText: string }).elementText).toHaveLength(2000);
+    // Every field of the page is capped before it leaves for the helper.
+    const sent = (message as unknown as { page: { title: string; outline: string[]; element: { text: string } } }).page;
+    expect(sent).toMatchObject({ title: "Settings", outline: ["a", "b"] });
+    expect(sent.element.text).toHaveLength(3000);
   });
 
   it("passes on what went wrong in the helper", async () => {
@@ -110,6 +125,6 @@ describe("local Claude helper", () => {
     ).rejects.toThrow("Wrong page.");
     expect(
       await handleLive({ type: "live.improve", url: "https://site.example/b", text: "x" }, "https://site.example/a"),
-    ).toBe("Better.");
+    ).toEqual({ text: "Better.", usage: null });
   });
 });

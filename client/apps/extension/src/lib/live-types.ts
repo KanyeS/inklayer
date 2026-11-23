@@ -8,6 +8,7 @@ import type {
 } from "@inklayer/api";
 import type { AnnotationKind, Rect } from "@inklayer/overlay";
 import type { Features } from "./api";
+import type { PageForImprove } from "./claude-helper";
 import type { CarriedDraft } from "./recorder-protocol";
 
 /**
@@ -115,7 +116,7 @@ export type LiveRequest =
   | { type: "live.sizeSaved" }
   | { type: "live.inbox" }
   | { type: "live.inboxRead"; ids?: string[] }
-  | { type: "live.improve"; url: string; text: string; selector?: string; elementText?: string }
+  | { type: "live.improve"; url: string; text: string; page?: PageForImprove }
   | { type: "live.improveSetup" };
 
 /** What the page looked like when a comment was made: see capture-main.ts and pageDetails.ts. */

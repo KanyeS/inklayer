@@ -50,8 +50,9 @@ export function ClaudeImprove({ serverUrl }: { serverUrl: string }) {
         {busy ? "Checking…" : enabled ? "Turn off Improve with Claude" : "Improve comments with Claude"}
       </Button>
       <p className="text-muted-foreground">
-        Adds an Improve button to the comment box. It uses Claude Code on this computer, with your own Claude plan; your
-        draft goes to Claude, not to Inklayer, until you save it.
+        Adds an Improve button to the comment box: it turns a rough draft into a clear comment and, when you ask for
+        ideas, suggests options from the page. It uses Claude Code on this computer, with your own Claude plan; your
+        draft and the page's text go to Claude, not to Inklayer, until you save.
       </p>
       {status?.enabled && status.ready && <p>Ready{status.claude ? ` (${status.claude})` : ""}.</p>}
       {status?.enabled && !status.ready && (

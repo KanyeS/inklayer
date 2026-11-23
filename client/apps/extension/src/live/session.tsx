@@ -786,7 +786,7 @@ export class LiveSession {
         draft: editing.draft,
         onChange: (draft) => this.#setEditing({ id: a.id, draft }),
         organizationId: () => this.#organizationOf(a.projectId),
-        improve: this.#improver.forEdit(a.id),
+        improve: this.#improver.forEdit(a.id, a.anchor as Anchor),
       },
       onSelect: () => {
         this.#selected = a.id;

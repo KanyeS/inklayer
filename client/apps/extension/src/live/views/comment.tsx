@@ -9,7 +9,7 @@ import type { ImproveControls } from "../improve";
 import { SuggestBox, type TextDraft } from "../suggestions";
 import { copyButton } from "./chrome";
 import type { CommentParts } from "./comment-parts";
-import { improveButton, improveNote } from "./improve";
+import { improveArea, improveButton, improveNote } from "./improve";
 
 /** A comment as it's shown: its entry in the panel's list, and its bubble next to the mark on the page. */
 
@@ -110,20 +110,23 @@ export function listEntry(
       )}
       {o.editing ? (
         <>
-          <SuggestBox
-            draft={o.editing.draft}
-            onChange={o.editing.onChange}
-            organizationId={o.editing.organizationId}
-            docsOn={ctx.init.features.docs}
-            rows={3}
-            autoFocus
-            onClick={stopPropagation}
-          />
+          {improveArea(
+            <SuggestBox
+              draft={o.editing.draft}
+              onChange={o.editing.onChange}
+              organizationId={o.editing.organizationId}
+              docsOn={ctx.init.features.docs}
+              rows={3}
+              autoFocus
+              onClick={stopPropagation}
+            />,
+            o.editing.improve,
+          )}
           <div className="row">
             <LinkButton
               label="Save"
               className="primary"
-              disabled={ctx.busy}
+              disabled={ctx.busy || o.editing.improve?.busy === true}
               run={() => o.editing && o.actions.saveEdit(o.editing.draft)}
             />
             <LinkButton label="Cancel" className="" run={o.actions.cancelEdit} />

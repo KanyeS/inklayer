@@ -6,7 +6,7 @@ import { type Scope, type ScopeOption, scopeOptions } from "../format";
 import type { ImproveControls, ImproveHint } from "../improve";
 import { COLORS, TOOLS, toolHint } from "../labels";
 import { SuggestBox, type TextDraft } from "../suggestions";
-import { improveButton, improveHint, improveNote } from "./improve";
+import { improveArea, improveButton, improveHint, improveNote } from "./improve";
 
 /** Making a new comment: where it goes, the drawing tools and colours, and the box to write it in. */
 
@@ -151,7 +151,7 @@ export function draftBox(o: DraftBoxOptions): ComponentChild {
   return (
     <div className="draft">
       <strong>New comment</strong>
-      {o.input}
+      {improveArea(o.input, o.improve)}
       {o.issueTitleHint && <p className="hint">The first line becomes the title of any issue made from it.</p>}
       {o.scope}
       {o.attachContext !== null && (
@@ -210,7 +210,7 @@ export function draftBox(o: DraftBoxOptions): ComponentChild {
           </button>
         ))}
       <div className="row">
-        <button type="button" className="primary" disabled={o.busy} onClick={o.onSave}>
+        <button type="button" className="primary" disabled={o.busy || o.improve?.busy} onClick={o.onSave}>
           {o.busy ? "Saving…" : "Save"}
         </button>
         <button type="button" onClick={o.onCancel}>

@@ -557,6 +557,70 @@ textarea::placeholder {
 .improve-note.error {
   color: var(--destructive);
 }
+/* What the rewrite used (tokens, cost at API prices, time): quieter than the rest of the line. */
+.improve-usage {
+  opacity: 0.8;
+  font-variant-numeric: tabular-nums;
+}
+/* While Claude rewrites the comment: the button keeps its colour and spins, and the box is locked under a shimmer. */
+.row > button.improve.busy:disabled {
+  opacity: 1;
+  cursor: progress;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.improve .spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: improve-spin 0.8s linear infinite;
+}
+.improve-area {
+  position: relative;
+}
+.improve-area.improving textarea {
+  opacity: 0.55;
+  cursor: progress;
+}
+.improve-area.improving::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklch, var(--primary) 30%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  animation: improve-shimmer 1.4s linear infinite;
+}
+@keyframes improve-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes improve-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .improve .spinner,
+  .improve-area.improving::after {
+    animation: none;
+  }
+}
 /* The offer to set the helper up, under the comment box. */
 .improve-hint {
   margin: 6px 0 0;

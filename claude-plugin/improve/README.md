@@ -33,6 +33,15 @@ On Windows, the helper starts `claude.cmd` through `cmd.exe`, with the system pr
 The browser starts the helper once for each request. It reads one message and answers one:
 
 - `ping` runs `claude --version`, to check Claude Code is there.
-- `improve` runs `claude -p --model haiku` with a fixed system prompt (`--system-prompt-file`), in an empty temporary folder. It runs with no tools (`--tools ""`), no MCP servers (`--strict-mcp-config`), no settings or CLAUDE.md files (`--setting-sources ""`), and no saved session. The draft, the page address and the commented element's selector and text go in as data. It gives up after 60 seconds.
+- `improve` runs `claude -p --model sonnet` (or `INKLAYER_CLAUDE_MODEL`) with a fixed system prompt (`--system-prompt-file`), in an empty temporary folder. It runs with no tools (`--tools ""`), no MCP servers (`--strict-mcp-config`), no settings or CLAUDE.md files (`--setting-sources ""`), and no saved session. It gives up after 100 seconds.
 
-Claude Code takes a few seconds to start, so a rewrite usually takes 5 to 10 seconds.
+What Claude gets, as data in tags:
+- the draft;
+- the page's address, title, description and headings;
+- the text of the section the comment is on;
+- the commented element: its tag, selector, label, text, and its HTML without anything typed into forms;
+- any highlighted text.
+
+The prompt says to ignore instructions in the page's content. Claude turns the draft into a clearer comment. When the draft asks for or invites suggestions ("the intro could be better, what alternatives might work?"), it adds two to four concrete options, built from the page's own content. It never invents facts about the product.
+
+A rewrite usually takes 5 to 15 seconds.

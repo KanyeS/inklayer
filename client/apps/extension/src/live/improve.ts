@@ -1,6 +1,7 @@
-import { type Draft, resolveElement } from "@inklayer/overlay";
-import { IMPROVE_HINT_HIDDEN } from "../lib/claude-helper";
+import type { Anchor, Draft } from "@inklayer/overlay";
+import { IMPROVE_HINT_HIDDEN, type Improved, type ImproveUsage, type PageForImprove } from "../lib/claude-helper";
 import { call, messageOf, remember } from "./call";
+import { pageForImprove } from "./improve-context";
 import type { TextDraft } from "./suggestions";
 
 /**
@@ -14,15 +15,16 @@ export interface ImproveControls {
   error: string | null;
   /** The text is still Claude's rewrite, so Undo can put the draft back. */
   canUndo: boolean;
+  /** What the last rewrite used, shown with Undo. */
+  usage: ImproveUsage | null;
   onImprove(): void;
   onUndo(): void;
 }
 
-/** What the page says about the comment's element, to help name things. */
+/** The page the comment is on, and what it says around the comment (improve-context.ts). */
 export interface ImproveContext {
   url: string;
-  selector?: string;
-  elementText?: string;
+  page?: PageForImprove;
 }
 
 interface BoxState {
@@ -31,6 +33,7 @@ interface BoxState {
   error: string | null;
   before: TextDraft | null;
   improved: string | null;
+  usage?: ImproveUsage | null;
 }
 
 /** The offer to set the helper up, under the comment box while it isn't. */
@@ -90,20 +93,20 @@ export class Improver {
       (text) => b.setDraftText(text),
       () => {
         const d = b.draft();
-        return d ? { url: d.url, ...improveContext(d.draft) } : { url: location.href };
+        return { url: d?.url ?? location.href, page: pageForImprove(d?.draft.anchor) };
       },
     );
   }
 
-  /** The controls for the box of comment `id` while it's being edited; null when the helper is off. */
-  forEdit(id: string): ImproveControls | null {
+  /** The controls for the box of comment `id` (anchored at `anchor`) while it's being edited; null when the helper is off. */
+  forEdit(id: string, anchor?: Anchor): ImproveControls | null {
     const b = this.#boxes;
     if (!b.enabled()) return null;
     return this.controls(
       `edit:${id}`,
       () => (b.editing()?.id === id ? (b.editing()?.draft ?? null) : null),
       (draft) => b.editing()?.id === id && b.setEditing({ id, draft }),
-      () => ({ url: location.href }),
+      () => ({ url: location.href, page: pageForImprove(anchor) }),
     );
   }
 
@@ -122,6 +125,7 @@ export class Improver {
       busy: state?.busy ?? false,
       error: state?.error ?? null,
       canUndo: Boolean(state?.before && state.improved === text),
+      usage: state?.usage ?? null,
       onImprove: () => void this.#improve(key, current, apply, context),
       onUndo: () => {
         const s = this.#state;
@@ -155,7 +159,7 @@ export class Improver {
     this.#state = state;
     this.#boxes.render();
     try {
-      const text = await call<string>({ type: "live.improve", ...context(), text: before.text });
+      const { text, usage } = await call<Improved>({ type: "live.improve", ...context(), text: before.text });
       if (this.#state !== state) return; // the box was saved, cancelled or another one started
       const now = current();
       if (!now) return;
@@ -164,6 +168,7 @@ export class Improver {
       } else {
         state.before = before;
         state.improved = text;
+        state.usage = usage;
         // @names picked from suggestions keep their people: the rewrite keeps the names as written.
         apply({ text, picked: before.picked });
       }
@@ -174,16 +179,4 @@ export class Improver {
     state.busy = false;
     this.#boxes.render();
   }
-}
-
-/** Longest element text sent along; the background caps it again. */
-const MAX_ELEMENT_TEXT = 500;
-
-/** The new comment's element: its selector, and its visible text or label, so Claude can name it. */
-export function improveContext(draft: Draft): Omit<ImproveContext, "url"> {
-  const selector = draft.anchor.element.path.join(" >>> ");
-  const element = resolveElement(document, draft.anchor.element).element;
-  const label = element?.getAttribute("aria-label") || element?.textContent || "";
-  const elementText = label.replace(/\s+/g, " ").trim().slice(0, MAX_ELEMENT_TEXT);
-  return elementText ? { selector, elementText } : { selector };
 }

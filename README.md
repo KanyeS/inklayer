@@ -262,7 +262,7 @@ For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the env
 
 ### Improving comments with Claude
 
-The comment box can have an **Improve** button that rewrites a rough draft ("button broke") into a clear comment the team can act on. It keeps your meaning, @mentions, [[doc links]] and #tags. It uses the [Claude Code](https://claude.com/claude-code) CLI already signed in on your computer, so it runs on your own Claude plan. The draft goes from the browser to Claude Code and back into the box, and nothing reaches the Inklayer server until you click Save. **Undo** puts your words back.
+The comment box can have an **Improve** button that rewrites a rough draft ("button broke") into a clear comment the team can act on. It keeps your meaning, @mentions, [[doc links]] and #tags. It reads the page around the comment, so when a draft asks for ideas ("the intro could be better, what alternatives might work?"), it adds concrete options built from the page's own content. After each rewrite it shows what it used: the model, tokens, the cost at API prices (on a Claude plan it counts towards your plan's limits instead), and the time. It uses the [Claude Code](https://claude.com/claude-code) CLI already signed in on your computer, so it runs on your own Claude plan. The draft goes from the browser to Claude Code and back into the box, and nothing reaches the Inklayer server until you click Save. **Undo** puts your words back.
 
 It's off by default, and works in Chrome, Edge, Brave and Firefox on Linux, macOS and Windows. Each person needs [Claude Code](https://claude.com/claude-code) (signed in) and Node.js, and sets it up once:
 

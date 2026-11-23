@@ -1,9 +1,10 @@
 import { anchorFor, type Draft } from "@inklayer/overlay";
 import { h } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type ImproveBoxes, Improver, improveContext } from "../src/live/improve";
+import { type ImproveBoxes, Improver } from "../src/live/improve";
 import { EMPTY_DRAFT, type TextDraft } from "../src/live/suggestions";
 import { draftBox } from "../src/live/views/composer";
+import { usageText } from "../src/live/views/improve";
 import { clickButton, fakeChrome, mountOne } from "./live-fixtures";
 
 afterEach(() => {
@@ -86,6 +87,9 @@ function draftOn(el: Element): Draft {
   return { kind: "pin", anchor: anchorFor(el), geometry: {}, viewportWidth: 1000 } as unknown as Draft;
 }
 
+/** What a rewrite used, as the helper reports it. */
+const USAGE = { inputTokens: 9000, outputTokens: 120, costUsd: 0.03, model: "claude-sonnet-4-6", durationMs: 6600 };
+
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
 describe("Improve button", () => {
@@ -115,10 +119,21 @@ describe("Improve button", () => {
   });
 
   it("puts Claude's rewrite in the box, keeping picked people, and Undo puts the draft back", async () => {
-    const b = box(() => "The Save button does nothing when clicked. @Sam");
+    const b = box(() => ({ text: "The Save button does nothing when clicked. @Sam", usage: USAGE }));
     clickButton(b.root, "Improve");
     expect(b.root.textContent).toContain("Improving…");
+    // While Claude works: the box is locked (inert) under a shimmer, Save waits, and a line says what's happening.
+    const area = b.root.querySelector<HTMLElement>(".improve-area");
+    expect(area?.classList.contains("improving")).toBe(true);
+    expect(area?.hasAttribute("inert")).toBe(true);
+    expect(area?.querySelector("textarea")).not.toBeNull();
+    const save = [...b.root.querySelectorAll("button")].find((x) => x.textContent === "Save");
+    expect(save?.disabled).toBe(true);
+    expect(b.root.querySelector(".improve-note")?.textContent).toBe("✨ Claude is rewriting your comment…");
+    expect(b.root.querySelector("button.improve .spinner")).not.toBeNull();
     await settle();
+    expect(b.root.querySelector(".improve-area")?.hasAttribute("inert")).toBe(false);
+    expect([...b.root.querySelectorAll("button")].find((x) => x.textContent === "Save")?.disabled).toBe(false);
     expect(b.fake.sendMessage).toHaveBeenCalledWith({
       type: "live.improve",
       url: "https://site.example/",
@@ -126,14 +141,16 @@ describe("Improve button", () => {
     });
     expect(b.draft.text).toBe("The Save button does nothing when clicked. @Sam");
     expect(b.draft.picked.get("Sam")).toBe("u1");
-    expect(b.root.textContent).toContain("Rewritten by Claude.");
+    expect(b.root.textContent).toContain(
+      "Rewritten by Claude · Sonnet 4.6 · 9,120 tokens · ≈$0.030 at API prices · 6.6 s.",
+    );
     clickButton(b.root, "Undo");
     expect(b.draft.text).toBe("button broke");
     expect(b.root.textContent).not.toContain("Rewritten by Claude.");
   });
 
   it("drops Undo once the person edits the rewrite", async () => {
-    const b = box(() => "Better.");
+    const b = box(() => ({ text: "Better.", usage: null }));
     clickButton(b.root, "Improve");
     await settle();
     b.type("Better, edited.");
@@ -152,7 +169,7 @@ describe("Improve button", () => {
   });
 
   it("asks for some text first", () => {
-    const b = box(() => "x", "  ");
+    const b = box(() => ({ text: "x", usage: null }), "  ");
     clickButton(b.root, "Improve");
     expect(b.fake.sendMessage).not.toHaveBeenCalled();
     expect(b.root.textContent).toContain("Write something first.");
@@ -164,14 +181,14 @@ describe("Improve button", () => {
     b.fake.sendMessage.mockReturnValue(new Promise((r) => (finish = r)) as never);
     clickButton(b.root, "Improve");
     b.type("button broke on Firefox");
-    finish({ ok: true, value: "Rewritten." });
+    finish({ ok: true, value: { text: "Rewritten.", usage: null } });
     await settle();
     expect(b.draft.text).toBe("button broke on Firefox");
     expect(b.root.textContent).toContain("changed while Claude was working");
   });
 
   it("forgets the box when it's reset", async () => {
-    const b = box(() => "Better.");
+    const b = box(() => ({ text: "Better.", usage: null }));
     clickButton(b.root, "Improve");
     await settle();
     expect(b.root.textContent).toContain("Undo");
@@ -189,7 +206,7 @@ describe("Improve button", () => {
   });
 
   it("works on a comment being edited", async () => {
-    vi.stubGlobal("chrome", fakeChrome(() => "Clearer.").chrome);
+    vi.stubGlobal("chrome", fakeChrome(() => ({ text: "Clearer.", usage: null })).chrome);
     let editing = { id: "c1", draft: { text: "meh", picked: new Map<string, string>() } };
     const setEditing = vi.fn((e: typeof editing) => {
       editing = e;
@@ -262,12 +279,15 @@ describe("the offer to set Improve up", () => {
   });
 });
 
-describe("Improve's page context", () => {
-  it("names the comment's element by its label or text", () => {
-    document.body.innerHTML = `<form><button id="save" aria-label="Save changes">💾</button><p id="msg">  Saved
-      at noon </p></form>`;
-    const save = document.getElementById("save") as Element;
-    expect(improveContext(draftOn(save))).toEqual({ selector: expect.any(String), elementText: "Save changes" });
-    expect(improveContext(draftOn(document.getElementById("msg") as Element)).elementText).toBe("Saved at noon");
+describe("what a rewrite used", () => {
+  it("says the model, tokens, cost at API prices and time", () => {
+    expect(usageText(USAGE)).toBe("Sonnet 4.6 · 9,120 tokens · ≈$0.030 at API prices · 6.6 s");
+    expect(usageText({ ...USAGE, model: "claude-haiku-4-5-20251001", costUsd: 0.0004 })).toBe(
+      "Haiku 4.5 · 9,120 tokens · ≈<$0.001 at API prices · 6.6 s",
+    );
+    expect(usageText({ ...USAGE, model: "claude-opus-5", costUsd: 0.25 })).toContain("Opus 5 · 9,120 tokens · ≈$0.25");
+    expect(usageText({ inputTokens: 10, outputTokens: 5, costUsd: null, model: null, durationMs: null })).toBe(
+      "15 tokens",
+    );
   });
 });

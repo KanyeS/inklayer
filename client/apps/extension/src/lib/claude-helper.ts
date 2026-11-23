@@ -27,27 +27,85 @@ export function helperOffered(): boolean {
   return (chrome.runtime.getManifest().optional_permissions ?? []).includes("nativeMessaging");
 }
 
-/** The CLI takes a few seconds to start; the helper itself gives up after a minute. */
-const IMPROVE_TIMEOUT_MS = 90_000;
+/** The CLI takes a few seconds to start, and suggestions take a while; the helper itself gives up after 100 seconds. */
+const IMPROVE_TIMEOUT_MS = 120_000;
 const PING_TIMEOUT_MS = 20_000;
 /** The last ping's result, so pages know whether to show the button without starting the helper each time. */
 const READY_KEY = "claudeHelperReady";
 
 export const MAX_IMPROVE_TEXT = 10_000;
-export const MAX_ELEMENT_TEXT = 2_000;
+/**
+ * What the page says around the comment, so Claude can name things accurately and, when the draft asks for options
+ * ("what alternatives might work?"), suggest some from the page's own content. Gathered by the panel
+ * (live/improve-context.ts) and capped here before it leaves for the helper.
+ */
+export interface PageForImprove {
+  title?: string;
+  description?: string;
+  /** The page's headings (h1 to h3), in order. */
+  outline?: string[];
+  /** The text of the part of the page the commented element is in. */
+  section?: string;
+  element?: { tag: string; selector: string; label?: string; text: string; html?: string };
+  /** Text the commenter highlighted. */
+  quote?: string;
+}
+
+/** What a rewrite used, as the helper reports it (older helpers don't). */
+export interface ImproveUsage {
+  inputTokens: number;
+  outputTokens: number;
+  /** At API list prices; on a Claude plan it counts towards the plan's limits instead. */
+  costUsd: number | null;
+  /** Such as claude-sonnet-4-6. */
+  model: string | null;
+  durationMs: number | null;
+}
+
+export interface Improved {
+  text: string;
+  usage: ImproveUsage | null;
+}
 
 export interface ImproveRequest {
   text: string;
   url?: string;
-  selector?: string;
-  elementText?: string;
+  page?: PageForImprove;
+}
+
+const cut = (value: unknown, max: number): string | undefined =>
+  typeof value === "string" && value.trim() ? value.slice(0, max) : undefined;
+
+/** Caps everything a page sends, field by field (the panel caps too; this is what the helper can rely on). */
+export function capPage(page: PageForImprove | undefined): PageForImprove | undefined {
+  if (!page || typeof page !== "object") return undefined;
+  const element = page.element;
+  return {
+    title: cut(page.title, 300),
+    description: cut(page.description, 500),
+    outline: Array.isArray(page.outline) ? page.outline.flatMap((h) => cut(h, 200) ?? []).slice(0, 40) : undefined,
+    section: cut(page.section, 4000),
+    element:
+      element && typeof element === "object"
+        ? {
+            tag: cut(element.tag, 40) ?? "",
+            selector: cut(element.selector, 1000) ?? "",
+            label: cut(element.label, 300),
+            text: cut(element.text, 3000) ?? "",
+            html: cut(element.html, 3000),
+          }
+        : undefined,
+    quote: cut(page.quote, 1000),
+  };
 }
 
 export type HelperStatus =
   | { enabled: boolean; permission: boolean; ready: true; claude: string }
   | { enabled: boolean; permission: boolean; ready: false; error: string | null };
 
-type HostReply = { ok: true; text?: string; version?: string; claude?: string } | { ok: false; error: string };
+type HostReply =
+  | { ok: true; text?: string; usage?: ImproveUsage; version?: string; claude?: string }
+  | { ok: false; error: string };
 
 async function hasPermission(): Promise<boolean> {
   return chrome.permissions.contains(NATIVE_MESSAGING);
@@ -110,22 +168,16 @@ export async function helperStatus(): Promise<HelperStatus> {
   }
 }
 
-/** Asks Claude to rewrite a comment draft; resolves with the new text. */
-export async function improveDraft(request: ImproveRequest): Promise<string> {
+/** Asks Claude to rewrite a comment draft; resolves with the new text and what it used. */
+export async function improveDraft(request: ImproveRequest): Promise<Improved> {
   if (!(await helperEnabled())) throw new Error("Improving comments with Claude is turned off (popup → Settings).");
   const text = request.text.slice(0, MAX_IMPROVE_TEXT);
   if (!text.trim()) throw new Error("Write something first.");
   const reply = await sendToHost(
-    {
-      type: "improve",
-      text,
-      url: request.url,
-      selector: request.selector?.slice(0, MAX_ELEMENT_TEXT),
-      elementText: request.elementText?.slice(0, MAX_ELEMENT_TEXT),
-    },
+    { type: "improve", text, url: request.url, page: capPage(request.page) },
     IMPROVE_TIMEOUT_MS,
   );
   if (!reply.ok) throw new Error(reply.error);
   if (!reply.text) throw new Error("Claude returned an empty comment.");
-  return reply.text;
+  return { text: reply.text, usage: reply.usage ?? null };
 }

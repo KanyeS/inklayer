@@ -430,9 +430,9 @@ const HANDLERS: Handlers = {
   "live.font": () => panelFont(),
 
   /* ---------------- the local Claude helper: the draft goes to Claude Code on this computer, not the server */
-  "live.improve": async ({ url, text, selector, elementText }) => {
+  "live.improve": async ({ url, text, page }) => {
     if (!(await signedIn())) throw new NotSignedInError();
-    return improveDraft({ url, text, selector, elementText });
+    return improveDraft({ url, text, page });
   },
   // The comment box's "set up" link: a page can't open the popup, so the setup opens in a tab of its own.
   "live.improveSetup": async () => {
