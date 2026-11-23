@@ -1,6 +1,6 @@
 /** @jsxImportSource preact */
 import type { ComponentChild } from "preact";
-import type { ImproveControls } from "../improve";
+import type { ImproveControls, ImproveHint } from "../improve";
 
 /** The Improve button beside a comment box's Save, and the line under it (Undo, or what went wrong). */
 
@@ -43,6 +43,37 @@ export function improveNote(c: ImproveControls): ComponentChild {
         }}
       >
         Undo
+      </button>
+    </p>
+  );
+}
+
+/** Under the comment box while the helper isn't set up: "✨ Improve with Claude: set up · Don't show this". */
+export function improveHint(h: ImproveHint): ComponentChild {
+  return (
+    <p className="improve-hint">
+      <span aria-hidden="true">✨ </span>
+      <button
+        type="button"
+        className="link"
+        title="Opens the setup in a new tab. It needs Claude Code on this computer."
+        onClick={(e) => {
+          stop(e);
+          h.onSetUp();
+        }}
+      >
+        Improve with Claude: set up
+      </button>
+      {" · "}
+      <button
+        type="button"
+        className="link"
+        onClick={(e) => {
+          stop(e);
+          h.onHide();
+        }}
+      >
+        Don't show this
       </button>
     </p>
   );

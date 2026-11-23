@@ -3,10 +3,10 @@ import type { Tool } from "@inklayer/overlay";
 import type { ComponentChild } from "preact";
 import type { LiveProject } from "../../lib/live";
 import { type Scope, type ScopeOption, scopeOptions } from "../format";
-import type { ImproveControls } from "../improve";
+import type { ImproveControls, ImproveHint } from "../improve";
 import { COLORS, TOOLS, toolHint } from "../labels";
 import { SuggestBox, type TextDraft } from "../suggestions";
-import { improveButton, improveNote } from "./improve";
+import { improveButton, improveHint, improveNote } from "./improve";
 
 /** Making a new comment: where it goes, the drawing tools and colours, and the box to write it in. */
 
@@ -140,6 +140,8 @@ export interface DraftBoxOptions {
   issueTitleHint: boolean;
   /** The Improve button (the local Claude helper); null when it's off. */
   improve?: ImproveControls | null;
+  /** While the helper isn't set up: a link to set it up, and one to stop offering. */
+  improveHint?: ImproveHint | null;
   onSave(): void;
   onCancel(): void;
 }
@@ -217,6 +219,7 @@ export function draftBox(o: DraftBoxOptions): ComponentChild {
         {o.improve && improveButton(o.improve)}
       </div>
       {o.improve && improveNote(o.improve)}
+      {o.improveHint && improveHint(o.improveHint)}
     </div>
   );
 }

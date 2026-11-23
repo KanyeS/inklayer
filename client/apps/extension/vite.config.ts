@@ -56,6 +56,7 @@ export default defineConfig(({ mode }) =>
               offscreen: "offscreen.html",
               sidebar: "sidebar.html",
               player: "player.html",
+              improve: "improve.html",
             },
             output: {
               entryFileNames: "[name].js",

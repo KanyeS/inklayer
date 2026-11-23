@@ -18,6 +18,7 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }));
 function home(name: string): { env: NodeJS.ProcessEnv; root: string } {
   const root = join(dir, name);
   mkdirSync(join(root, ".config", "google-chrome"), { recursive: true });
+  mkdirSync(join(root, ".mozilla"), { recursive: true });
   mkdirSync(join(root, "bin"));
   writeFileSync(join(root, "bin", "claude"), '#!/bin/sh\necho "9.9.9 (Claude Code)"\n', { mode: 0o755 });
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: root, PATH: `${join(root, "bin")}:${process.env.PATH}` };
@@ -58,10 +59,18 @@ describe.runIf(process.platform !== "win32")("downloaded installers", () => {
     expect(run.status).toBe(0);
     const manifest = manifestOf(root);
     expect(manifest.allowed_origins).toEqual(["chrome-extension://cihhaaceflhcncmeoiembekghkhbgfio/"]);
+    // Firefox names the add-on that may start it by its ID.
+    const firefox = JSON.parse(
+      readFileSync(join(root, ".mozilla", "native-messaging-hosts", "com.inklayer.claude.json"), "utf8"),
+    );
+    expect(firefox).toMatchObject({ path: manifest.path, allowed_extensions: ["inklayer-extension@inklayer"] });
     expect(await ping(manifest.path)).toEqual({ ok: true, version: "1", claude: "9.9.9 (Claude Code)" });
   });
 
-  it("says Node.js is needed when there isn't one", () => {
+  // The installer also looks where Homebrew and other installers put node (a double-click gets a short PATH), so this
+  // only shows on a machine with no node there (not GitHub's runners, which have one in /usr/local/bin).
+  const nodeInUsualPlaces = ["/usr/local/bin/node", "/opt/homebrew/bin/node"].some((p) => existsSync(p));
+  it.skipIf(nodeInUsualPlaces)("says Node.js is needed when there isn't one", () => {
     const { root } = home("no-node");
     const file = join(root, "install.sh");
     writeFileSync(file, unixInstaller());

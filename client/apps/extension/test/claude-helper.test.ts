@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HOST, helperEnabled, helperStatus, improveDraft } from "../src/lib/claude-helper";
+import { HOST, helperEnabled, helperOffered, helperStatus, improveDraft } from "../src/lib/claude-helper";
 import { HANDLED_REQUEST_TYPES, handleLive } from "../src/lib/live";
 
 /** A browser with the local Claude helper in some state: setting, permission, and what the helper answers. */
@@ -80,6 +80,25 @@ describe("local Claude helper", () => {
     });
     await helperStatus();
     await expect(improveDraft({ text: "bad" })).rejects.toThrow("Not logged in");
+  });
+
+  it("opens the setup page in a tab when the comment box's link asks", async () => {
+    browser({ on: false, permission: false });
+    const create = vi.fn(async () => ({}));
+    (globalThis.chrome as unknown as { tabs: unknown; runtime: Record<string, unknown> }).tabs = { create };
+    (globalThis.chrome as unknown as { runtime: Record<string, unknown> }).runtime.getURL = (p: string) =>
+      `chrome-extension://x/${p}`;
+    expect(await handleLive({ type: "live.improveSetup" }, "https://site.example/a")).toBeNull();
+    expect(create).toHaveBeenCalledWith({ url: "chrome-extension://x/improve.html" });
+  });
+
+  it("is only offered where the browser can run the helper (Chromium builds ask for nativeMessaging)", () => {
+    browser({ on: false, permission: false });
+    const runtime = (globalThis.chrome as unknown as { runtime: Record<string, unknown> }).runtime;
+    runtime.getManifest = () => ({ optional_permissions: ["desktopCapture", "nativeMessaging"] });
+    expect(helperOffered()).toBe(true);
+    runtime.getManifest = () => ({});
+    expect(helperOffered()).toBe(false);
   });
 
   it("is a live request pages can make, only about their own page", async () => {

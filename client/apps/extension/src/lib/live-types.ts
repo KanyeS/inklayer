@@ -48,6 +48,8 @@ export interface LiveInit {
   pullRequest: PullRequestPageResponse | null;
   /** Whether the Improve button shows: the person turned on the local Claude helper and it's installed. */
   claudeImprove?: boolean;
+  /** Offer to set the helper up, under the comment box: it isn't set up, this browser can use it, and it wasn't hidden. */
+  claudeImproveHint?: boolean;
 }
 
 /** Messages from the live content script. The background checks each one against the sender's actual origin. */
@@ -113,7 +115,8 @@ export type LiveRequest =
   | { type: "live.sizeSaved" }
   | { type: "live.inbox" }
   | { type: "live.inboxRead"; ids?: string[] }
-  | { type: "live.improve"; url: string; text: string; selector?: string; elementText?: string };
+  | { type: "live.improve"; url: string; text: string; selector?: string; elementText?: string }
+  | { type: "live.improveSetup" };
 
 /** What the page looked like when a comment was made: see capture-main.ts and pageDetails.ts. */
 export interface PageContext {

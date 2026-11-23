@@ -14,7 +14,7 @@ The install script does three things:
 
 - It copies `inklayer-claude-host.mjs` to `~/.local/share/inklayer/` on Linux, `~/Library/Application Support/InkLayer/` on macOS, or `%LOCALAPPDATA%\InkLayer` on Windows.
 - It writes a wrapper next to it (`claude-host`, or `claude-host.bat` on Windows). Browsers start helpers with a minimal `PATH`, so the wrapper records where `node` and `claude` are.
-- It registers `com.inklayer.claude` with each Chromium browser (Chrome, Chromium, Brave, Edge): in its `NativeMessagingHosts` folder on Linux and macOS, or under its `NativeMessagingHosts` key in the current user's registry on Windows. Only the Inklayer extension (`cihhaaceflhcncmeoiembekghkhbgfio`) may start it. A fork with a different ID can set `INKLAYER_EXTENSION_ID` when installing.
+- It registers `com.inklayer.claude` with each browser: Chrome, Chromium, Brave and Edge in their `NativeMessagingHosts` folders on Linux and macOS, and Firefox in `~/.mozilla/native-messaging-hosts` (Linux) or `~/Library/Application Support/Mozilla/NativeMessagingHosts` (macOS), when it's installed. On Windows it adds each browser's `NativeMessagingHosts` key in the current user's registry. Only the Inklayer extension may start it: `cihhaaceflhcncmeoiembekghkhbgfio` in Chromium browsers, `inklayer-extension@inklayer` in Firefox. A fork with other IDs can set `INKLAYER_EXTENSION_ID` and `INKLAYER_FIREFOX_ID` when installing.
 
 Run it again after moving Node or Claude Code. Then turn the button on from the extension popup: open **Settings** and click **Improve comments with Claude**.
 
@@ -26,7 +26,7 @@ node claude-plugin/improve/install.cjs --uninstall
 
 (Uninstalling the plugin doesn't remove the helper; run this too.)
 
-Firefox isn't supported yet. On Windows, the helper starts `claude.cmd` through `cmd.exe`, with the system prompt in a file rather than on the command line.
+On Windows, the helper starts `claude.cmd` through `cmd.exe`, with the system prompt in a file rather than on the command line.
 
 ## What it runs
 

@@ -1,5 +1,6 @@
 import { type Draft, resolveElement } from "@inklayer/overlay";
-import { call, messageOf } from "./call";
+import { IMPROVE_HINT_HIDDEN } from "../lib/claude-helper";
+import { call, messageOf, remember } from "./call";
 import type { TextDraft } from "./suggestions";
 
 /**
@@ -32,10 +33,18 @@ interface BoxState {
   improved: string | null;
 }
 
+/** The offer to set the helper up, under the comment box while it isn't. */
+export interface ImproveHint {
+  onSetUp(): void;
+  onHide(): void;
+}
+
 /** The comment boxes Improve works in, as the session keeps them. */
 export interface ImproveBoxes {
   /** The local Claude helper is on (popup → Settings) and installed. */
   enabled(): boolean;
+  /** Offer to set it up (it isn't, this browser can use it, and the person didn't hide the offer). */
+  offerSetUp?(): boolean;
   render(): void;
   /** The new comment being written, if any: its element (for context), text, page and box number. */
   draft(): { draft: Draft; text: TextDraft; url: string; number: number } | null;
@@ -47,10 +56,27 @@ export interface ImproveBoxes {
 
 export class Improver {
   #state: BoxState | null = null;
+  #hintHidden = false;
   readonly #boxes: ImproveBoxes;
 
   constructor(boxes: ImproveBoxes) {
     this.#boxes = boxes;
+  }
+
+  /**
+   * The "set up" link under the new comment's box: it opens the setup in a tab (a page can't open the popup). "Don't
+   * show this" hides it for good, on every site.
+   */
+  setUpHint(): ImproveHint | null {
+    if (this.#hintHidden || this.#boxes.enabled() || !this.#boxes.offerSetUp?.()) return null;
+    return {
+      onSetUp: () => void call({ type: "live.improveSetup" }).catch(() => undefined),
+      onHide: () => {
+        this.#hintHidden = true;
+        remember({ [IMPROVE_HINT_HIDDEN]: true });
+        this.#boxes.render();
+      },
+    };
   }
 
   /** The controls for the new comment's box; null when the helper is off. */

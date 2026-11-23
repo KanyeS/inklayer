@@ -205,6 +205,63 @@ describe("Improve button", () => {
   });
 });
 
+describe("the offer to set Improve up", () => {
+  it("shows under the comment box until the helper is on, and opens the setup in a tab", async () => {
+    const fake = fakeChrome();
+    vi.stubGlobal("chrome", fake.chrome);
+    const improver = new Improver(boxes({ enabled: () => false, offerSetUp: () => true }));
+    const hint = improver.setUpHint();
+    expect(hint).not.toBeNull();
+    hint?.onSetUp();
+    await settle();
+    expect(fake.sendMessage).toHaveBeenCalledWith({ type: "live.improveSetup" });
+    expect(new Improver(boxes({ enabled: () => true, offerSetUp: () => true })).setUpHint()).toBeNull();
+    expect(new Improver(boxes({ enabled: () => false, offerSetUp: () => false })).setUpHint()).toBeNull();
+  });
+
+  it("stops for good when the person says so", () => {
+    const fake = fakeChrome();
+    vi.stubGlobal("chrome", fake.chrome);
+    const render = vi.fn();
+    const improver = new Improver(boxes({ enabled: () => false, offerSetUp: () => true, render }));
+    improver.setUpHint()?.onHide();
+    expect(improver.setUpHint()).toBeNull();
+    expect(fake.stored).toMatchObject({ claudeImproveHintHidden: true });
+    expect(render).toHaveBeenCalled();
+  });
+
+  it("is a line of two links under the box", () => {
+    const onSetUp = vi.fn();
+    const onHide = vi.fn();
+    const root = mountOne(
+      draftBox({
+        input: null,
+        scope: null,
+        busy: false,
+        attachContext: null,
+        onAttachContext: vi.fn(),
+        fullPage: null,
+        onFullPage: vi.fn(),
+        recording: null,
+        recorderOpen: false,
+        onRecord: vi.fn(),
+        onRecordInWindow: vi.fn(),
+        onCloseRecorder: vi.fn(),
+        onRemoveRecording: vi.fn(),
+        issueTitleHint: false,
+        improveHint: { onSetUp, onHide },
+        onSave: vi.fn(),
+        onCancel: vi.fn(),
+      }),
+    );
+    expect(root.querySelector(".improve-hint")?.textContent).toBe("✨ Improve with Claude: set up · Don't show this");
+    clickButton(root, "Improve with Claude: set up");
+    clickButton(root, "Don't show this");
+    expect(onSetUp).toHaveBeenCalledOnce();
+    expect(onHide).toHaveBeenCalledOnce();
+  });
+});
+
 describe("Improve's page context", () => {
   it("names the comment's element by its label or text", () => {
     document.body.innerHTML = `<form><button id="save" aria-label="Save changes">💾</button><p id="msg">  Saved

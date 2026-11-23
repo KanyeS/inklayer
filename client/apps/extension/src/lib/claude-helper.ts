@@ -17,6 +17,16 @@ export function pluginCommand(serverUrl: string): string {
   return `claude plugin marketplace add KanyeS/inklayer && claude plugin install inklayer@inklayer --config server_url=${serverUrl}`;
 }
 
+/** The page that sets the helper up, opened from the comment box's hint. */
+export const HELPER_SETUP_PAGE = "improve.html";
+/** Set (in local storage) when the person hides the comment box's hint for good. */
+export const IMPROVE_HINT_HIDDEN = "claudeImproveHintHidden";
+
+/** Whether this browser can use the helper at all: builds that ask for nativeMessaging (Chromium's and Firefox's). */
+export function helperOffered(): boolean {
+  return (chrome.runtime.getManifest().optional_permissions ?? []).includes("nativeMessaging");
+}
+
 /** The CLI takes a few seconds to start; the helper itself gives up after a minute. */
 const IMPROVE_TIMEOUT_MS = 90_000;
 const PING_TIMEOUT_MS = 20_000;
@@ -66,7 +76,7 @@ async function sendToHost(message: object, timeoutMs: number): Promise<HostReply
 /** Chrome's errors when the helper isn't installed are cryptic. */
 function friendly(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  if (/not found|forbidden|exited|failed to start/i.test(message))
+  if (/not found|forbidden|exited|failed to start|no such native application/i.test(message))
     return "The Claude helper isn't set up on this computer yet: see Settings in the Inklayer popup.";
   return message;
 }

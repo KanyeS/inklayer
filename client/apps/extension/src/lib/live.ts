@@ -2,7 +2,7 @@ import outfitLatinUrl from "@fontsource-variable/outfit/files/outfit-latin-wght-
 import { api } from "./api";
 import { NotSignedInError } from "./auth";
 import { bytesToBase64 } from "./base64";
-import { helperEnabled, improveDraft } from "./claude-helper";
+import { HELPER_SETUP_PAGE, helperEnabled, helperOffered, IMPROVE_HINT_HIDDEN, improveDraft } from "./claude-helper";
 import type { LiveInit, LiveRequest, PullRequestPage } from "./live-types";
 import { inbox, markRead } from "./notifications";
 import {
@@ -434,6 +434,11 @@ const HANDLERS: Handlers = {
     if (!(await signedIn())) throw new NotSignedInError();
     return improveDraft({ url, text, selector, elementText });
   },
+  // The comment box's "set up" link: a page can't open the popup, so the setup opens in a tab of its own.
+  "live.improveSetup": async () => {
+    await chrome.tabs.create({ url: chrome.runtime.getURL(HELPER_SETUP_PAGE) });
+    return null;
+  },
 };
 
 /* -------------------------------------------------------------- helpers */
@@ -462,7 +467,7 @@ async function init(url: string): Promise<LiveInit> {
   const [all, pages, stored, settings, on, pullRequest, claudeImprove] = await Promise.all([
     projects.get(),
     pageComments(url),
-    chrome.storage.local.get(["lastLiveProjectId", SITE_PRODUCTS_KEY]),
+    chrome.storage.local.get(["lastLiveProjectId", SITE_PRODUCTS_KEY, IMPROVE_HINT_HIDDEN]),
     getSettings(),
     features.get(),
     pullRequestOf(url),
@@ -478,6 +483,7 @@ async function init(url: string): Promise<LiveInit> {
     features: on,
     pullRequest,
     claudeImprove,
+    claudeImproveHint: !claudeImprove && helperOffered() && stored[IMPROVE_HINT_HIDDEN] !== true,
   };
 }
 

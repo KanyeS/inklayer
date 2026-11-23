@@ -264,9 +264,9 @@ For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the env
 
 The comment box can have an **Improve** button that rewrites a rough draft ("button broke") into a clear comment the team can act on. It keeps your meaning, @mentions, [[doc links]] and #tags. It uses the [Claude Code](https://claude.com/claude-code) CLI already signed in on your computer, so it runs on your own Claude plan. The draft goes from the browser to Claude Code and back into the box, and nothing reaches the Inklayer server until you click Save. **Undo** puts your words back.
 
-It's off by default, and works in Chromium browsers (Chrome, Edge, Brave) on Linux, macOS and Windows. Each person needs [Claude Code](https://claude.com/claude-code) (signed in) and Node.js, and sets it up once:
+It's off by default, and works in Chrome, Edge, Brave and Firefox on Linux, macOS and Windows. Each person needs [Claude Code](https://claude.com/claude-code) (signed in) and Node.js, and sets it up once:
 
-1. In the extension popup, open **Settings** and click **Improve comments with Claude**. Allow the permission it asks for.
+1. Click **✨ Improve with Claude: set up** under the comment box (it opens the setup in a tab), or open the extension popup's **Settings**. Then click **Improve comments with Claude**, and allow the permission it asks for. The link shows until it's set up; **Don't show this** hides it for good.
 2. Set up the helper, one of these ways (the popup shows both, filled in for your server):
    - **With Claude Code:** run `claude plugin marketplace add KanyeS/inklayer && claude plugin install inklayer@inklayer --config server_url=https://<your server>`, then restart Claude Code. The [plugin](claude-plugin/README.md) registers the helper with your browsers each time Claude Code starts, and also brings the review helper below.
    - **With an installer:** click **Download installer** and open it. On a Mac it's a zip with the installer in it; on Windows a `.cmd`; on Linux a `.sh` you run with `sh`. They aren't signed, so macOS and Windows warn before opening them.

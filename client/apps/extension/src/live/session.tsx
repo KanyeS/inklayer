@@ -31,6 +31,7 @@ import { PanelMover } from "./panel-mover";
 import { SettleTimer } from "./settle-timer";
 import { sharePage } from "./share";
 import { SiteProduct } from "./site-product";
+import { type SettingChanges, type StoredSettings, watchSettings } from "./stored-settings";
 import panelCss from "./styles/panel.css?inline";
 import { draftBody, EMPTY_DRAFT, type TextDraft } from "./suggestions";
 import { ActivityView } from "./views/activity";
@@ -50,17 +51,6 @@ const REANCHOR_DELAY_MS = 400;
 const REANCHOR_MAX_WAIT_MS = 1500;
 const REFRESH_EVERY_MS = 60_000;
 const WATCH_ADDRESS_MS = 1000;
-
-/** Settings remembered in the extension's storage, the same on every site. */
-const STORED_KEYS = [
-  "bubblesOpen",
-  "attachContext",
-  "panelPosition",
-  "panelPinned",
-  "unreadCount",
-  "fullPage",
-  "productMenu",
-];
 
 /**
  * Live mode on a real page.
@@ -102,6 +92,7 @@ export class LiveSession {
   /** The Improve button in comment boxes: the local Claude helper rewrites what's written (see improve.ts). */
   readonly #improver = new Improver({
     enabled: () => this.#init.claudeImprove === true,
+    offerSetUp: () => this.#init.claudeImproveHint === true,
     render: () => this.#render(),
     draft: () =>
       this.#draft && { draft: this.#draft, text: this.#draftText, url: this.#carry.url, number: this.#draftNumber },
@@ -216,8 +207,10 @@ export class LiveSession {
     this.#inbox = new InboxView(this.#ctx);
 
     document.documentElement.append(this.#host);
-    this.#restoreSettings();
-    this.#followSettings();
+    watchSettings(
+      (stored) => this.#restoreSettings(stored),
+      (changes) => this.#followSettings(changes),
+    );
     this.#mover.followWindowSize();
   }
 
@@ -333,31 +326,23 @@ export class LiveSession {
 
   /* ------------------------------------------------------------------ settings */
 
-  #restoreSettings(): void {
-    void chrome.storage.local
-      .get(STORED_KEYS)
-      .then((stored) => {
-        this.#inbox.unread = typeof stored.unreadCount === "number" ? stored.unreadCount : 0;
-        this.#bubblesOpen = stored.bubblesOpen === true;
-        this.#productMenu = readProductMenuView(stored.productMenu);
-        this.#captures.restore(stored);
-        this.#mover.restore(stored);
-        this.#render();
-      })
-      .catch(() => undefined);
+  #restoreSettings(stored: StoredSettings): void {
+    this.#inbox.unread = typeof stored.unreadCount === "number" ? stored.unreadCount : 0;
+    this.#bubblesOpen = stored.bubblesOpen === true;
+    this.#productMenu = readProductMenuView(stored.productMenu);
+    this.#captures.restore(stored);
+    this.#mover.restore(stored);
+    this.#render();
   }
 
   /** Another tab moved or pinned the panel, or the unread count changed: follow. */
-  #followSettings(): void {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local") return;
-      if (changes.unreadCount) {
-        this.#inbox.unread = typeof changes.unreadCount.newValue === "number" ? changes.unreadCount.newValue : 0;
-        if (this.#view === "inbox" && this.#inbox.idle) void this.#inbox.load();
-        else this.#render();
-      }
-      if (this.#mover.follow(changes)) this.#render();
-    });
+  #followSettings(changes: SettingChanges): void {
+    if (changes.unreadCount) {
+      this.#inbox.unread = typeof changes.unreadCount.newValue === "number" ? changes.unreadCount.newValue : 0;
+      if (this.#view === "inbox" && this.#inbox.idle) void this.#inbox.load();
+      else this.#render();
+    }
+    if (this.#mover.follow(changes)) this.#render();
   }
 
   #setBubblesOpen(open: boolean): void {
@@ -752,6 +737,7 @@ export class LiveSession {
       busy: this.#busy,
       issueTitleHint: this.#init.features.issueTrackers,
       improve: this.#improver.forDraft(),
+      improveHint: this.#improver.setUpHint(),
       ...this.#captures.options(),
       onSave: () => void this.#saveDraft(),
       onCancel: () => this.#cancelDraft(),

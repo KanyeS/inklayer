@@ -1,5 +1,5 @@
-// Installs Inklayer's local Claude helper for Chromium browsers (Chrome, Chromium, Brave, Edge) on Linux, macOS and
-// Windows, so the extension's "Improve" button can use the Claude Code CLI signed in on this computer.
+// Installs Inklayer's local Claude helper for Chrome, Chromium, Brave, Edge and Firefox on Linux, macOS and Windows,
+// so the extension's "Improve" button can use the Claude Code CLI signed in on this computer.
 //
 //   node install.cjs              install (or update)
 //   node install.cjs --quiet      the same, saying nothing unless something's wrong (the plugin's SessionStart hook)
@@ -21,6 +21,8 @@ const { delimiter, dirname, join } = require("node:path");
 const HOST_NAME = "com.inklayer.claude";
 /** The Web Store extension ID, which the manifest's "key" also gives builds from source. */
 const EXTENSION_ID = process.env.INKLAYER_EXTENSION_ID || "cihhaaceflhcncmeoiembekghkhbgfio";
+/** The Firefox add-on's ID (build-firefox.mjs). */
+const FIREFOX_ID = process.env.INKLAYER_FIREFOX_ID || "inklayer-extension@inklayer";
 
 const home = homedir();
 const os = platform();
@@ -47,6 +49,16 @@ function browserDirs() {
 const REGISTRY_KEYS = ["Google\\Chrome", "Chromium", "BraveSoftware\\Brave-Browser", "Microsoft\\Edge"].map(
   (browser) => `HKCU\\Software\\${browser}\\NativeMessagingHosts\\${HOST_NAME}`,
 );
+const FIREFOX_REGISTRY_KEY = `HKCU\\Software\\Mozilla\\NativeMessagingHosts\\${HOST_NAME}`;
+
+/** Linux and macOS: Firefox's folder for helpers' manifests, and the folder that shows Firefox is installed. */
+function firefoxDirs() {
+  if (os === "darwin") {
+    const support = join(home, "Library", "Application Support");
+    return { hosts: join(support, "Mozilla", "NativeMessagingHosts"), installed: join(support, "Firefox") };
+  }
+  return { hosts: join(home, ".mozilla", "native-messaging-hosts"), installed: join(home, ".mozilla") };
+}
 
 function installDir() {
   if (os === "win32") return join(process.env.LOCALAPPDATA || join(home, "AppData", "Local"), "InkLayer");
@@ -151,23 +163,30 @@ function install() {
   if (os === "win32") write(wrapper, batchWrapper(claude, script));
   else write(wrapper, shellWrapper(claude, script), 0o755);
 
-  const manifest = `${JSON.stringify(
-    {
-      name: HOST_NAME,
-      description: "Inklayer: improve comments with the Claude Code CLI on this computer",
-      path: wrapper,
-      type: "stdio",
-      allowed_origins: [`chrome-extension://${EXTENSION_ID}/`],
-    },
-    null,
-    2,
-  )}\n`;
+  const describe = (who) =>
+    `${JSON.stringify(
+      {
+        name: HOST_NAME,
+        description: "Inklayer: improve comments with the Claude Code CLI on this computer",
+        path: wrapper,
+        type: "stdio",
+        ...who,
+      },
+      null,
+      2,
+    )}\n`;
+  // Chromium browsers name the extensions that may start it by origin; Firefox by add-on ID.
+  const manifest = describe({ allowed_origins: [`chrome-extension://${EXTENSION_ID}/`] });
+  const firefoxManifest = describe({ allowed_extensions: [FIREFOX_ID] });
 
   if (os === "win32") {
     const file = join(dir, `${HOST_NAME}.json`);
     write(file, manifest);
     for (const key of REGISTRY_KEYS) execFileSync("reg", ["add", key, "/ve", "/t", "REG_SZ", "/d", file, "/f"], { stdio: "ignore" });
-    say(`Registered for Chrome, Chromium, Brave and Edge (${file})`);
+    const firefoxFile = join(dir, `${HOST_NAME}.firefox.json`);
+    write(firefoxFile, firefoxManifest);
+    execFileSync("reg", ["add", FIREFOX_REGISTRY_KEY, "/ve", "/t", "REG_SZ", "/d", firefoxFile, "/f"], { stdio: "ignore" });
+    say(`Registered for Chrome, Chromium, Brave, Edge and Firefox (${dir})`);
   } else {
     // Browsers that are installed (have their folder); Chrome's anyway if none are found yet.
     const dirs = browserDirs();
@@ -178,6 +197,12 @@ function install() {
       write(join(hosts, `${HOST_NAME}.json`), manifest);
       say(`Registered for ${d}`);
     }
+    const firefox = firefoxDirs();
+    if (fs.existsSync(firefox.installed)) {
+      fs.mkdirSync(firefox.hosts, { recursive: true });
+      write(join(firefox.hosts, `${HOST_NAME}.json`), firefoxManifest);
+      say(`Registered for Firefox (${firefox.hosts})`);
+    }
   }
   say(`\nInstalled. It uses ${claude} with ${process.execPath}.`);
   say('In the Inklayer popup, open Settings and turn on "Improve comments with Claude".');
@@ -185,7 +210,7 @@ function install() {
 
 function uninstall() {
   if (os === "win32") {
-    for (const key of REGISTRY_KEYS) {
+    for (const key of [...REGISTRY_KEYS, FIREFOX_REGISTRY_KEY]) {
       try {
         execFileSync("reg", ["delete", key, "/f"], { stdio: "ignore" });
       } catch {
@@ -194,6 +219,7 @@ function uninstall() {
     }
   } else {
     for (const d of browserDirs()) fs.rmSync(join(d, "NativeMessagingHosts", `${HOST_NAME}.json`), { force: true });
+    fs.rmSync(join(firefoxDirs().hosts, `${HOST_NAME}.json`), { force: true });
   }
   fs.rmSync(installDir(), { recursive: true, force: true });
   say("Removed Inklayer's Claude helper.");
