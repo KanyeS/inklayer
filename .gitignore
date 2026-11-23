@@ -20,6 +20,7 @@ test-results/
 # Env / secrets
 .env
 .env.*
+**/dex/config.yaml
 !.env.example
 *.pfx
 *.pem

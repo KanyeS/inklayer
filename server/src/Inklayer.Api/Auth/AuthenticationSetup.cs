@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
 using ModelContextProtocol.AspNetCore.Authentication;
@@ -110,38 +112,15 @@ internal static partial class AuthenticationSetup
 
         foreach (var provider in authOptions.Oidc.Where(o => o.IsConfigured))
         {
-            authentication.AddOpenIdConnect(AuthSchemes.ForProvider(provider.Id), provider.DisplayNameOrId, o =>
-            {
-                o.Authority = provider.Authority;
-                o.ClientId = provider.ClientId;
-                o.ClientSecret = provider.ClientSecret.Length > 0 ? provider.ClientSecret : null;
-                o.ResponseType = "code";
-                o.UsePkce = true;
-                o.CallbackPath = $"/auth/callback/{provider.Id}";
-                o.SignInScheme = AuthSchemes.Cookie;
-                o.RequireHttpsMetadata = !allowInsecureHttp;
-                o.Scope.Clear();
-                o.Scope.Add("openid");
-                foreach (var scope in provider.Scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(s => s != "openid"))
-                {
-                    o.Scope.Add(scope);
-                }
-
-                o.MapInboundClaims = false;
-                o.SaveTokens = false;
-
-                // Some providers put email and name only in the userinfo response, not in the ID token.
-                o.GetClaimsFromUserInfoEndpoint = true;
-                o.ClaimActions.MapUniqueJsonKey("email_verified", "email_verified");
-                o.ClaimActions.MapUniqueJsonKey("picture", "picture");
-                o.Events = new OpenIdConnectEvents
-                {
-                    // Runs after the ID token and the userinfo response are both in.
-                    OnTicketReceived = ctx => CompleteSignInAsync(ctx, ExternalIdentity.FromOidc(ctx.Principal!, provider)),
-                    OnRemoteFailure = OnRemoteFailureAsync,
-                };
-            });
+            authentication.AddOpenIdConnect(AuthSchemes.ForProvider(provider.Id), provider.DisplayNameOrId, o => ConfigureOidc(o, provider, allowInsecureHttp));
         }
+
+        // Providers that administrators add on the Admin page: their schemes are added while the server runs (SignInProviders).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPostConfigureOptions<OpenIdConnectOptions>, OpenIdConnectPostConfigureOptions>());
+        services.AddSingleton(new SignInProviderSettings(allowInsecureHttp));
+        services.AddSingleton<SignInProviders>();
+        services.AddSingleton<IConfigureOptions<OpenIdConnectOptions>, StoredOidcConfigurator>();
+        services.AddHostedService(sp => sp.GetRequiredService<SignInProviders>());
 
         // MCP: bearer tokens like the extension's, but challenges point clients at the protected-resource metadata
         // (/.well-known/oauth-protected-resource/api/mcp), which says where to sign in. Tokens must be issued for the MCP endpoint.
@@ -266,6 +245,39 @@ internal static partial class AuthenticationSetup
         return app;
     }
 
+    /// <summary>The OpenID Connect handler's settings for a provider, from the server's configuration or added by an administrator.</summary>
+    internal static void ConfigureOidc(OpenIdConnectOptions o, InklayerAuthOptions.OidcProviderOptions provider, bool allowInsecureHttp)
+    {
+        o.Authority = provider.Authority;
+        o.ClientId = provider.ClientId;
+        o.ClientSecret = provider.ClientSecret.Length > 0 ? provider.ClientSecret : null;
+        o.ResponseType = "code";
+        o.UsePkce = true;
+        o.CallbackPath = $"/auth/callback/{provider.Id}";
+        o.SignInScheme = AuthSchemes.Cookie;
+        o.RequireHttpsMetadata = !allowInsecureHttp;
+        o.Scope.Clear();
+        o.Scope.Add("openid");
+        foreach (var scope in provider.Scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(s => s != "openid"))
+        {
+            o.Scope.Add(scope);
+        }
+
+        o.MapInboundClaims = false;
+        o.SaveTokens = false;
+
+        // Some providers put email and name only in the userinfo response, not in the ID token.
+        o.GetClaimsFromUserInfoEndpoint = true;
+        o.ClaimActions.MapUniqueJsonKey("email_verified", "email_verified");
+        o.ClaimActions.MapUniqueJsonKey("picture", "picture");
+        o.Events = new OpenIdConnectEvents
+        {
+            // Runs after the ID token and the userinfo response are both in.
+            OnTicketReceived = ctx => CompleteSignInAsync(ctx, ExternalIdentity.FromOidc(ctx.Principal!, provider)),
+            OnRemoteFailure = OnRemoteFailureAsync,
+        };
+    }
+
     /// <summary>Runs the sign-in rules and replaces the provider's claims with Inklayer's own. Only Inklayer's user id, email, name and security stamp go into the cookie.</summary>
     private static async Task CompleteSignInAsync(TicketReceivedContext context, ExternalIdentity identity)
     {
@@ -303,6 +315,15 @@ internal static partial class AuthenticationSetup
 
         return Task.CompletedTask;
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message =
+        "No sign-in provider is configured, so nobody can sign in. Inklayer stores no passwords: it signs people in through " +
+        "Google or an OpenID Connect identity server. The quickest options: (1) a Google OAuth client, set GOOGLE_CLIENT_ID and " +
+        "GOOGLE_CLIENT_SECRET; (2) running it by yourself, start the bundled Dex identity server with " +
+        "'docker compose -f docker-compose.yml -f docker-compose.dex.yml up -d' (docs/sso-oidc.md, 'Running Inklayer by yourself'); (3) your company's " +
+        "provider (Okta, Entra ID, JumpCloud, Keycloak, ...), set the OIDC_* settings. Also set INKLAYER_BOOTSTRAP_ADMINS to your " +
+        "email. Steps for each: docs/sso-oidc.md")]
+    internal static partial void LogNoProviders(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Sign-in with {Scheme} failed")]
     private static partial void LogRemoteFailure(ILogger logger, string scheme, Exception? exception);

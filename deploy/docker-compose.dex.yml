@@ -1,0 +1,16 @@
+# A small identity server (Dex, Apache-2.0) for running Inklayer by yourself, with no Google account or company SSO.
+# Inklayer stores no passwords; Dex holds the few accounts you list in dex/config.yaml.
+#   cp dex/config.yaml.example dex/config.yaml    (then edit it: see docs/sso-oidc.md, "Running Inklayer by yourself")
+#   docker compose -f docker-compose.yml -f docker-compose.dex.yml up -d
+# Set the OIDC_* lines for Dex in .env (see .env.example).
+
+services:
+  dex:
+    image: ghcr.io/dexidp/dex:v2.46.1
+    restart: unless-stopped
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    volumes:
+      - ./dex/config.yaml:/etc/dex/config.yaml:ro
+    # Only for the plain-HTTP local trial; behind Caddy, the proxy reaches Dex on the Docker network instead.
+    ports:
+      - "${DEX_PORT:-127.0.0.1:5556}:5556"

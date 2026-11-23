@@ -1,0 +1,36 @@
+# Dex: the identity server for running Inklayer by yourself. Copy to config.yaml and change the three marked values.
+# Steps: docs/sso-oidc.md, "Running Inklayer by yourself".
+
+# 1. The address people's browsers use for Dex. Inklayer's server must reach the same address.
+#    Behind Caddy: https://id.example.com   Plain-HTTP local trial: http://dex:5556 (see the doc)
+issuer: https://id.example.com
+
+storage:
+  type: memory   # accounts come from this file, so there's nothing to keep between restarts
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+
+staticClients:
+  - id: inklayer
+    name: Inklayer
+    # 2. A long random secret (openssl rand -hex 32), the same as OIDC_CLIENT_SECRET in .env.
+    secret: change-me
+    redirectURIs:
+      # Inklayer's address + /auth/callback/dex
+      - https://inklayer.example.com/auth/callback/dex
+      - http://localhost:8080/auth/callback/dex
+
+enablePasswordDB: true
+
+# 3. The people who can sign in. hash is a bcrypt hash of their password:
+#    docker run --rm httpd:2-alpine htpasswd -nbBC 10 "" 'the password' | tr -d ':\n'
+#    userID is any unique, unchanging value per person (uuidgen).
+staticPasswords:
+  - email: you@example.com
+    username: you
+    hash: "$2y$10$replace.with.your.own.bcrypt.hash"
+    userID: 00000000-0000-0000-0000-000000000001

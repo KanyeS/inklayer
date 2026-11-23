@@ -24,6 +24,7 @@ export type {
   OrganizationResponse as Organization,
   ProjectResponse as Project,
   Role,
+  SignInProviderResponse as SignInProvider,
   TeamMemberResponse as TeamMember,
   TeamResponse as Team,
 } from "@inklayer/api";

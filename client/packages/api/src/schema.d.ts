@@ -1689,6 +1689,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/sign-in-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The sign-in providers: those in the server's configuration, and those administrators added */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignInProvidersResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Add an OpenID Connect sign-in provider. Its discovery document is checked first; it works straight away. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SaveSignInProviderRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignInProvidersResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/sign-in-providers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a provider an administrator added. Leave out the client secret to keep it. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SaveSignInProviderRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignInProvidersResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Remove a provider an administrator added. People who used only it can no longer sign in. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignInProvidersResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users": {
         parameters: {
             query?: never;
@@ -4780,6 +4904,15 @@ export interface components {
         };
         /** @enum {unknown} */
         Role: "Viewer" | "Commenter" | "Editor" | "Manager" | "Admin" | "Owner";
+        SaveSignInProviderRequest: {
+            id?: null | string;
+            displayName?: null | string;
+            authority?: null | string;
+            clientId?: null | string;
+            clientSecret?: null | string;
+            scopes?: null | string;
+            verifiedDomains?: null | string[];
+        };
         SetGrantRequest: {
             role?: null | components["schemas"]["Role"];
         };
@@ -4819,6 +4952,32 @@ export interface components {
         SignInProvider: {
             id: string;
             displayName: string;
+        };
+        SignInProviderResponse: {
+            id: string;
+            displayName: string;
+            kind: string;
+            source: components["schemas"]["SignInProviderSource"];
+            redirectUri: string;
+            /** Format: int32 */
+            accounts: number;
+            authority?: null | string;
+            clientId?: null | string;
+            /** @default false */
+            hasClientSecret?: boolean;
+            scopes?: null | string;
+            verifiedDomains?: null | string[];
+            /** @default false */
+            canRemove?: boolean;
+            /** @default false */
+            needsSecret?: boolean;
+        };
+        /** @enum {unknown} */
+        SignInProviderSource: "Config" | "Admin";
+        SignInProvidersResponse: {
+            providers: components["schemas"]["SignInProviderResponse"][];
+            redirectUriPrefix: string;
+            yourProviders: string[];
         };
         TeamMemberResponse: {
             /** Format: uuid */
@@ -5070,10 +5229,14 @@ export type PullRequestCommentResponse = components['schemas']['PullRequestComme
 export type PullRequestPageResponse = components['schemas']['PullRequestPageResponse'];
 export type ReplyResponse = components['schemas']['ReplyResponse'];
 export type Role = components['schemas']['Role'];
+export type SaveSignInProviderRequest = components['schemas']['SaveSignInProviderRequest'];
 export type SetGrantRequest = components['schemas']['SetGrantRequest'];
 export type SetRoleRequest = components['schemas']['SetRoleRequest'];
 export type ShareResponse = components['schemas']['ShareResponse'];
 export type SignInProvider = components['schemas']['SignInProvider'];
+export type SignInProviderResponse = components['schemas']['SignInProviderResponse'];
+export type SignInProviderSource = components['schemas']['SignInProviderSource'];
+export type SignInProvidersResponse = components['schemas']['SignInProvidersResponse'];
 export type TeamMemberResponse = components['schemas']['TeamMemberResponse'];
 export type TeamRequest = components['schemas']['TeamRequest'];
 export type TeamResponse = components['schemas']['TeamResponse'];

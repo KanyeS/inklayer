@@ -26,6 +26,14 @@ cd deploy
 docker compose up -d          # serves on http://localhost:8080
 ```
 
+**Set up sign-in next.** Inklayer stores no passwords, so nobody can sign in until it has a sign-in provider. Until then the server says so in its log and on its sign-in page. Choose one of these, and set `INKLAYER_BOOTSTRAP_ADMINS` to your email so you become the administrator:
+
+- **Google:** a Google OAuth client, with no extra server.
+- **Your company's provider:** JumpCloud, Okta, Microsoft Entra ID, Keycloak, Authentik, Auth0, or any OpenID Connect provider.
+- **Just you, or a few people:** the small Dex identity server that comes with Inklayer (`docker-compose.dex.yml`).
+
+Once you can sign in, administrators can add more providers under **Admin → Sign-in providers**, with no restart. The steps for each are in [docs/sso-oidc.md](docs/sso-oidc.md). An AI coding assistant can do the setup for you: open this repository in it and say *"Set up sign-in for my Inklayer server by following docs/sso-oidc.md, starting with 'Instructions for AI assistants'."*
+
 All data (a SQLite database) lives on the `inklayer-data` volume. Run a single replica on local disk, and put a TLS reverse proxy in front (see `deploy/Caddyfile.example`).
 
 **Production on AWS for about $7/month:** see [docs/deploy-aws-lightsail.md](docs/deploy-aws-lightsail.md). It covers Lightsail with Caddy HTTPS and Litestream backups to S3. To find out how much load that box can take, see [docs/load-testing.md](docs/load-testing.md).
@@ -55,7 +63,7 @@ dotnet user-secrets set "Inklayer:Auth:Google:ClientSecret" "<client secret>"
 dotnet user-secrets set "Inklayer:Auth:BootstrapAdmins" "you@gmail.com"
 ```
 
-To use another OpenID Connect provider instead of, or as well as, Google, see [docs/sso-oidc.md](docs/sso-oidc.md).
+To use another OpenID Connect provider instead of, or as well as, Google, or to run your own small identity server when you use Inklayer by yourself, see [docs/sso-oidc.md](docs/sso-oidc.md).
 
 Then open <http://localhost:5048/auth/login>.
 
@@ -134,7 +142,7 @@ People with the extension can see and add comments **directly on any website**.
 **On the page:** the overlay and panel live in closed shadow roots, so the page's CSS and scripts can't restyle or read them. The page never sees an access token: the extension's background worker makes every API call, checked against the page's real origin.
 
 ### How sign-in and access work
-- **Single sign-on only.** People sign in with Google or an OpenID Connect provider such as JumpCloud ([setup](docs/sso-oidc.md)). Inklayer stores no passwords.
+- **Single sign-on only.** People sign in with Google, an OpenID Connect provider such as JumpCloud or Okta, or the bundled Dex identity server ([setup](docs/sso-oidc.md)). Inklayer stores no passwords.
 - **Who can get in:**
   - instance administrators listed in `Inklayer:Auth:BootstrapAdmins`;
   - people with an invitation for their verified email;

@@ -138,5 +138,10 @@ export const queries = {
     network: () => queryOptions({ queryKey: ["admin", "network"], queryFn: () => api.get("/api/admin/network") }),
     features: () => queryOptions({ queryKey: ["admin", "features"], queryFn: () => api.get("/api/admin/features") }),
     email: () => queryOptions({ queryKey: ["admin", "email"], queryFn: () => api.get("/api/admin/email") }),
+    signInProviders: () =>
+      queryOptions({
+        queryKey: ["admin", "sign-in-providers"],
+        queryFn: () => api.get("/api/admin/sign-in-providers"),
+      }),
   },
 };

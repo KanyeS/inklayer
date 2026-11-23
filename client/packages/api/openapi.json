@@ -1718,6 +1718,122 @@
         }
       }
     },
+    "/api/admin/sign-in-providers": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "The sign-in providers: those in the server\u0027s configuration, and those administrators added",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Add an OpenID Connect sign-in provider. Its discovery document is checked first; it works straight away.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSignInProviderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/sign-in-providers/{id}": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Change a provider an administrator added. Leave out the client secret to keep it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSignInProviderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Remove a provider an administrator added. People who used only it can no longer sign in.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInProvidersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/users": {
       "get": {
         "tags": [
@@ -7416,6 +7532,62 @@
           "Owner"
         ]
       },
+      "SaveSignInProviderRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "maxLength": 32,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "maxLength": 80,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "authority": {
+            "maxLength": 500,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientId": {
+            "maxLength": 500,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientSecret": {
+            "maxLength": 2000,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "scopes": {
+            "maxLength": 500,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "verifiedDomains": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "SetGrantRequest": {
         "type": "object",
         "properties": {
@@ -7571,6 +7743,108 @@
           },
           "displayName": {
             "type": "string"
+          }
+        }
+      },
+      "SignInProviderResponse": {
+        "required": [
+          "id",
+          "displayName",
+          "kind",
+          "source",
+          "redirectUri",
+          "accounts"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SignInProviderSource"
+          },
+          "redirectUri": {
+            "type": "string"
+          },
+          "accounts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "authority": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasClientSecret": {
+            "type": "boolean",
+            "default": false
+          },
+          "scopes": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "verifiedDomains": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "canRemove": {
+            "type": "boolean",
+            "default": false
+          },
+          "needsSecret": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "SignInProviderSource": {
+        "enum": [
+          "Config",
+          "Admin"
+        ]
+      },
+      "SignInProvidersResponse": {
+        "required": [
+          "providers",
+          "redirectUriPrefix",
+          "yourProviders"
+        ],
+        "type": "object",
+        "properties": {
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SignInProviderResponse"
+            }
+          },
+          "redirectUriPrefix": {
+            "type": "string"
+          },
+          "yourProviders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

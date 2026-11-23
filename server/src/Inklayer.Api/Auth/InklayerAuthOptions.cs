@@ -78,7 +78,7 @@ public sealed partial class InklayerAuthOptions
 
         foreach (var provider in Oidc.Where(o => o.IsConfigured))
         {
-            if (!ProviderIdPattern().IsMatch(provider.Id))
+            if (!IsValidProviderId(provider.Id))
             {
                 throw new InvalidOperationException(
                     $"OIDC provider id '{provider.Id}' is invalid. Use 1-32 lower-case letters, digits or dashes, e.g. 'jumpcloud'.");
@@ -89,13 +89,20 @@ public sealed partial class InklayerAuthOptions
                 throw new InvalidOperationException($"OIDC provider id '{provider.Id}' is used more than once (the id 'google' is reserved for Inklayer:Auth:Google).");
             }
 
-            if (!Uri.TryCreate(provider.Authority, UriKind.Absolute, out var authority)
-                || (authority.Scheme != Uri.UriSchemeHttps && !(allowInsecureHttp && authority.Scheme == Uri.UriSchemeHttp)))
+            if (!IsValidAuthority(provider.Authority, allowInsecureHttp))
             {
                 throw new InvalidOperationException($"OIDC provider '{provider.Id}' needs an https Authority (the issuer URL), got '{provider.Authority}'.");
             }
         }
     }
+
+    /// <summary>1-32 lower-case letters, digits or dashes: the id is part of the callback URL.</summary>
+    public static bool IsValidProviderId(string id) => ProviderIdPattern().IsMatch(id);
+
+    /// <summary>An absolute https address (or http, for a plain-HTTP trial).</summary>
+    public static bool IsValidAuthority(string authority, bool allowInsecureHttp) =>
+        Uri.TryCreate(authority, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttps || (allowInsecureHttp && uri.Scheme == Uri.UriSchemeHttp));
 
     internal static HashSet<string> Split(string value) =>
         new(value.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

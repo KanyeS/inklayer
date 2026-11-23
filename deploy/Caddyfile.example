@@ -6,3 +6,8 @@ inklayer.example.com {
 	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	reverse_proxy server:8080
 }
+
+# Running Inklayer by yourself with the Dex identity server (docker-compose.dex.yml): its own address.
+# id.example.com {
+# 	reverse_proxy dex:5556
+# }

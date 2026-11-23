@@ -22,9 +22,9 @@ internal static class AuthEndpoints
 
         // Browser navigation: starts sign-in with the chosen provider, then returns to returnUrl (local paths only).
         // Without a provider, the only configured one is used, or a page lets the user choose.
-        auth.MapGet("/login", (string? provider, string? returnUrl, IOptions<InklayerAuthOptions> options) =>
+        auth.MapGet("/login", (string? provider, string? returnUrl, SignInProviders signIn) =>
         {
-            var providers = options.Value.Providers;
+            var providers = signIn.All;
             var safeReturnUrl = SafeReturnUrl(returnUrl);
             var chosen = provider is { Length: > 0 }
                 ? providers.FirstOrDefault(p => p.Id == provider)
@@ -41,11 +41,11 @@ internal static class AuthEndpoints
             }
 
             return providers.Count == 0
-                ? Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "No sign-in provider is configured on this server.")
+                ? Results.Content(NoProvidersPage(), "text/html; charset=utf-8", statusCode: StatusCodes.Status503ServiceUnavailable)
                 : Results.Content(ChooserPage(providers, safeReturnUrl), "text/html; charset=utf-8");
         }).ExcludeFromDescription();
 
-        auth.MapGet("/providers", (IOptions<InklayerAuthOptions> options) => options.Value.Providers)
+        auth.MapGet("/providers", (SignInProviders signIn) => signIn.All)
             .WithSummary("The sign-in providers configured on this server");
 
         auth.MapPost("/logout", async (HttpContext context) =>
@@ -218,6 +218,24 @@ internal static class AuthEndpoints
             </head><body><h1>Can't sign you in</h1><p>{WebUtility.HtmlEncode(message)}</p><p><a href="/auth/login">Try a different account</a></p></body></html>
             """;
     }
+
+    /// <summary>Shown while the server has no sign-in provider: what the person running it needs to set.</summary>
+    private static string NoProvidersPage() => """
+        <!DOCTYPE html>
+        <html lang="en"><head><meta charset="utf-8"><title>Inklayer: no sign-in provider</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5}code{background:#f2f2f2;padding:0 .2rem;border-radius:3px}</style>
+        </head><body>
+        <h1>No sign-in provider is set up yet</h1>
+        <p>Inklayer stores no passwords: it signs people in through Google or an OpenID Connect identity server. Whoever runs this server sets one up, then restarts it:</p>
+        <ul>
+        <li><strong>Google:</strong> create a Google OAuth client and set <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code>.</li>
+        <li><strong>Just you, or a few people:</strong> start the small Dex identity server that comes with Inklayer: <code>docker compose -f docker-compose.yml -f docker-compose.dex.yml up -d</code> (see "Running Inklayer by yourself" in <code>docs/sso-oidc.md</code>).</li>
+        <li><strong>Your company's provider</strong> (Okta, Microsoft Entra ID, JumpCloud, Keycloak, …): set the <code>OIDC_*</code> settings.</li>
+        </ul>
+        <p>Also set <code>INKLAYER_BOOTSTRAP_ADMINS</code> to your email, so you become the administrator. Steps for each provider are in <code>docs/sso-oidc.md</code>.</p>
+        </body></html>
+        """;
 
     private static string ChooserPage(IEnumerable<SignInProvider> providers, string returnUrl)
     {

@@ -9,6 +9,9 @@ public sealed class InstanceSetting
     /// <summary>Features an administrator turned on or off, as JSON (<c>{"docs":false}</c>). Features not listed follow the server's configuration.</summary>
     public const string Features = "features";
 
+    /// <summary>OpenID Connect sign-in providers administrators added, as JSON. Client secrets are encrypted. Configured providers aren't in it.</summary>
+    public const string SignInProviders = "auth.providers";
+
     public required string Key { get; init; }
 
     public required string Value { get; set; }

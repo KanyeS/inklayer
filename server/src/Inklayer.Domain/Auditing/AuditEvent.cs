@@ -55,4 +55,7 @@ public static class AuditActions
     public const string UserEnabled = "user.enabled";
     public const string NetworkAccessChanged = "network.changed";
     public const string FeaturesChanged = "features.changed";
+    public const string SignInProviderAdded = "sign_in_provider.added";
+    public const string SignInProviderChanged = "sign_in_provider.changed";
+    public const string SignInProviderRemoved = "sign_in_provider.removed";
 }

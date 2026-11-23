@@ -99,7 +99,8 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
         // Configure runs before the handler's post-configuration, which builds the backchannel client from this handler.
         builder.ConfigureTestServices(services =>
         {
-            services.Configure<OpenIdConnectOptions>(AuthSchemes.ForProvider(OidcProviderId), o => o.BackchannelHttpHandler = Oidc);
+            // Every OpenID Connect provider but Google talks to the fake one: the configured one, and any an admin adds in a test.
+            services.AddSingleton<Microsoft.Extensions.Options.IConfigureOptions<OpenIdConnectOptions>>(new FakeOidcBackchannel(Oidc));
             services.AddSingleton<Inklayer.Api.Features.Notifications.IEmailSender>(Emails);
             services.AddSingleton<Inklayer.Api.Features.Annotations.INetworkLookup, FakeNetworkLookup>();
             services.AddHttpClient(Inklayer.Api.Features.Notifications.NotificationDispatcher.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => Outbound).SetHandlerLifetime(Timeout.InfiniteTimeSpan);
@@ -200,4 +201,18 @@ public sealed class InklayerApiFactory : WebApplicationFactory<Program>, IAsyncL
 public sealed class ApiTestGroup : ICollectionFixture<InklayerApiFactory>
 {
     public const string Name = "api";
+}
+
+/// <summary>Points every OpenID Connect scheme except Google at <see cref="FakeOidcProvider"/>.</summary>
+internal sealed class FakeOidcBackchannel(FakeOidcProvider provider) : Microsoft.Extensions.Options.IConfigureNamedOptions<OpenIdConnectOptions>
+{
+    public void Configure(string? name, OpenIdConnectOptions options)
+    {
+        if (name != AuthSchemes.Google)
+        {
+            options.BackchannelHttpHandler = provider;
+        }
+    }
+
+    public void Configure(OpenIdConnectOptions options) => Configure(Microsoft.Extensions.Options.Options.DefaultName, options);
 }
