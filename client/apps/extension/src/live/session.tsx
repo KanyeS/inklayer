@@ -547,8 +547,8 @@ export class LiveSession {
       });
       const note = await this.#captures.attach(created.id, draft, [this.#host, this.#bubbles.host], !from);
       this.#carry.clear();
+      await this.#load(); // the new comment, with what attached, even if something didn't
       if (note) this.#note.show(note);
-      else await this.#load(); // the screenshot and recording are there: show them
       this.#draft = null;
       this.#draftText = EMPTY_DRAFT;
       this.#improver.reset();
