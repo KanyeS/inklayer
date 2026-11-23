@@ -1,0 +1,10 @@
+{
+  "name": "inklayer-claude-plugin",
+  "private": true,
+  "description": "Inklayer's Claude Code plugin. Claude Code installs its one dependency (playwright-core, for the review helper in review/) when it installs the plugin.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "playwright-core": "1.65.1"
+  }
+}

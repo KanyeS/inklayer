@@ -26,7 +26,8 @@ Updates come with each commit to the repository: `claude plugin update inklayer@
 | `.claude-plugin/plugin.json` | The plugin, and its one setting: your Inklayer server's address. |
 | `hooks/hooks.json` | Runs `improve/install.cjs --quiet` as each session starts. |
 | `improve/` | The Improve helper and its installer. |
-| `.mcp.json`, `review/` | The review helper: built from `client/apps/review` and committed, with its one dependency (`playwright-core`), which Claude Code installs with the plugin. |
+| `.mcp.json`, `review/` | The review helper, built from `client/apps/review` and committed. |
+| `package.json`, `package-lock.json` | The review helper's one dependency (`playwright-core`), which Claude Code installs with the plugin. They have to be at the plugin's root for that. |
 | `skills/review-feature/` | How Claude reviews a feature and comments on it. |
 
 The marketplace that lists it is `.claude-plugin/marketplace.json` at the repository's root.

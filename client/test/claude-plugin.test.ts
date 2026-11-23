@@ -29,10 +29,10 @@ describe("Claude Code plugin", () => {
   }, 60_000);
 
   it("pins the review helper's one dependency to the version the workspace builds with", () => {
-    const shipped = json(join(PLUGIN, "review/package.json")).dependencies;
+    const shipped = json(join(PLUGIN, "package.json")).dependencies;
     const workspace = json(join(REPO, "client/apps/review/package.json")).dependencies;
     expect(shipped).toEqual({ "playwright-core": workspace["playwright-core"] });
-    const lock = json(join(PLUGIN, "review/package-lock.json"));
+    const lock = json(join(PLUGIN, "package-lock.json"));
     expect(lock.packages["node_modules/playwright-core"].version).toBe(workspace["playwright-core"]);
   });
 
