@@ -280,7 +280,7 @@ const HANDLERS: Handlers = {
     return null;
   },
   "live.capture": async (r, sender) => {
-    await captureScreenshot(windowOf(sender), r.annotationId, r.area, r.viewportWidth);
+    await captureScreenshot(windowOf(sender), tabOf(sender), r.annotationId, r.area, r.viewportWidth);
     return null;
   },
   // The page waits for this after showing the panel again, to say if the upload failed.
@@ -292,7 +292,7 @@ const HANDLERS: Handlers = {
   // A full-page screenshot: the page scrolls through itself, and each screen is taken here.
   "live.fullPageStart": async (r) => startFullPage(r.annotationId, r.width, r.height),
   "live.fullPageFrame": async (r, sender) => {
-    await captureFullPageFrame(windowOf(sender), r.annotationId, r.y);
+    await captureFullPageFrame(windowOf(sender), tabOf(sender), r.annotationId, r.y);
     return null;
   },
   "live.fullPageEnd": async (r) => {

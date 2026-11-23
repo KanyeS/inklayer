@@ -70,22 +70,40 @@ function captureError(error: unknown): unknown {
   );
 }
 
+/** Why there's no screenshot when the commenting tab wasn't the one showing. */
+export const NOT_IN_FRONT =
+  "the page wasn't in front while the screenshot was taken, so none was kept. Stay on the page until it's done.";
+
 /**
- * Takes the screenshot now, while the page shows the comment, then crops and uploads it in the background so the panel
- * can reappear at once. `uploadResult` reports how the upload went.
+ * A screenshot of `tabId`, which must be the tab showing in its window. The browser only captures whatever tab is in
+ * front, so if the person has switched tabs (to their email, say), taking it anyway would attach that tab to the
+ * comment. Checked before and after, since the switch can happen while the capture is under way.
  */
-export async function captureScreenshot(
-  windowId: number,
-  annotationId: string,
-  area: Rect,
-  viewportWidth: number,
-): Promise<void> {
+export async function captureTab(windowId: number, tabId: number): Promise<string> {
+  const inFront = async () => (await chrome.tabs.query({ active: true, windowId }))[0]?.id === tabId;
+  if (!(await inFront())) throw new Error(NOT_IN_FRONT);
   let shot: string;
   try {
     shot = await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
   } catch (error) {
     throw captureError(error);
   }
+  if (!(await inFront())) throw new Error(NOT_IN_FRONT);
+  return shot;
+}
+
+/**
+ * Takes the screenshot now, while the page shows the comment, then crops and uploads it in the background so the panel
+ * can reappear at once. `uploadResult` reports how the upload went.
+ */
+export async function captureScreenshot(
+  windowId: number,
+  tabId: number,
+  annotationId: string,
+  area: Rect,
+  viewportWidth: number,
+): Promise<void> {
+  const shot = await captureTab(windowId, tabId);
   const upload = uploadScreenshot(annotationId, shot, area, viewportWidth);
   uploads.set(annotationId, upload);
   void upload.catch(() => undefined).finally(() => setTimeout(() => uploads.delete(annotationId), KEEP_RESULT_MS));
@@ -125,17 +143,26 @@ export function startFullPage(annotationId: string, cssWidth: number, cssHeight:
   return { height };
 }
 
-/** Takes the screen the page is showing, scrolled to `y`, and draws it into the full-page image. */
-export async function captureFullPageFrame(windowId: number, annotationId: string, y: number): Promise<void> {
+/**
+ * Takes the screen the page is showing, scrolled to `y`, and draws it into the full-page image. If the page isn't in
+ * front any more, the whole image is dropped: it could already hold nothing but the page, but it's never finished.
+ */
+export async function captureFullPageFrame(
+  windowId: number,
+  tabId: number,
+  annotationId: string,
+  y: number,
+): Promise<void> {
   const stitch = stitches.get(annotationId);
   if (!stitch) throw new Error("No full-page screenshot is being taken.");
   const wait = stitch.lastCapture + CAPTURE_GAP_MS - Date.now();
   if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
   let shot: string;
   try {
-    shot = await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+    shot = await captureTab(windowId, tabId);
   } catch (error) {
-    throw captureError(error);
+    stitches.delete(annotationId);
+    throw error;
   }
   stitch.lastCapture = Date.now();
   const frame = await createImageBitmap(await (await fetch(shot)).blob());

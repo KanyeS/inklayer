@@ -13,6 +13,22 @@ import { CLICKS_FLAG } from "./page/clicks";
  * they sign in once, in a window of its own (signInToSite), and later sessions start signed in.
  */
 
+/**
+ * The address, if it's a web page (http or https). Anything else (file://, chrome://, data:…) is refused: Claude reads
+ * what it opens, and a page it's reviewing could try to talk it into opening the person's own files.
+ */
+export function webAddress(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Not a web address: ${url}`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
+    throw new Error(`Only web pages (http or https) can be opened, not ${parsed.protocol} addresses.`);
+  return parsed.href;
+}
+
 export interface LogEntry {
   level: string;
   message: string;
@@ -103,12 +119,13 @@ export class ReviewBrowser {
   }
 
   async open(url: string, viewport?: { width: number; height: number }): Promise<Page> {
+    const address = webAddress(url);
     if (viewport && (viewport.width !== this.#viewport.width || viewport.height !== this.#viewport.height)) {
       this.#viewport = viewport;
       await this.#page?.setViewportSize(viewport);
     }
     const page = this.#page ?? (await this.#newContext({ state: await this.#savedLogins() }));
-    await page.goto(url, { waitUntil: "load" });
+    await page.goto(address, { waitUntil: "load" });
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => undefined);
     await this.#saveLogins();
     return page;
@@ -119,6 +136,7 @@ export class ReviewBrowser {
    * is kept for this and later sessions. Returns the address the window ended on.
    */
   async signInToSite(url: string): Promise<string> {
+    const address = webAddress(url);
     if (this.#recording) throw new Error("Stop recording first.");
     const browser = await launch(false);
     try {
@@ -127,7 +145,7 @@ export class ReviewBrowser {
         ...(await this.#currentState().then((state) => (state ? { storageState: state } : {}))),
       });
       const page = await context.newPage();
-      await page.goto(url, { waitUntil: "load" });
+      await page.goto(address, { waitUntil: "load" });
       let last = page.url();
       page.on("framenavigated", (frame) => {
         if (frame === page.mainFrame()) last = frame.url();
