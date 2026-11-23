@@ -215,6 +215,25 @@ describe("showing some products' comments", () => {
     expect(listed()).toEqual(["Website", "Shop", "Blog"]);
   });
 
+  it("stays open when pressing inside it, and closes when pressing elsewhere in the panel or on the page", async () => {
+    const session = new LiveSession(init({ pages, projects: [website, shop, blog] }));
+    await session.start(true);
+    const menu = panel().querySelector(".filter") as HTMLDetailsElement;
+    const press = (el: Element) => el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+
+    menu.open = true;
+    for (const inside of [".page-only", ".search-toggle", ".filter-menu > .choice"]) {
+      press(panel().querySelector(inside) as Element);
+      expect(menu.open).toBe(true);
+    }
+    press(panel().querySelector(".list") as Element);
+    expect(menu.open).toBe(false);
+
+    menu.open = true;
+    press(document.body);
+    expect(menu.open).toBe(false);
+  });
+
   it("remembers on this page only and the search for every site", async () => {
     pages = [pages[0]!, pages[1]!];
     const session = new LiveSession(init({ pages, projects: [website, shop, blog] }));

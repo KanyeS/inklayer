@@ -46,13 +46,24 @@ export function productFilter(o: ProductFilterOptions): ComponentChild {
 
 function ProductFilter(o: ProductFilterOptions) {
   const menu = useRef<HTMLDetailsElement>(null);
-  // Close when clicking anywhere else (the panel is in a shadow root, so check the event's path).
+  // Close when clicking anywhere else. The panel is in a closed shadow root, so the page's listeners only see its host:
+  // the page closes the menu on clicks outside the panel, and the shadow root on clicks elsewhere in the panel.
   useEffect(() => {
-    const close = (e: Event) => {
-      if (menu.current?.open && !e.composedPath().includes(menu.current)) menu.current.open = false;
+    const details = menu.current;
+    if (!details) return;
+    const root = details.getRootNode();
+    const inside = root instanceof ShadowRoot ? root.host : details;
+    const closeUnless = (keep: Node) => (e: Event) => {
+      if (details.open && !e.composedPath().includes(keep)) details.open = false;
     };
-    document.addEventListener("pointerdown", close, true);
-    return () => document.removeEventListener("pointerdown", close, true);
+    const onPage = closeUnless(inside);
+    const inPanel = closeUnless(details);
+    document.addEventListener("pointerdown", onPage, true);
+    if (root !== document) root.addEventListener("pointerdown", inPanel, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPage, true);
+      root.removeEventListener("pointerdown", inPanel, true);
+    };
   }, []);
 
   const { pageOnly, search: query } = o.view;
