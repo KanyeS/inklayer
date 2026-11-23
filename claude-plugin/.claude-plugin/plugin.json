@@ -1,0 +1,18 @@
+{
+  "name": "inklayer",
+  "displayName": "Inklayer",
+  "description": "Improve Inklayer comment drafts with your own Claude Code, and let Claude review pages in a browser and leave comments with screenshots and recordings.",
+  "author": { "name": "Inklayer", "url": "https://github.com/KanyeS/inklayer" },
+  "homepage": "https://github.com/KanyeS/inklayer/tree/main/claude-plugin",
+  "repository": "https://github.com/KanyeS/inklayer",
+  "license": "Apache-2.0",
+  "keywords": ["inklayer", "comments", "review", "browser", "playwright"],
+  "userConfig": {
+    "server_url": {
+      "type": "string",
+      "title": "Inklayer server",
+      "description": "Your Inklayer server's address, such as https://inklayer.example.com. The review helper signs in to it and leaves comments there.",
+      "required": true
+    }
+  }
+}

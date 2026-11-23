@@ -1,7 +1,10 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node", "vite/client", "chrome"]
+    "types": ["node", "vite/client", "chrome"],
+    "paths": {
+      "@claude-plugin/*": ["../../claude-plugin/*"]
+    }
   },
   "include": ["."]
 }

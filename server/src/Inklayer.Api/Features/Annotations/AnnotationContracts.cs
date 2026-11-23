@@ -49,7 +49,11 @@ public sealed record AnnotationResponse(
     IReadOnlyList<Notifications.PersonResponse>? People = null,
     IReadOnlyList<Issues.IssueResponse>? Issues = null,
     IReadOnlyList<Issues.IssueCommentResponse>? IssueComments = null,
-    IReadOnlyList<Media.MediaResponse>? Media = null);
+    IReadOnlyList<Media.MediaResponse>? Media = null)
+{
+    /// <summary>The app that left the comment for its author ("Claude Code"), shown as "via …"; empty if they made it themselves.</summary>
+    public string Via { get; init; } = "";
+}
 
 /// <summary>A reply in a comment's thread, oldest first.</summary>
 public sealed record ReplyResponse(Guid Id, string Body, AuthorSummary Author, DateTime CreatedAt, DateTime UpdatedAt, int Version, bool CanEdit, bool CanDelete);
@@ -72,6 +76,10 @@ public sealed record AnnotationDetailResponse(
     IReadOnlyList<Notifications.PersonResponse>? People = null,
     IReadOnlyList<Issues.IssueResponse>? Issues = null,
     IReadOnlyList<Issues.IssueCommentResponse>? IssueComments = null,
-    IReadOnlyList<Media.MediaResponse>? Media = null);
+    IReadOnlyList<Media.MediaResponse>? Media = null)
+{
+    /// <summary>The app that left the comment for its author ("Claude Code"), shown as "via …"; empty if they made it themselves.</summary>
+    public string Via { get; init; } = "";
+}
 
 public sealed record AnnotationRevisionResponse(int Version, string Action, AuthorSummary Actor, DateTime OccurredAt, JsonElement State);

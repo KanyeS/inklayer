@@ -55,6 +55,7 @@ export function ConnectedApps() {
           can still disconnect them here.
         </p>
       )}
+      <ReviewSetup server={location.origin} />
       <ErrorText error={action.error ?? apps.error} />
       {apps.data?.length === 0 && <p className="text-sm text-muted-foreground">No apps connected.</p>}
       <ul className="max-w-2xl divide-y rounded-xl border empty:hidden">
@@ -128,6 +129,29 @@ function McpSetup({ url }: { url: string }) {
           In Settings → Connectors, add a custom connector with the address above.
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The review helper (client/apps/review, installed with Inklayer's Claude Code plugin): Claude Code tries pages in a
+ * browser and leaves comments with screenshots and recordings. It signs in as a built-in app, not through MCP, so it's
+ * offered whether or not AI assistants are on.
+ */
+function ReviewSetup({ server }: { server: string }) {
+  const install = `claude plugin marketplace add KanyeS/inklayer && claude plugin install inklayer@inklayer --config server_url=${server}`;
+  const browser = "npx -y playwright-core@1.65.1 install chromium";
+  return (
+    <div className="mb-6 max-w-2xl space-y-2 text-sm">
+      <p className="font-medium">Claude Code, reviewing pages in a browser</p>
+      <p className="text-muted-foreground">
+        Claude tries a page or feature and leaves comments on what it finds, with screenshots, page details and
+        recordings, as you. Install Inklayer's Claude Code plugin and the browser it drives, then restart Claude Code.
+        The first time Claude comments, your browser opens to sign in and allow it. The plugin also sets up the
+        extension's Improve button.
+      </p>
+      <CopyField value={install} />
+      <CopyField value={browser} />
     </div>
   );
 }

@@ -54,6 +54,45 @@ public sealed partial class ReviewClientTests(InklayerApiFactory factory)
     }
 
     [Fact]
+    public async Task Comments_the_review_helper_leaves_say_they_came_via_claude_code()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var org = await Scenario.CreateOrganizationAsync(admin);
+        var project = await Scenario.CreateProjectAsync(admin, org.Id);
+        var (browser, _) = await Scenario.AddProjectMemberAsync(factory, admin, org.Id, "Commenter");
+        var verifier = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+        using var consent = await browser.GetAsync(AuthorizeUrl(verifier));
+        using var allowed = await browser.PostAsync(new Uri("/connect/authorize", UriKind.Relative), ConsentForm(await consent.Content.ReadAsStringAsync(), "allow"));
+        using var helper = Bearer((await RedeemAsync(allowed, verifier)).AccessToken);
+
+        var comment = new
+        {
+            url = "https://site.example/settings",
+            kind = "Element",
+            body = "Saving does nothing.",
+            anchor = new { element = new { path = new[] { "#save" }, tag = "button" } },
+            geometry = new { kind = "Element" },
+        };
+        using var byHelper = await helper.PostAsJsonAsync($"/api/projects/{project.Id}/live/annotations", comment);
+        Assert.Equal(HttpStatusCode.Created, byHelper.StatusCode);
+        Assert.Equal("Claude Code", (await byHelper.ReadAsync<ViaDto>(HttpStatusCode.Created)).Via);
+
+        // Made by the person themselves: no "via".
+        using var byPerson = await browser.PostJsonAsync($"/api/projects/{project.Id}/live/annotations", comment);
+        Assert.Equal("", (await byPerson.ReadAsync<ViaDto>(HttpStatusCode.Created)).Via);
+
+        // Listed with it too.
+        using var list = await browser.GetAsync(new Uri("/api/live/annotations?url=https%3A%2F%2Fsite.example%2Fsettings", UriKind.Relative));
+        var pages = await list.ReadAsync<List<PageDto>>();
+        Assert.Equal(["", "Claude Code"], pages.SelectMany(p => p.Annotations).Select(a => a.Via).Order().ToList());
+        browser.Dispose();
+    }
+
+    private sealed record ViaDto(Guid Id, string Via);
+
+    private sealed record PageDto(List<ViaDto> Annotations);
+
+    [Fact]
     public async Task People_can_disconnect_the_review_helper()
     {
         var (browser, _) = await NewMemberAsync();

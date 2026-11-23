@@ -84,6 +84,11 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Via")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("ViewportWidth")
                         .HasColumnType("INTEGER");
 

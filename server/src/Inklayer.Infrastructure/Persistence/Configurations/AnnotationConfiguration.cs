@@ -14,6 +14,7 @@ internal sealed class AnnotationConfiguration : IEntityTypeConfiguration<Annotat
         builder.Property(a => a.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(a => a.Body).HasMaxLength(10_000);
         builder.Property(a => a.Color).HasMaxLength(7);
+        builder.Property(a => a.Via).HasMaxLength(Annotation.MaxViaLength);
         builder.Property(a => a.Version).IsConcurrencyToken();
         builder.Property(a => a.PageUrl).HasMaxLength(LivePageUrl.MaxLength);
         builder.HasIndex(a => new { a.ProjectId, a.PageUrl, a.CreatedAt });

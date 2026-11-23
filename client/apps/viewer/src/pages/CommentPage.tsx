@@ -1,4 +1,4 @@
-import type { AnnotationContextResponse } from "@inklayer/api";
+import type { AnnotationContextResponse, AuthorSummary } from "@inklayer/api";
 import { commentParts, openOnPageUrl } from "@inklayer/overlay";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
@@ -105,12 +105,7 @@ export function CommentPage({ commentId }: { commentId: string }) {
         {c.status === "Resolved" && <Badge variant="secondary">Resolved</Badge>}
       </p>
       <article className="rounded-3xl border p-6">
-        <p className="mb-3 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground" title={personTitle(c.author)}>
-            {c.author.displayName}
-          </span>{" "}
-          · <span title={dateTime(c.createdAt)}>{timeAgo(c.createdAt)}</span>
-        </p>
+        <Byline author={c.author} via={c.via} createdAt={c.createdAt} />
         <p className="text-lg whitespace-pre-wrap">{linked(c.body)}</p>
         {me.features.bugContext && c.hasScreenshot && (
           <a
@@ -345,5 +340,18 @@ function PageDetails({ context: c }: { context: PageContext }) {
         </ul>
       )}
     </details>
+  );
+}
+
+/** Who wrote the comment, and when; "via Claude Code" when an app left it for them. */
+function Byline({ author, via, createdAt }: { author: AuthorSummary; via?: string; createdAt: string }) {
+  return (
+    <p className="mb-3 text-sm text-muted-foreground">
+      <span className="font-medium text-foreground" title={personTitle(author)}>
+        {author.displayName}
+      </span>{" "}
+      {via && <span title={`${via} left this for ${author.displayName}`}>via {via} </span>}·{" "}
+      <span title={dateTime(createdAt)}>{timeAgo(createdAt)}</span>
+    </p>
   );
 }

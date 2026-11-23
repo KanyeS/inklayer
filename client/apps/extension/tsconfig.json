@@ -4,7 +4,8 @@
     "types": ["chrome"],
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@claude-plugin/*": ["../../../claude-plugin/*"]
     }
   },
   "include": ["src", "test"]

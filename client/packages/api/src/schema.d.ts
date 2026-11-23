@@ -4097,6 +4097,7 @@ export interface components {
             issues?: null | components["schemas"]["IssueResponse"][];
             issueComments?: null | components["schemas"]["IssueCommentResponse"][];
             media?: null | components["schemas"]["MediaResponse"][];
+            via?: string;
         };
         AnnotationDocLink: {
             text: string;
@@ -4150,6 +4151,7 @@ export interface components {
             issues?: null | components["schemas"]["IssueResponse"][];
             issueComments?: null | components["schemas"]["IssueCommentResponse"][];
             media?: null | components["schemas"]["MediaResponse"][];
+            via?: string;
         };
         AnnotationRevisionResponse: {
             /** Format: int32 */

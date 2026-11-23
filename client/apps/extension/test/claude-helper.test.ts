@@ -50,7 +50,7 @@ describe("local Claude helper", () => {
   it("says how to install the helper when the browser can't find it", async () => {
     browser({ on: true, permission: true });
     const status = await helperStatus();
-    expect(status.ready === false && status.error).toContain("native-host/install.mjs");
+    expect(status.ready === false && status.error).toContain("isn't set up on this computer");
     expect(await helperEnabled()).toBe(false);
   });
 

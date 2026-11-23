@@ -13,6 +13,9 @@ public sealed class CurrentUser(IHttpContextAccessor http, InklayerDbContext db)
     public Guid? Id =>
         http.HttpContext?.User.FindFirst(InklayerClaims.Subject)?.Value is { } sub && Guid.TryParse(sub, out var id) ? id : null;
 
+    /// <summary>The OAuth client the request's token was issued to (the extension, the review helper, an MCP app); null for the browser session.</summary>
+    public string? ClientId => http.HttpContext?.User.FindFirst(OpenIddict.Abstractions.OpenIddictConstants.Claims.ClientId)?.Value;
+
     /// <summary>Loads the user record (once per request). It is null when anonymous or the account no longer exists.</summary>
     public async Task<User?> GetAsync(CancellationToken cancellationToken)
     {

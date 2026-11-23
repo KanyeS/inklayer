@@ -33,6 +33,8 @@ describe("review tools", () => {
       "fill",
       "press",
       "scroll",
+      "sign_in_to_site",
+      "forget_site_logins",
       "start_recording",
       "stop_recording",
       "comment",

@@ -555,6 +555,11 @@ textarea::placeholder {
   align-items: center;
   gap: 6px;
 }
+/* "via Claude Code": an app left the comment for its author. */
+.via {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
 .badge {
   color: #fff;
   border-radius: 11px;

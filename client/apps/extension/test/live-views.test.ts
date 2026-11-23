@@ -402,6 +402,14 @@ describe("a comment", () => {
     expect(texts(li, ".actions button")).toEqual(["Resolve", "Edit", "Copy link", "Delete"]);
   });
 
+  it("says when an app left the comment for its author", () => {
+    const ctx = fakeContext();
+    expect(mountOne(listEntry(ctx, parts(ctx), annotation(), entryOptions())).querySelector(".via")).toBeNull();
+    const li = mountOne(listEntry(ctx, parts(ctx), annotation({ via: "Claude Code" }), entryOptions()));
+    expect(li.querySelector(".meta .via")?.textContent).toBe("via Claude Code");
+    expect(li.querySelector(".meta .via")?.getAttribute("title")).toBe("Claude Code left this for Ann");
+  });
+
   it("offers only what the user may do", () => {
     const ctx = fakeContext();
     const a = annotation({ canEdit: false, canDelete: false, status: "Resolved" });

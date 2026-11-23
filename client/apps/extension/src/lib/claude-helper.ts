@@ -1,15 +1,21 @@
 import { getSettings } from "./settings";
 
 /**
- * The local Claude helper (native-host/): a native messaging host that rewrites comment drafts with the Claude Code CLI
+ * The local Claude helper (claude-plugin/improve): a native messaging host that rewrites comment drafts with the Claude Code CLI
  * signed in on this computer, so it runs on the person's own Claude subscription and nothing reaches the server until
  * they save. Opt-in: needs the optional nativeMessaging permission, the claudeImprove setting and the helper installed.
  */
 
 export const HOST = "com.inklayer.claude";
 export const NATIVE_MESSAGING: chrome.permissions.Permissions = { permissions: ["nativeMessaging"] };
-/** How people install it, shown in the popup. */
-export const INSTALL_COMMAND = "node client/apps/extension/native-host/install.mjs";
+/**
+ * Installing it with Claude Code: Inklayer's plugin (claude-plugin/ in the repository), which also brings the review
+ * helper. The plugin registers the helper with the browsers whenever Claude Code starts. The popup also offers
+ * installers to download (helper-installers.ts).
+ */
+export function pluginCommand(serverUrl: string): string {
+  return `claude plugin marketplace add KanyeS/inklayer && claude plugin install inklayer@inklayer --config server_url=${serverUrl}`;
+}
 
 /** The CLI takes a few seconds to start; the helper itself gives up after a minute. */
 const IMPROVE_TIMEOUT_MS = 90_000;
@@ -61,7 +67,7 @@ async function sendToHost(message: object, timeoutMs: number): Promise<HostReply
 function friendly(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/not found|forbidden|exited|failed to start/i.test(message))
-    return `The Claude helper isn't installed on this computer. Run: ${INSTALL_COMMAND}`;
+    return "The Claude helper isn't set up on this computer yet: see Settings in the Inklayer popup.";
   return message;
 }
 

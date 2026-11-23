@@ -14,7 +14,14 @@ const SCRIPTS: Record<string, { entry: string; name: string; file: string }> = {
   capture: { entry: "src/capture-main.ts", name: "InklayerCapture", file: "capture.js" },
 };
 
-const resolve = { alias: { "@": path.resolve(import.meta.dirname, "src") } };
+// The Claude Code plugin at the repository's root (claude-plugin/): the popup builds the Improve helper's installers
+// from its files, so a downloaded installer always matches the helper the plugin installs.
+const resolve = {
+  alias: {
+    "@": path.resolve(import.meta.dirname, "src"),
+    "@claude-plugin": path.resolve(import.meta.dirname, "../../../claude-plugin"),
+  },
+};
 
 export default defineConfig(({ mode }) =>
   SCRIPTS[mode]

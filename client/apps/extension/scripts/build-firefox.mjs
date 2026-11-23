@@ -18,7 +18,7 @@ delete manifest.minimum_chrome_version;
 // Chrome-only: recording from a hidden page (offscreen documents, and asking what to share with desktopCapture).
 // Firefox records in a small window instead (see src/lib/recorder-session.ts).
 manifest.permissions = manifest.permissions.filter((p) => p !== "offscreen");
-// Chrome-only for now: the local Claude helper (native-host/) is only installed for Chromium browsers.
+// Chrome-only for now: the local Claude helper (claude-plugin/improve) is only installed for Chromium browsers.
 manifest.optional_permissions = (manifest.optional_permissions ?? []).filter(
   (p) => p !== "desktopCapture" && p !== "nativeMessaging",
 );

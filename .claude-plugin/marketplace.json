@@ -1,0 +1,12 @@
+{
+  "name": "inklayer",
+  "owner": { "name": "Inklayer", "url": "https://github.com/KanyeS/inklayer" },
+  "description": "Inklayer's Claude Code plugin: improve comment drafts, and review pages in a browser and comment on them.",
+  "plugins": [
+    {
+      "name": "inklayer",
+      "source": "./claude-plugin",
+      "description": "Improve Inklayer comment drafts with your own Claude Code, and let Claude review pages in a browser and leave comments with screenshots and recordings."
+    }
+  ]
+}

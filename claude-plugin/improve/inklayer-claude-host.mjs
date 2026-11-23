@@ -8,7 +8,7 @@
 //   { type: "ping" }                                         → { ok: true, version, claude }
 //   { type: "improve", text, url?, selector?, elementText? } → { ok: true, text } | { ok: false, error }
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -66,12 +66,19 @@ export function frame(message) {
   return Buffer.concat([header, body]);
 }
 
-/** Runs the Claude CLI with the given arguments and input; resolves with its stdout. */
-function run(args, input, timeoutMs) {
+/**
+ * Runs the Claude CLI with the given arguments and input; resolves with its stdout. `files` are written to the empty
+ * folder it runs in first, and `args` may name them.
+ */
+function run(args, input, timeoutMs, files = {}) {
   return new Promise((resolve, reject) => {
     // An empty folder of its own: no project instructions (CLAUDE.md) or settings are picked up.
     const cwd = mkdtempSync(join(tmpdir(), "inklayer-claude-"));
-    const child = spawn(CLAUDE, args, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+    for (const [name, content] of Object.entries(files)) writeFileSync(join(cwd, name), content);
+    const child = spawnClaude(
+      args.map((a) => (a in files ? join(cwd, a) : a)),
+      cwd,
+    );
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -106,6 +113,27 @@ function run(args, input, timeoutMs) {
   });
 }
 
+/**
+ * How to start claude. On Windows, npm installs it as claude.cmd, which Node only runs through cmd.exe: every argument
+ * is quoted for it (the arguments here are fixed words, empty strings and file paths, never the draft).
+ */
+export function claudeCommand(args, platform = process.platform, claude = CLAUDE) {
+  if (platform === "win32" && /\.(cmd|bat)$/i.test(claude)) {
+    const line = [claude, ...args].map((a) => `"${a.replaceAll('"', '""')}"`).join(" ");
+    return {
+      command: process.env.ComSpec || "cmd.exe",
+      args: ["/d", "/s", "/c", `"${line}"`],
+      options: { windowsVerbatimArguments: true },
+    };
+  }
+  return { command: claude, args, options: {} };
+}
+
+function spawnClaude(args, cwd) {
+  const { command, args: argv, options } = claudeCommand(args);
+  return spawn(command, argv, { ...options, cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+}
+
 const firstLine = (text) => text.trim().split("\n")[0]?.slice(0, 300) ?? "";
 
 /** The draft and its page, as the message to Claude. */
@@ -137,10 +165,10 @@ export async function handle(request) {
       "--setting-sources",
       "",
       "--no-session-persistence",
-      "--system-prompt",
-      SYSTEM_PROMPT,
+      "--system-prompt-file",
+      "system-prompt.txt",
     ];
-    const output = await run(args, promptFor(request), IMPROVE_TIMEOUT_MS);
+    const output = await run(args, promptFor(request), IMPROVE_TIMEOUT_MS, { "system-prompt.txt": SYSTEM_PROMPT });
     let parsed;
     try {
       parsed = JSON.parse(output);

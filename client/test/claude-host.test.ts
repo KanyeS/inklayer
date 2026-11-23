@@ -3,10 +3,12 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+// @ts-expect-error: a plain JavaScript module without types
+import { claudeCommand } from "../../claude-plugin/improve/inklayer-claude-host.mjs";
 
-/** The native messaging host (native-host/inklayer-claude-host.mjs), run as the browser runs it, with a fake claude. */
+/** The native messaging host (claude-plugin/improve/inklayer-claude-host.mjs), run as the browser runs it, with a fake claude. */
 
-const HOST = join(__dirname, "..", "apps", "extension", "native-host", "inklayer-claude-host.mjs");
+const HOST = join(__dirname, "..", "..", "claude-plugin", "improve", "inklayer-claude-host.mjs");
 const dir = mkdtempSync(join(tmpdir(), "inklayer-host-test-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -68,6 +70,8 @@ describe("Claude helper host", () => {
     expect(args).toContain("-p");
     expect(args[args.indexOf("--tools") + 1]).toBe("");
     expect(args).toContain("--strict-mcp-config");
+    // The system prompt goes in a file next to it, not on the command line.
+    expect(args[args.indexOf("--system-prompt-file") + 1]).toMatch(/system-prompt\.txt$/);
   });
 
   it("passes on Claude Code's errors", async () => {
@@ -96,5 +100,26 @@ describe("Claude helper host", () => {
     const claude = fakeClaude("unused", "exit 1");
     expect(await ask(claude, { type: "improve", text: " " })).toEqual({ ok: false, error: "Nothing to improve." });
     expect(await ask(claude, { type: "delete-everything" })).toEqual({ ok: false, error: "Unknown request." });
+  });
+
+  it("starts claude.cmd through cmd.exe on Windows, every argument quoted", () => {
+    const run = claudeCommand(
+      ["-p", "--tools", "", "--system-prompt-file", "C:\\Temp\\a b\\p.txt"],
+      "win32",
+      "C:\\npm\\claude.cmd",
+    );
+    expect(run.args).toEqual([
+      "/d",
+      "/s",
+      "/c",
+      '""C:\\npm\\claude.cmd" "-p" "--tools" "" "--system-prompt-file" "C:\\Temp\\a b\\p.txt""',
+    ]);
+    expect(run.options).toEqual({ windowsVerbatimArguments: true });
+    expect(claudeCommand(["-p"], "win32", "C:\\claude\\claude.exe")).toEqual({
+      command: "C:\\claude\\claude.exe",
+      args: ["-p"],
+      options: {},
+    });
+    expect(claudeCommand(["-p"], "linux", "/usr/bin/claude").command).toBe("/usr/bin/claude");
   });
 });

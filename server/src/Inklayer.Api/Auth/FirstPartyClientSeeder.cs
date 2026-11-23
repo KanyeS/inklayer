@@ -33,6 +33,9 @@ internal sealed class FirstPartyClientSeeder(
         new("http://127.0.0.1:47823/callback"),
     ];
 
+    /// <summary>What comments made with a client's tokens say they came "via": the review helper's are Claude Code's.</summary>
+    public static string ViaFor(string? clientId) => clientId == ReviewClientId ? "Claude Code" : "";
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await using var scope = services.CreateAsyncScope();

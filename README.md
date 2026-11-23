@@ -264,13 +264,15 @@ For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the env
 
 The comment box can have an **Improve** button that rewrites a rough draft ("button broke") into a clear comment the team can act on. It keeps your meaning, @mentions, [[doc links]] and #tags. It uses the [Claude Code](https://claude.com/claude-code) CLI already signed in on your computer, so it runs on your own Claude plan. The draft goes from the browser to Claude Code and back into the box, and nothing reaches the Inklayer server until you click Save. **Undo** puts your words back.
 
-It's off by default, and works in Chromium browsers (Chrome, Edge, Brave) on Linux and macOS:
+It's off by default, and works in Chromium browsers (Chrome, Edge, Brave) on Linux, macOS and Windows. Each person needs [Claude Code](https://claude.com/claude-code) (signed in) and Node.js, and sets it up once:
 
-1. Install Claude Code and sign in (`claude`, then `/login`).
-2. From this repository, run `node client/apps/extension/native-host/install.mjs`. It registers a small helper the extension can talk to ([native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)).
-3. In the extension popup, open **Settings** and click **Improve comments with Claude**. Allow the permission it asks for. The popup says **Ready** once it finds the helper.
+1. In the extension popup, open **Settings** and click **Improve comments with Claude**. Allow the permission it asks for.
+2. Set up the helper, one of these ways (the popup shows both, filled in for your server):
+   - **With Claude Code:** run `claude plugin marketplace add KanyeS/inklayer && claude plugin install inklayer@inklayer --config server_url=https://<your server>`, then restart Claude Code. The [plugin](claude-plugin/README.md) registers the helper with your browsers each time Claude Code starts, and also brings the review helper below.
+   - **With an installer:** click **Download installer** and open it. On a Mac it's a zip with the installer in it; on Windows a `.cmd`; on Linux a `.sh` you run with `sh`. They aren't signed, so macOS and Windows warn before opening them.
+3. Click **Check again**. The popup says **Ready** once it finds the helper.
 
-See [native-host/README.md](client/apps/extension/native-host/README.md) for what the helper runs, and how to remove it.
+From a copy of this repository, `node claude-plugin/improve/install.cjs` does the same as the installers. See [claude-plugin/improve/README.md](claude-plugin/improve/README.md) for what the helper runs, and how to remove it.
 
 ### Reviewing pages with Claude
 
@@ -278,15 +280,16 @@ Claude Code can try a page or feature in a real browser and leave Inklayer comme
 
 This runs on your computer through the review helper in [client/apps/review](client/apps/review/README.md), a small MCP server that drives Playwright's Chromium. It uses Claude Code's own plan. It signs in to Inklayer as a built-in app ("Inklayer review helper"): your browser opens the first time, and you allow it once. It's listed under **Connected apps**, where you can disconnect it.
 
-To set it up (from `client/`, after `pnpm install`):
+To set it up, install Inklayer's Claude Code plugin (the same one as for **Improve** above), then restart Claude Code:
 
 ```sh
-pnpm --filter @inklayer/review build
-npx playwright-core@1.65.1 install chromium   # once, if Playwright's Chromium isn't installed yet
-claude mcp add inklayer-review -e INKLAYER_SERVER=https://<your server> -- node "$PWD/apps/review/dist/server.mjs"
+claude plugin marketplace add KanyeS/inklayer && claude plugin install inklayer@inklayer --config server_url=https://<your server>
+npx -y playwright-core@1.65.1 install chromium   # once: the browser the helper drives
 ```
 
-Then ask Claude Code to review a page, for example "review the settings page on staging and comment on anything broken". The repository's `review-feature` skill tells it how.
+The viewer's **Connected apps** section has these filled in for your server.
+
+Then ask Claude Code to review a page, for example "review the settings page on staging and comment on anything broken". The plugin's `review-feature` skill tells it how. For sites that need a login, Claude opens a window for you to sign in once, and remembers the sign-in. Claude never sees the password.
 
 ### Using Inklayer from Claude (MCP)
 Inklayer is an MCP server at `https://<your server>/api/mcp`. An assistant signs in as you and can do what your role allows:

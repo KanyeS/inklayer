@@ -45,7 +45,16 @@ export interface ListEntryOptions {
 }
 
 function author(a: PageAnnotation): ComponentChild {
-  return <strong title={personTitle(a.author)}>{a.author.displayName || "Someone"}</strong>;
+  return (
+    <>
+      <strong title={personTitle(a.author)}>{a.author.displayName || "Someone"}</strong>
+      {a.via && (
+        <span className="via" title={`${a.via} left this for ${a.author.displayName || "them"}`}>
+          via {a.via}
+        </span>
+      )}
+    </>
+  );
 }
 
 interface LinkButtonProps {

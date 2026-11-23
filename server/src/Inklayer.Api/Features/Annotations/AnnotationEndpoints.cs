@@ -77,6 +77,7 @@ internal static partial class AnnotationEndpoints
             Anchor = anchor!,
             Geometry = geometry!,
             ViewportWidth = viewportWidth,
+            Via = Auth.FirstPartyClientSeeder.ViaFor(currentUser.ClientId),
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -259,7 +260,8 @@ internal static partial class AnnotationEndpoints
             await MentionedPeople.ForAsync(db, [annotation.Body, .. await db.AnnotationReplies.Where(r => r.AnnotationId == annotation.Id && r.DeletedAt == null).Select(r => r.Body).ToListAsync(ct)], ct),
             (await Issues.IssueService.ForAsync(db, [annotation.Id], ct)).GetValueOrDefault(annotation.Id, []),
             (await Issues.IssueService.CommentsForAsync(db, [annotation.Id], ct)).GetValueOrDefault(annotation.Id, []),
-            (await Media.MediaEndpoints.ForAsync(db, [annotation.Id], ct)).GetValueOrDefault(annotation.Id, [])));
+            (await Media.MediaEndpoints.ForAsync(db, [annotation.Id], ct)).GetValueOrDefault(annotation.Id, []))
+        { Via = annotation.Via });
     }
 
     /* ---------------------------------------------------------------- replies */
@@ -544,7 +546,7 @@ internal static partial class AnnotationEndpoints
         a.Id, a.ProjectId, a.PageUrl, a.Kind, a.Status, a.Body, a.Color, new RawJson(a.Anchor), new RawJson(a.Geometry), a.ViewportWidth, a.Version,
         authors.GetValueOrDefault(a.AuthorUserId) ?? new AuthorSummary(a.AuthorUserId, "", null),
         a.CreatedAt, a.UpdatedAt, a.ResolvedAt, a.ResolvedByUserId,
-        CanEdit(a, role, userId), CanEdit(a, role, userId), a.OrganizationId);
+        CanEdit(a, role, userId), CanEdit(a, role, userId), a.OrganizationId) { Via = a.Via };
 
     private static JsonElement Parse(string json)
     {

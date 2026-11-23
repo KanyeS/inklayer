@@ -76,6 +76,14 @@ public sealed class Annotation
 
     /// <summary>Soft delete: deleted annotations stay in history.</summary>
     public DateTime? DeletedAt { get; set; }
+
+    /// <summary>
+    /// The app that left the comment for its author, shown as "via …": Claude Code for the review helper. Empty when the
+    /// author made it themselves (the extension, the viewer).
+    /// </summary>
+    public string Via { get; init; } = "";
+
+    public const int MaxViaLength = 40;
 }
 
 public static class AnnotationActions

@@ -345,7 +345,7 @@ internal static class InklayerTools
     private static object SummaryOf(AnnotationResponse a) => new
     {
         a.Id, a.ProjectId, a.PageUrl, a.Kind, a.Status, a.Body, Author = a.Author.DisplayName, AuthorFullName = a.Author.FullName, AuthorRole = a.Author.Role,
-        a.CreatedAt, a.CanEdit,
+        Via = a.Via.Length > 0 ? a.Via : null, a.CreatedAt, a.CanEdit,
         Replies = a.Replies?.Select(r => new { r.Id, Author = r.Author.DisplayName, AuthorFullName = r.Author.FullName, r.Body, r.CreatedAt, r.CanDelete }),
         DocLinks = a.DocLinks, MentionedIn = a.MentionedIn,
         a.HasScreenshot,

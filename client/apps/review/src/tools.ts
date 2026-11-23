@@ -1,5 +1,5 @@
 import type { Api, LiveProject } from "./api";
-import type { ReviewBrowser } from "./browser";
+import { MAX_RECORDING_MS, type ReviewBrowser } from "./browser";
 import { postComment } from "./comment";
 import { type Content, image, type Tool, text } from "./mcp";
 
@@ -7,6 +7,7 @@ import { type Content, image, type Tool, text } from "./mcp";
 
 export const INSTRUCTIONS = `Review a web page or feature in a real browser and leave Inklayer comments on it, as the signed-in person.
 Open the page with open_page, find elements with page_outline, try things with click, fill, press and scroll, and look with screenshot.
+If the site needs a login, sign_in_to_site opens a window for the person to sign in; it's kept for later sessions.
 To show a problem in motion, start_recording before the steps and stop_recording after: the next comment gets the video.
 Leave each finding with comment, on the element it's about: say what's wrong, the steps, expected and actual.
 The first time, Inklayer asks the person to sign in and allow the helper in their browser.
@@ -123,13 +124,31 @@ export function reviewTools(api: Api, browser: ReviewBrowser): Tool[] {
       },
     },
     {
-      name: "start_recording",
+      name: "sign_in_to_site",
       description:
-        "Start recording the tab (the page reloads, staying signed in). Do the steps, then stop_recording; the next comment gets the video. Keep it under a minute.",
+        "For sites that need a login: opens a visible browser window at the address for the person to sign in themselves, and waits until they close it (up to 10 minutes). The sign-in is kept for this and later sessions. Tell the person first that a window will open.",
+      inputSchema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+      run: async (a) => {
+        const ended = await browser.signInToSite(String(a.url));
+        return [text(`The window closed on ${ended}. Its sign-in is kept; the review browser uses it now.`)];
+      },
+    },
+    {
+      name: "forget_site_logins",
+      description: "Forget every sign-in to reviewed sites that the review browser kept.",
+      inputSchema: { type: "object", properties: {} },
+      run: async () => {
+        await browser.forgetLogins();
+        return [text("Forgotten. The review browser is signed out of every site.")];
+      },
+    },
+    {
+      name: "start_recording",
+      description: `Start recording the tab (the page reloads, staying signed in; clicks show as rings). Do the steps, then stop_recording; the next comment gets the video. It stops by itself after ${MAX_RECORDING_MS / 1000} seconds.`,
       inputSchema: { type: "object", properties: {} },
       run: async () => {
         await browser.startRecording();
-        return [text("Recording. Do the steps, then stop_recording.")];
+        return [text(`Recording, for up to ${MAX_RECORDING_MS / 1000} seconds. Do the steps, then stop_recording.`)];
       },
     },
     {
@@ -137,8 +156,10 @@ export function reviewTools(api: Api, browser: ReviewBrowser): Tool[] {
       description: "Stop recording. The video is attached to the next comment.",
       inputSchema: { type: "object", properties: {} },
       run: async () => {
-        const recording = await browser.stopRecording();
-        return [text(`Recorded ${recording.seconds}s. The next comment gets it.`)];
+        const finished = browser.recording ? await browser.stopRecording() : browser.finishedRecording;
+        if (!finished) throw new Error("Not recording: use start_recording first.");
+        const limit = browser.takeAutoStopped() ? `, stopping by itself at the ${MAX_RECORDING_MS / 1000}s limit` : "";
+        return [text(`Recorded ${finished.seconds}s${limit}. The next comment gets it.`)];
       },
     },
     {

@@ -1,6 +1,5 @@
 import { Button } from "@inklayer/ui/components/button";
 import { type ReactNode, useEffect, useState } from "react";
-import { type HelperStatus, INSTALL_COMMAND, NATIVE_MESSAGING } from "@/lib/claude-helper";
 import { send } from "@/lib/messages";
 import { openInNewTab, requestSiteAccess, SITE_ACCESS } from "./browser";
 
@@ -102,80 +101,5 @@ export function ConnectAssistant({ serverUrl }: { serverUrl: string }) {
       </Button>
       <Hint>Let Claude or your editor read and resolve comments for you.</Hint>
     </>
-  );
-}
-
-/**
- * Turns the Improve button in the comment box on or off. It rewrites drafts with the Claude Code CLI on this computer
- * (the person's own Claude subscription) through the local helper in native-host/, which has to be installed separately.
- */
-export function ClaudeImprove() {
-  const [status, setStatus] = useState<HelperStatus | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    void send({ type: "claudeStatus" })
-      .then(setStatus)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
-
-  const toggle = async () => {
-    const on = !status?.enabled;
-    // The permission request has to come first, inside the click.
-    if (on && !(await chrome.permissions.request(NATIVE_MESSAGING))) {
-      setError("Inklayer needs permission to talk to the helper on this computer.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      setStatus(await send({ type: "setClaudeImprove", on }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(INSTALL_COMMAND);
-    setCopied(true);
-  };
-
-  const enabled = status?.enabled ?? false;
-  return (
-    <div className="flex flex-col gap-1.5 rounded-lg border p-2 text-xs">
-      <Button
-        size="sm"
-        variant={enabled ? "secondary" : "outline"}
-        disabled={status === null || busy}
-        onClick={() => void toggle()}
-      >
-        {busy ? "Checking…" : enabled ? "Turn off Improve with Claude" : "Improve comments with Claude"}
-      </Button>
-      <p className="text-muted-foreground">
-        Adds an Improve button to the comment box. It uses Claude Code on this computer, with your own Claude plan; your
-        draft goes to Claude, not to Inklayer, until you save it.
-      </p>
-      {status?.enabled && status.ready && <p>Ready{status.claude ? ` (${status.claude})` : ""}.</p>}
-      {status?.enabled && !status.ready && (
-        <>
-          <p className="text-destructive">{status.error ?? "The helper isn't set up yet."}</p>
-          {status.permission && (
-            <p className="text-muted-foreground">
-              Install the helper from the Inklayer source folder, then reopen this:
-            </p>
-          )}
-          <div className={status.permission ? "flex items-center gap-1" : "hidden"}>
-            <code className="break-all rounded bg-muted px-1 py-0.5">{INSTALL_COMMAND}</code>
-            <Button size="sm" variant="ghost" onClick={() => void copy()}>
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-        </>
-      )}
-      <ErrorText>{error}</ErrorText>
-    </div>
   );
 }
