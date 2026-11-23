@@ -5,6 +5,8 @@
 #   restore  (one-shot) pulls the SQLite database from S3 if the disk is empty  ─┐
 #   server   Inklayer API on :8080 (internal only)                              <─┘ starts after restore
 #   litestream uploads database changes to S3 (every 15 minutes by default)
+#   keys-backup uploads the server's keys (/data/keys) to their own bucket when they change (KEYS_BACKUP_BUCKET)
+#   keys-restore (on demand) puts them back on a new instance: docker compose run --rm keys-restore
 #   caddy    public :80/:443, automatic Let's Encrypt HTTPS, proxies to server
 #
 # Images are pulled from a registry. Never build on the VM: it doesn't have the RAM for the .NET SDK.
@@ -132,6 +134,47 @@ services:
         condition: service_started
     mem_limit: 64m
     logging: *logging
+
+  # The keys that encrypt saved secrets (sign-in providers added on the Admin page, integrations) and sign tokens aren't in
+  # the database backup, so a stolen backup doesn't give them away. This keeps a copy in a bucket of their own, which the
+  # server's AWS key can write to but not read. See docs/deploy-aws-lightsail.md, "Keys".
+  keys-backup:
+    image: &aws-cli amazon/aws-cli:2.42.1
+    restart: on-failure
+    user: "1654:1654"
+    entrypoint: ["bash", "/keys-backup.sh"]
+    command: ["backup"]
+    environment: &keys-env
+      HOME: /tmp
+      AWS_REGION: ${AWS_REGION:-}
+      KEYS_BACKUP_BUCKET: ${KEYS_BACKUP_BUCKET:-}
+    volumes:
+      - inklayer-data:/data:ro
+      - ./keys-backup.sh:/keys-backup.sh:ro
+    depends_on:
+      server:
+        condition: service_started
+    mem_limit: 128m
+    logging: *logging
+
+  # On demand, with credentials that can read the keys bucket (yours, not the server's):
+  #   docker compose stop server
+  #   docker compose run --rm -e AWS_ACCESS_KEY_ID=... -e AWS_SECRET_ACCESS_KEY=... keys-restore
+  #   docker compose up -d
+  keys-restore:
+    image: *aws-cli
+    profiles: ["restore"]
+    restart: "no"
+    user: "1654:1654"
+    entrypoint: ["bash", "/keys-backup.sh"]
+    command: ["restore"]
+    environment: *keys-env
+    volumes:
+      - inklayer-data:/data
+      - ./keys-backup.sh:/keys-backup.sh:ro
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
 
   caddy:
     image: caddy:2-alpine

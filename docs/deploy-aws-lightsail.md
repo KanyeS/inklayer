@@ -25,7 +25,7 @@ This guide runs Inklayer on a single Lightsail instance:
 | Item | Monthly |
 |---|---|
 | Lightsail Linux, 1 GB plan (includes a static IPv4 address and at least 1 TB of transfer) | ~$7.00 |
-| S3 backups (a few hundred MB plus requests) | < $0.10 |
+| S3 backups (a few hundred MB plus requests, and a few KB of keys) | < $0.10 |
 | Domain name | ~$1 (varies) |
 
 Check current prices at <https://aws.amazon.com/lightsail/pricing/>. The $5 plan (512 MB) is too small: the system and Docker use most of its memory, it swaps constantly, and it runs out of CPU credits, which can take the site down during updates.
@@ -34,12 +34,12 @@ Check current prices at <https://aws.amazon.com/lightsail/pricing/>. The $5 plan
 
 This is the default setup (`LITESTREAM_AUTH=keys`): an S3 bucket, and an access key that can only reach that bucket. To avoid storing a key on the server, see [Keyless backups](#keyless-backups-optional) instead, and skip this step.
 
-1. **Create the bucket.** In the S3 console, create a bucket such as `acme-inklayer-backups`, in the same region you'll use for Lightsail. Keep **Block all public access** on.
-2. **Create a policy.** In IAM → Policies → Create policy → JSON, paste [`deploy/lightsail/iam-policy.json`](../deploy/lightsail/iam-policy.json), replacing `YOUR-INKLAYER-BACKUPS` with your bucket name. Name it `inklayer-litestream`.
+1. **Create the buckets.** In the S3 console, create a bucket such as `acme-inklayer-backups` for the database, in the same region you'll use for Lightsail, and a second one such as `acme-inklayer-keys` for the server's [keys](#keys). Keep **Block all public access** on for both.
+2. **Create a policy.** In IAM → Policies → Create policy → JSON, paste [`deploy/lightsail/iam-policy.json`](../deploy/lightsail/iam-policy.json), replacing `YOUR-INKLAYER-BACKUPS` and `YOUR-INKLAYER-KEYS` with your bucket names. Name it `inklayer-litestream`.
 3. **Create a user.** In IAM → Users → Create user, name it `inklayer-litestream` with no console access, and attach only that policy.
 4. **Create an access key.** On that user, go to Security credentials → Create access key and choose "Application running outside AWS". Save both values; you'll need them in step 5.
 
-The key can only read and write that one bucket. If the server is ever compromised, nothing else in your AWS account is exposed.
+The key can read and write the backups bucket, and only upload to the keys bucket: it can't read the keys back. If the server is ever compromised, nothing else in your AWS account is exposed.
 
 ## 2. Create the Google sign-in client
 
@@ -102,6 +102,7 @@ nano .env
 | `INKLAYER_DOMAIN` | `inklayer.example.com` |
 | `ACME_EMAIL` | your email address, for certificate expiry notices |
 | `LITESTREAM_BUCKET` | `acme-inklayer-backups` |
+| `KEYS_BACKUP_BUCKET` | `acme-inklayer-keys` |
 | `AWS_REGION` | `us-east-1` |
 | `LITESTREAM_AUTH` | `keys` (default), or `instance` for [keyless backups](#keyless-backups-optional) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | from step 1 (leave empty with `LITESTREAM_AUTH=instance`) |
@@ -124,22 +125,22 @@ On first start, the services run in this order:
 1. `volume-init` sets permissions on the data volume.
 2. `restore` finds no backup and exits cleanly.
 3. The server creates a new database.
-4. Litestream starts streaming it to S3.
+4. Litestream starts streaming it to S3, and `keys-backup` uploads the new keys to the keys bucket.
 
 ## Keyless backups (optional)
 
 Lightsail instances can't have IAM roles, so by default Litestream uses an access key. Instead, you can back up to a **Lightsail bucket** and attach the instance to it ("resource access"). The instance then gets short-lived credentials automatically, and no key is stored on the server.
 
 Trade-offs compared with the default:
-- **Cost:** the smallest Lightsail bucket plan is about $1/month, compared with a few cents for S3.
-- **Scope:** an attached instance gets full access to that bucket, while the default IAM policy only allows reading, writing and deleting objects. Use the bucket for Inklayer backups only.
+- **Cost:** the smallest Lightsail bucket plan is about $1/month per bucket, compared with a few cents for S3.
+- **Scope:** an attached instance gets full access to its buckets, while the default IAM policy only allows reading, writing and deleting objects, and only uploading keys. So in this mode, the instance can read the keys bucket too: the keys are still kept apart from the database backup, but not out of the server's reach. Use the buckets for Inklayer only.
 
 Setup:
-1. **Create the bucket.** Lightsail → Storage → Create bucket, in the **same region** as the instance, on the smallest plan. Leave it private.
-2. **Attach the instance.** In the bucket's Permissions tab, under Resource access, choose **Attach instance** and pick your Inklayer instance.
-3. **Configure `.env`.** Set `LITESTREAM_BUCKET` to the bucket's name, `AWS_REGION` to its region, `LITESTREAM_AUTH=instance`, and leave `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` empty.
+1. **Create the buckets.** Lightsail → Storage → Create bucket, in the **same region** as the instance, on the smallest plan: one for the database, and one for the [keys](#keys). Leave them private.
+2. **Attach the instance** to both. In each bucket's Permissions tab, under Resource access, choose **Attach instance** and pick your Inklayer instance.
+3. **Configure `.env`.** Set `LITESTREAM_BUCKET` and `KEYS_BACKUP_BUCKET` to the buckets' names, `AWS_REGION` to their region, `LITESTREAM_AUTH=instance`, and leave `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` empty.
 
-Then continue with step 5 as usual. To check that it works, run `docker compose logs --tail=50 litestream` and look for errors. The `litestream` and `restore` containers use host networking in this mode, so they can reach the instance metadata service.
+Then continue with step 5 as usual. To check that it works, run `docker compose logs --tail=50 litestream` and look for errors. The `litestream`, `restore`, `keys-backup` and `keys-restore` containers use host networking in this mode, so they can reach the instance metadata service.
 
 To switch an existing install, set `LITESTREAM_AUTH` and run `docker compose up -d`. A new bucket starts empty, so Litestream writes a fresh full snapshot to it; the old bucket's history isn't copied over.
 
@@ -153,6 +154,16 @@ docker compose pull && docker compose up -d
 ```
 Expect a few seconds of downtime while the server restarts. Database migrations run automatically on startup.
 
+**New deployment files.** `docker compose pull` only updates images. When a release changes the files in `deploy/lightsail` (the [keys backup](#keys) added `keys-backup.sh` and new services), download them again and compare `.env` with `.env.example`:
+```bash
+cd /opt/inklayer
+for f in docker-compose.yml litestream-auth.keys.yml litestream-auth.instance.yml litestream.yml keys-backup.sh Caddyfile; do
+  curl -fsSL "https://raw.githubusercontent.com/<owner>/inklayer/main/deploy/lightsail/$f" -o "$f"
+done
+docker compose up -d
+```
+For the keys backup on an existing install: create the keys bucket and add its statement to the IAM policy as in [step 1](#1-create-the-s3-backup-bucket-and-credentials) (or attach the instance to a second Lightsail bucket in keyless mode), then set `KEYS_BACKUP_BUCKET` in `.env` before `docker compose up -d`.
+
 ### Checking backups
 ```bash
 docker compose logs --tail=50 litestream
@@ -161,8 +172,20 @@ docker compose run --rm restore restore -dry-run -o /tmp/check.db /data/inklayer
 ```
 Also check the S3 console: objects under `inklayer.db/` should keep updating as people use the app.
 
+For the keys, `docker compose logs keys-backup` should show "keys backed up", and the keys bucket should have files under `keys/`. They only change when the server makes a new key, every few months.
+
 ### Restoring
-**The instance was lost or rebuilt.** Create a new instance, then repeat steps 3 and 5 with the same `.env`. On first start, `restore` pulls the latest database from S3 automatically, because the new volume is empty.
+**The instance was lost or rebuilt.** Create a new instance, then repeat steps 3 and 5 with the same `.env`, but before `docker compose up -d`, put the keys back:
+
+```bash
+cd /opt/inklayer
+docker compose run --rm -e AWS_ACCESS_KEY_ID=<yours> -e AWS_SECRET_ACCESS_KEY=<yours> keys-restore
+docker compose up -d
+```
+
+Use your own AWS credentials (any that can read the keys bucket), not the server's: its key can only upload there. In keyless mode, leave out the `-e` options: the attached instance can read the bucket. Then on first start, `restore` pulls the latest database from S3 automatically, because the new volume is empty, and the server finds its old keys, so sessions, sign-in providers added on the Admin page and integrations all keep working.
+
+If you already started the server before restoring the keys, stop it first (`docker compose stop server`), run `keys-restore`, then `docker compose up -d`.
 
 **Rolling back to a point in time**, for example after a bad change:
 ```bash
@@ -180,7 +203,17 @@ docker compose up -d
 If no instance administrator can sign in, add an email address that can sign in to `INKLAYER_BOOTSTRAP_ADMINS` in `.env` and run `docker compose up -d`. That account becomes an administrator on its next sign-in.
 
 ### Keys
-`/data/keys` holds the token-signing keys and the cookie-protection keys. They are created on first start, and they aren't stored in the S3 backup. If they're lost, everyone simply signs in again; no data is lost.
+`/data/keys` holds the token-signing keys and the keys that encrypt secrets: sessions, and the secrets saved in the database, such as the client secrets of sign-in providers added on the Admin page and integrations' tokens. They are created on first start.
+
+They aren't in the database backup, so a stolen backup doesn't give away those secrets. Instead, `keys-backup` uploads them to their own bucket (`KEYS_BACKUP_BUCKET`) when it starts and whenever they change, checking hourly. The server's AWS key can only upload there, not read, so the keys can't be fetched with it either. To restore them, see [Restoring](#restoring).
+
+If they're lost, for example when you restore the database without them or `KEYS_BACKUP_BUCKET` isn't set, comments, docs and accounts are all still there, but:
+
+- everyone signs in again;
+- sign-in providers added under **Admin → Sign-in providers** are taken off the sign-in page until an administrator enters their client secret again (the page marks them, and the server log names them). Providers in `.env` aren't affected;
+- integrations' saved secrets can't be read either, so set them up again.
+
+Without a keys bucket, you can copy `/data/keys` somewhere safe yourself instead (not next to the database backup), and put it back before starting a restored server.
 
 ### Watching memory
 ```bash

@@ -9,3 +9,5 @@ x-keys: &keys
 services:
   restore: *keys
   litestream: *keys
+  keys-backup: *keys
+  keys-restore: *keys

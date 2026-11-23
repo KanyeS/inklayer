@@ -14,3 +14,5 @@ x-instance: &instance
 services:
   restore: *instance
   litestream: *instance
+  keys-backup: *instance
+  keys-restore: *instance
