@@ -25,7 +25,7 @@
     <!-- Email notifications over SMTP (MIT) -->
     <PackageVersion Include="MailKit" Version="5.0.0" />
     <!-- Media (full-page screenshots, videos) in S3. -->
-    <PackageVersion Include="AWSSDK.S3" Version="4.1.1" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.1.2" />
     <!-- Reads the offline IP-to-network database (DB-IP Lite, in MaxMind's format). -->
     <PackageVersion Include="MaxMind.Db" Version="5.3.0" />
   </ItemGroup>
