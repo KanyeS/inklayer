@@ -27,7 +27,7 @@
     <!-- Media (full-page screenshots, videos) in S3. -->
     <PackageVersion Include="AWSSDK.S3" Version="4.1.1" />
     <!-- Reads the offline IP-to-network database (DB-IP Lite, in MaxMind's format). -->
-    <PackageVersion Include="MaxMind.Db" Version="5.2.0" />
+    <PackageVersion Include="MaxMind.Db" Version="5.3.0" />
   </ItemGroup>
   <ItemGroup Label="Observability (Apache-2.0)">
     <PackageVersion Include="Serilog.AspNetCore" Version="11.0.0" />
