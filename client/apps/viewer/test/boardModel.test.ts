@@ -121,9 +121,12 @@ describe("the summary the server indexes", () => {
       ["d2", { id: "d2", folder: "", title: "Spec" }],
     ]);
     expect(summaryMarkdown(doc, docs)).toBe(
-      ["- [[Spec]]\n- [[Plans/Roadmap]]", "Ship the beta #launch", "[Example site](https://example.com/)", "feeds"].join(
-        "\n\n",
-      ),
+      [
+        "- [[Spec]]\n- [[Plans/Roadmap]]",
+        "Ship the beta #launch",
+        "[Example site](https://example.com/)",
+        "feeds",
+      ].join("\n\n"),
     );
   });
 });

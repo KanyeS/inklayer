@@ -108,6 +108,25 @@
     @apply pointer-events-auto absolute rounded-md border bg-background px-2 py-0.5 text-xs shadow-sm;
   }
 
+  /* Who else has a card selected: their names above it, in their colours. cards.tsx */
+  .board-selected-by {
+    @apply pointer-events-none absolute -top-6 left-0 z-10 flex gap-1;
+  }
+
+  .board-selected-by span,
+  .board-marquee span {
+    @apply rounded-md px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-white;
+  }
+
+  /* The box someone else is dragging to select cards, with their name. BoardCanvas.tsx */
+  .board-marquee {
+    @apply pointer-events-none absolute top-0 left-0 z-40 rounded-sm border-2 border-dashed;
+  }
+
+  .board-marquee span {
+    @apply absolute -top-6 left-0;
+  }
+
   /* Someone else's pointer, with their name. BoardCanvas.tsx */
   .board-pointer {
     @apply pointer-events-none absolute top-0 left-0 z-50 flex items-start gap-0.5 transition-transform duration-100 ease-linear;

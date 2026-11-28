@@ -78,11 +78,22 @@ function Frame({
           onResizeEnd={(_, p) => updateCard(doc, id, { x: p.x, y: p.y, w: p.width, h: p.height })}
         />
       )}
+      {others?.length ? (
+        <div className="board-selected-by" aria-hidden="true">
+          {others.map((o) => (
+            <span key={o.name + o.color} style={{ background: o.color }}>
+              {o.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div
         className={cn("board-card", selected && "board-card-selected", className)}
         style={{
           ...style,
-          ...(others?.length ? { boxShadow: others.map((c, i) => `0 0 0 ${2 + i * 2}px ${c}`).join(", ") } : null),
+          ...(others?.length
+            ? { boxShadow: others.map((o, i) => `0 0 0 ${2 + i * 2}px ${o.color}`).join(", ") }
+            : null),
         }}
       >
         {children}
@@ -194,6 +205,9 @@ function CardEditor({ docId }: { docId: string }) {
   const { tree, orgId, measured } = useBoard();
   const treeRef = useRef(tree);
   treeRef.current = tree;
+  // Read through refs, so the editor (and its live session) is made once per doc, not again on every board render.
+  const measuredRef = useRef(measured);
+  measuredRef.current = measured;
   const [status, setStatus] = useState("Connecting…");
 
   useEffect(() => {
@@ -216,7 +230,7 @@ function CardEditor({ docId }: { docId: string }) {
         person: () => undefined,
         onPointer: () => undefined,
       });
-      measured();
+      measuredRef.current();
     };
     const off = session.subscribe(() => {
       if (session.status === "offline") setStatus(session.error || "Can't reach the server. Retrying…");
@@ -229,7 +243,7 @@ function CardEditor({ docId }: { docId: string }) {
       editor?.destroy();
       void session.close();
     };
-  }, [docId, orgId, measured]);
+  }, [docId, orgId]);
 
   return (
     <div className="board-doc-editor nodrag nowheel nopan">

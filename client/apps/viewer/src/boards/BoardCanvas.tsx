@@ -15,6 +15,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useSelectionStore,
   ViewportPortal,
 } from "@xyflow/react";
 import { type DragEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -90,29 +91,35 @@ function useBoardContents(doc: Y.Doc) {
   return { cards, arrows };
 }
 
-/** Others' awareness on the board: where their pointer is and what they have selected. Re-renders as it changes. */
+type Box = { x: number; y: number; w: number; h: number };
+
+/** Others' awareness on the board: their pointer, the box they're dragging to select, and what they have selected. */
 function usePeersOnBoard(session: DocSession) {
   const [version, setVersion] = useState(0);
   useEffect(() => {
-    const bump = () => setVersion((v) => v + 1);
+    // Only others' changes: this person's own pointer and selection needn't redraw the board.
+    const bump = (_: unknown, origin: unknown) => origin !== "local" && setVersion((v) => v + 1);
     session.awareness.on("change", bump);
     return () => session.awareness.off("change", bump);
   }, [session]);
   return useMemo(() => {
     void version;
     const pointers: { peerId: string; name: string; color: string; x: number; y: number }[] = [];
-    const selectedBy = new Map<string, string[]>();
+    const marquees: { peerId: string; name: string; color: string; box: Box }[] = [];
+    const selectedBy = new Map<string, { name: string; color: string }[]>();
     for (const [clientId, state] of session.awareness.getStates()) {
       if (clientId === session.doc.clientID) continue;
       const user = state.user as AwarenessUser | undefined;
       if (!user) continue;
       const pointer = state.board as { x: number; y: number } | null | undefined;
       if (pointer) pointers.push({ peerId: user.peerId, name: user.name, color: user.color, ...pointer });
+      const marquee = state.marquee as Box | null | undefined;
+      if (marquee) marquees.push({ peerId: user.peerId, name: user.name, color: user.color, box: marquee });
       for (const id of (state.selection as string[] | undefined) ?? []) {
-        selectedBy.set(id, [...(selectedBy.get(id) ?? []), user.color]);
+        selectedBy.set(id, [...(selectedBy.get(id) ?? []), { name: user.name, color: user.color }]);
       }
     }
-    return { pointers, selectedBy };
+    return { pointers, marquees, selectedBy };
   }, [session, version]);
 }
 
@@ -150,7 +157,7 @@ function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef
   const flow = useReactFlow<BoardNode, BoardEdge>();
   const wrapper = useRef<HTMLDivElement>(null);
   const { cards, arrows } = useBoardContents(doc);
-  const { pointers, selectedBy } = usePeersOnBoard(session);
+  const { pointers, marquees, selectedBy } = usePeersOnBoard(session);
   const [showLinks, setShowLinks] = useState(true);
   const [showComments, setShowComments] = useState(true);
 
@@ -441,6 +448,27 @@ function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef
 
   /* ------------------------------------------------------------------ presence */
 
+  // The box this person is dragging to select, in board coordinates, so others see it where it is on their screen.
+  const selecting = useSelectionStore((s) => s.userSelectionRect);
+  const lastMarquee = useRef(0);
+  useEffect(() => {
+    if (!liveCursors) return;
+    if (!selecting || selecting.width + selecting.height < 4) {
+      session.awareness.setLocalStateField("marquee", null);
+      return;
+    }
+    const now = performance.now();
+    if (now - lastMarquee.current < POINTER_EVERY_MS) return;
+    lastMarquee.current = now;
+    const { x, y, zoom } = flow.getViewport();
+    session.awareness.setLocalStateField("marquee", {
+      x: Math.round((selecting.x - x) / zoom),
+      y: Math.round((selecting.y - y) / zoom),
+      w: Math.round(selecting.width / zoom),
+      h: Math.round(selecting.height / zoom),
+    } satisfies Box);
+  }, [selecting, liveCursors, session, flow]);
+
   const lastPointer = useRef(0);
   const onMouseMove = (e: React.MouseEvent) => {
     if (!liveCursors) return;
@@ -464,6 +492,14 @@ function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef
 
   /* ------------------------------------------------------------------ */
 
+  // Stable, so cards that hold on to it (the live editor) aren't remade when the board redraws.
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
+  const measured = useCallback(
+    () => restackSoon(cardsRef.current.flatMap((c) => (c.parent ? [c.parent] : []))),
+    [restackSoon],
+  );
+
   const context = useMemo<BoardContextValue>(
     () => ({
       orgId,
@@ -476,12 +512,9 @@ function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef
       selectedBy,
       openDoc: (id, newTab) =>
         newTab ? window.open(docPath(orgId, id), "_blank", "noopener") : navigate(docPath(orgId, id)),
-      measured: () => {
-        const parents = cards.flatMap((c) => (c.parent ? [c.parent] : []));
-        restackSoon(parents);
-      },
+      measured,
     }),
-    [orgId, boardId, doc, canEdit, tree, docsById, docs.isFetched, docIds.length, selectedBy, cards, restackSoon],
+    [orgId, boardId, doc, canEdit, tree, docsById, docs.isFetched, docIds.length, selectedBy, measured],
   );
 
   return (
@@ -542,6 +575,21 @@ function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef
           />
           {liveCursors && (
             <ViewportPortal>
+              {marquees.map((m) => (
+                <div
+                  key={m.peerId}
+                  className="board-marquee"
+                  style={{
+                    transform: `translate(${m.box.x}px, ${m.box.y}px)`,
+                    width: m.box.w,
+                    height: m.box.h,
+                    borderColor: m.color,
+                    background: `color-mix(in srgb, ${m.color} 12%, transparent)`,
+                  }}
+                >
+                  <span style={{ background: m.color }}>{m.name}</span>
+                </div>
+              ))}
               {pointers.map((p) => (
                 <div
                   key={p.peerId}

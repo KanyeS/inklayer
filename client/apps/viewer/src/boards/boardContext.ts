@@ -14,8 +14,8 @@ export interface BoardContextValue {
   docs: Map<string, BoardDoc>;
   /** Whether the server has answered for the docs yet (so a missing one really is missing). */
   docsLoaded: boolean;
-  /** Who else has each card selected: card id → their colours. */
-  selectedBy: Map<string, string[]>;
+  /** Who else has each card selected: card id → their names and colours. */
+  selectedBy: Map<string, { name: string; color: string }[]>;
   /** Opens a doc's own page. */
   openDoc: (docId: string, newTab?: boolean) => void;
   /** Tells the board a card's drawn height changed (columns restack). */
