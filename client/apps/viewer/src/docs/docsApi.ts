@@ -8,12 +8,14 @@ export type {
   DocCommentLinkResponse as DocCommentLink,
   DocGraphResponse as DocGraph,
   DocLinkResponse as DocLinkInfo,
+  DocOrgShareResponse as DocOrgShare,
   DocResponse as DocInfo,
   DocRevisionResponse as DocRevision,
   DocSearchResultResponse as DocSearchResult,
   DocSummaryResponse as DocSummary,
   DocTagCountResponse as DocTagInfo,
   DocTreeResponse as DocTree,
+  SharedDocResponse as SharedDoc,
 } from "@inklayer/api";
 
 /** How a doc or tag looks in the graph and lists: a Lucide icon name and a #rrggbb colour, either null for the default. */
@@ -55,6 +57,11 @@ export const docsApi = {
   /** Sets the doc's icon and colour (null for the defaults). Not a change to the doc: no version needed. */
   setAppearance: (docId: string, appearance: { icon: string | null; color: string | null }) =>
     api.put("/api/docs/{docId}/appearance", { ...doc(docId), body: appearance }) as Promise<DocResponse>,
+  /** Shares the doc with another organisation (the same doc, not a copy), or changes whether it can edit the text. */
+  shareWithOrg: (docId: string, orgId: string, canEdit: boolean) =>
+    api.put("/api/docs/{docId}/organizations/{orgId}", { params: { path: { docId, orgId } }, body: { canEdit } }),
+  unshareWithOrg: (docId: string, orgId: string) =>
+    api.delete("/api/docs/{docId}/organizations/{orgId}", { params: { path: { docId, orgId } } }),
   history: (docId: string) => api.get("/api/docs/{docId}/history", doc(docId)),
   revision: (docId: string, revisionId: string) =>
     api.get("/api/docs/{docId}/history/{revisionId}", { params: { path: { docId, revisionId } } }),

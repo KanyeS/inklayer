@@ -1813,6 +1813,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/tracker-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The OAuth apps people connect their own tracker accounts through: from the server's configuration, or added here */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackerAppResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/tracker-apps/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set up or change a tracker's OAuth app. Leave out the client secret to keep it. Changing the app or its instance disconnects the accounts connected through it. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SaveTrackerAppRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackerAppResponse"][];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Remove a tracker's OAuth app added here, and disconnect the accounts connected through it */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kind: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrackerAppResponse"][];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users": {
         parameters: {
             query?: never;
@@ -4098,6 +4198,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/docs/{docId}/organizations/{orgId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Share the doc with another organisation you're in, or change whether it can edit the text */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    docId: string;
+                    orgId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ShareDocWithOrganizationRequest"];
+                };
+            };
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** Stop sharing the doc with an organisation */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    docId: string;
+                    orgId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4546,6 +4708,20 @@ export interface components {
             title: null | string;
             folder: null | string;
         };
+        DocOrgShareResponse: {
+            /** Format: uuid */
+            organizationId: string;
+            name: string;
+            canEdit: boolean;
+            /** Format: date-time */
+            sharedAt: string;
+            sharedBy: components["schemas"]["DocActor"];
+        };
+        DocOrganizationResponse: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
         DocResponse: {
             /** Format: uuid */
             id: string;
@@ -4569,6 +4745,10 @@ export interface components {
             people?: null | components["schemas"]["PersonResponse"][];
             icon?: null | string;
             color?: null | string;
+            /** @default false */
+            canManage?: boolean;
+            sharedFrom?: null | components["schemas"]["DocOrganizationResponse"];
+            sharedWith?: null | components["schemas"]["DocOrgShareResponse"][];
         };
         DocRevisionContentResponse: {
             /** Format: uuid */
@@ -4625,6 +4805,7 @@ export interface components {
             docs: components["schemas"]["DocSummaryResponse"][];
             canEdit: boolean;
             tags?: null | components["schemas"]["DocTagCountResponse"][];
+            shared?: null | components["schemas"]["SharedDocResponse"][];
         };
         EmailSetupResponse: {
             configured: boolean;
@@ -5000,11 +5181,20 @@ export interface components {
             scopes?: null | string;
             verifiedDomains?: null | string[];
         };
+        SaveTrackerAppRequest: {
+            clientId?: null | string;
+            clientSecret?: null | string;
+            url?: null | string;
+            tenantId?: null | string;
+        };
         SetGrantRequest: {
             role?: null | components["schemas"]["Role"];
         };
         SetRoleRequest: {
             role?: null | components["schemas"]["Role"];
+        };
+        ShareDocWithOrganizationRequest: {
+            canEdit: boolean;
         };
         ShareResponse: {
             /** Format: uuid */
@@ -5035,6 +5225,17 @@ export interface components {
             canRevoke: boolean;
             /** @default false */
             existing?: boolean;
+        };
+        SharedDocResponse: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+            from: components["schemas"]["DocOrganizationResponse"];
+            canEdit: boolean;
+            icon?: null | string;
+            color?: null | string;
         };
         SignInProvider: {
             id: string;
@@ -5103,6 +5304,24 @@ export interface components {
             connectedAt: null | string;
             site: null | string;
         };
+        TrackerAppResponse: {
+            /** @enum {string} */
+            kind: "github" | "jira" | "linear" | "azuredevops" | "gitlab" | "forgejo";
+            name: string;
+            source: components["schemas"]["TrackerAppSource"];
+            callbackUrl: string;
+            /** Format: int32 */
+            accounts: number;
+            clientId?: null | string;
+            /** @default false */
+            hasClientSecret?: boolean;
+            url?: null | string;
+            tenantId?: null | string;
+            /** @default false */
+            needsSecret?: boolean;
+        };
+        /** @enum {unknown} */
+        TrackerAppSource: "None" | "Config" | "Admin";
         TrackerChoiceResponse: {
             /** Format: uuid */
             id: string;
@@ -5265,6 +5484,8 @@ export type DocGraphEdge = components['schemas']['DocGraphEdge'];
 export type DocGraphNode = components['schemas']['DocGraphNode'];
 export type DocGraphResponse = components['schemas']['DocGraphResponse'];
 export type DocLinkResponse = components['schemas']['DocLinkResponse'];
+export type DocOrgShareResponse = components['schemas']['DocOrgShareResponse'];
+export type DocOrganizationResponse = components['schemas']['DocOrganizationResponse'];
 export type DocResponse = components['schemas']['DocResponse'];
 export type DocRevisionContentResponse = components['schemas']['DocRevisionContentResponse'];
 export type DocRevisionResponse = components['schemas']['DocRevisionResponse'];
@@ -5318,9 +5539,12 @@ export type PullRequestPageResponse = components['schemas']['PullRequestPageResp
 export type ReplyResponse = components['schemas']['ReplyResponse'];
 export type Role = components['schemas']['Role'];
 export type SaveSignInProviderRequest = components['schemas']['SaveSignInProviderRequest'];
+export type SaveTrackerAppRequest = components['schemas']['SaveTrackerAppRequest'];
 export type SetGrantRequest = components['schemas']['SetGrantRequest'];
 export type SetRoleRequest = components['schemas']['SetRoleRequest'];
+export type ShareDocWithOrganizationRequest = components['schemas']['ShareDocWithOrganizationRequest'];
 export type ShareResponse = components['schemas']['ShareResponse'];
+export type SharedDocResponse = components['schemas']['SharedDocResponse'];
 export type SignInProvider = components['schemas']['SignInProvider'];
 export type SignInProviderResponse = components['schemas']['SignInProviderResponse'];
 export type SignInProviderSource = components['schemas']['SignInProviderSource'];
@@ -5331,6 +5555,8 @@ export type TeamResponse = components['schemas']['TeamResponse'];
 export type TeamSource = components['schemas']['TeamSource'];
 export type TestResultResponse = components['schemas']['TestResultResponse'];
 export type TrackerAccountResponse = components['schemas']['TrackerAccountResponse'];
+export type TrackerAppResponse = components['schemas']['TrackerAppResponse'];
+export type TrackerAppSource = components['schemas']['TrackerAppSource'];
 export type TrackerChoiceResponse = components['schemas']['TrackerChoiceResponse'];
 export type TrackerConnectionResponse = components['schemas']['TrackerConnectionResponse'];
 export type TrackerSettings = components['schemas']['TrackerSettings'];

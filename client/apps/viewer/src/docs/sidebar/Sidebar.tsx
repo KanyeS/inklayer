@@ -1,10 +1,11 @@
 import { cn } from "@inklayer/ui/lib/utils";
-import { FilePlus2, FolderPlus, Network, Search, Trash2 } from "lucide-react";
+import { Building2, FilePlus2, FolderPlus, Network, Search, Trash2 } from "lucide-react";
 import { type DragEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ErrorText } from "@/components/Layout";
 import { useAction } from "@/lib/query";
 import { Link, navigate } from "@/lib/router";
-import { type DocTagInfo, type DocTree, docPath, docsApi } from "../docsApi";
+import { DocIcon } from "../docIcons";
+import { type DocTagInfo, type DocTree, docPath, docsApi, type SharedDoc } from "../docsApi";
 import { rewriteLinks } from "../links";
 import { deletedDocsPath } from "../paths";
 import { TagPill, tagOf } from "../tags";
@@ -191,6 +192,10 @@ export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch, 
         </nav>
       )}
 
+      {!tag && tree.shared && tree.shared.length > 0 && (
+        <SharedDocs orgId={orgId} docs={tree.shared} activeId={activeId} />
+      )}
+
       {tags.length > 0 && <TagList tags={tags} active={tag} onTag={onTag} />}
 
       <div className="border-t px-2 py-2">
@@ -232,6 +237,37 @@ function TaggedDocs({
       </div>
       {docs.map((d) => (
         <DocRow key={d.id} orgId={orgId} doc={d} active={d.id === activeId} depth={0} showFolder />
+      ))}
+    </div>
+  );
+}
+
+/** Docs other organisations share with this one: the same live docs, listed apart from this organisation's folders. */
+function SharedDocs({ orgId, docs, activeId }: { orgId: string; docs: SharedDoc[]; activeId?: string }) {
+  return (
+    <div className="border-t px-2 py-3">
+      <h2 className="mb-1 flex items-center gap-1.5 px-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        <Building2 className="size-3.5" />
+        Shared with us
+      </h2>
+      {docs.map((d) => (
+        <Link
+          key={d.id}
+          to={docPath(orgId, d.id)}
+          className={cn(
+            "flex items-center gap-1.5 rounded-md px-2 py-1 text-sm",
+            d.id === activeId ? "bg-primary/12 font-medium text-foreground" : "text-foreground/85 hover:bg-muted",
+          )}
+          title={`From ${d.from.name}${d.canEdit ? "" : " (read only)"}`}
+        >
+          <DocIcon
+            icon={d.icon}
+            color={d.color}
+            className={cn("size-3.5 shrink-0", !d.color && "text-muted-foreground")}
+          />
+          <span className="min-w-0 flex-1 truncate">{d.title}</span>
+          <span className="max-w-24 shrink-0 truncate text-xs text-muted-foreground">{d.from.name}</span>
+        </Link>
       ))}
     </div>
   );

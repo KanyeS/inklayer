@@ -1834,6 +1834,103 @@
         }
       }
     },
+    "/api/admin/tracker-apps": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "The OAuth apps people connect their own tracker accounts through: from the server\u0027s configuration, or added here",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerAppResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/tracker-apps/{kind}": {
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Set up or change a tracker\u0027s OAuth app. Leave out the client secret to keep it. Changing the app or its instance disconnects the accounts connected through it.",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTrackerAppRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerAppResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Remove a tracker\u0027s OAuth app added here, and disconnect the accounts connected through it",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackerAppResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/users": {
       "get": {
         "tags": [
@@ -4051,6 +4148,80 @@
           }
         }
       }
+    },
+    "/api/docs/{docId}/organizations/{orgId}": {
+      "put": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Share the doc with another organisation you\u0027re in, or change whether it can edit the text",
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareDocWithOrganizationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Docs"
+        ],
+        "summary": "Stop sharing the doc with an organisation",
+        "parameters": [
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5944,6 +6115,51 @@
           }
         }
       },
+      "DocOrgShareResponse": {
+        "required": [
+          "organizationId",
+          "name",
+          "canEdit",
+          "sharedAt",
+          "sharedBy"
+        ],
+        "type": "object",
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "sharedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sharedBy": {
+            "$ref": "#/components/schemas/DocActor"
+          }
+        }
+      },
+      "DocOrganizationResponse": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "DocResponse": {
         "required": [
           "id",
@@ -6053,6 +6269,29 @@
               "null",
               "string"
             ]
+          },
+          "canManage": {
+            "type": "boolean",
+            "default": false
+          },
+          "sharedFrom": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DocOrganizationResponse"
+              }
+            ]
+          },
+          "sharedWith": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/DocOrgShareResponse"
+            }
           }
         }
       },
@@ -6262,6 +6501,15 @@
             ],
             "items": {
               "$ref": "#/components/schemas/DocTagCountResponse"
+            }
+          },
+          "shared": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SharedDocResponse"
             }
           }
         }
@@ -7694,6 +7942,39 @@
           }
         }
       },
+      "SaveTrackerAppRequest": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "maxLength": 500,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clientSecret": {
+            "maxLength": 2000,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "url": {
+            "maxLength": 500,
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantId": {
+            "maxLength": 100,
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "SetGrantRequest": {
         "type": "object",
         "properties": {
@@ -7721,6 +8002,17 @@
                 "$ref": "#/components/schemas/Role"
               }
             ]
+          }
+        }
+      },
+      "ShareDocWithOrganizationRequest": {
+        "required": [
+          "canEdit"
+        ],
+        "type": "object",
+        "properties": {
+          "canEdit": {
+            "type": "boolean"
           }
         }
       },
@@ -7834,6 +8126,47 @@
           "existing": {
             "type": "boolean",
             "default": false
+          }
+        }
+      },
+      "SharedDocResponse": {
+        "required": [
+          "id",
+          "title",
+          "updatedAt",
+          "from",
+          "canEdit"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "from": {
+            "$ref": "#/components/schemas/DocOrganizationResponse"
+          },
+          "canEdit": {
+            "type": "boolean"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8104,6 +8437,75 @@
             ]
           }
         }
+      },
+      "TrackerAppResponse": {
+        "required": [
+          "kind",
+          "name",
+          "source",
+          "callbackUrl",
+          "accounts"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "github",
+              "jira",
+              "linear",
+              "azuredevops",
+              "gitlab",
+              "forgejo"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/TrackerAppSource"
+          },
+          "callbackUrl": {
+            "type": "string"
+          },
+          "accounts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "clientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasClientSecret": {
+            "type": "boolean",
+            "default": false
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "tenantId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "needsSecret": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "TrackerAppSource": {
+        "enum": [
+          "None",
+          "Config",
+          "Admin"
+        ]
       },
       "TrackerChoiceResponse": {
         "required": [

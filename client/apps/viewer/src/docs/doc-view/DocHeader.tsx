@@ -1,7 +1,8 @@
 import { initials, safeColor } from "@inklayer/overlay";
+import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
 import { cn } from "@inklayer/ui/lib/utils";
-import { BookOpen, History, Info, PenLine, Trash2 } from "lucide-react";
+import { BookOpen, Building2, History, Info, PenLine, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useState } from "react";
 import { useMe } from "@/App";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -18,6 +19,7 @@ import { type Appearance, IconPicker } from "../IconPicker";
 import { rewriteLinks } from "../links";
 import { TagBar } from "../tags";
 import { statusDotClass, statusLabel } from "./docViewText";
+import { OrgShareButton } from "./OrgShareDialog";
 import { useSessionState } from "./useSessionState";
 
 export type Mode = "edit" | "read";
@@ -46,14 +48,25 @@ export function DocHeader(props: DocHeaderProps) {
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-        <span className="truncate">{info.folder ? info.folder.split("/").join(" / ") : "Docs"}</span>
+        {info.sharedFrom ? (
+          <Badge
+            variant="outline"
+            title={`This doc belongs to ${info.sharedFrom.name}, which shares it with this organisation. It's the same doc there: edits show up on both sides.`}
+          >
+            <Building2 data-icon="inline-start" />
+            Shared from {info.sharedFrom.name}
+          </Badge>
+        ) : (
+          <span className="truncate">{info.folder ? info.folder.split("/").join(" / ") : "Docs"}</span>
+        )}
         <div className="flex items-center gap-1">
           <SaveStatus status={state?.status ?? "connecting"} canEdit={canEdit} />
           <PeopleHere peers={state?.peers ?? []} onFollow={props.onFollow} />
           <DocTools {...props} onError={setError} />
         </div>
       </div>
-      <TitleRow info={info} canEdit={canEdit} onError={setError} />
+      {/* Renaming and the icon belong to the doc's own organisation. */}
+      <TitleRow info={info} canEdit={canEdit && !!info.canManage} onError={setError} />
       <TagBar orgId={orgId} tree={tree} session={session} fallback={info.tags} canEdit={canEdit} onTag={props.onTag} />
       <p className="mt-1 text-xs text-muted-foreground">
         {info.updatedBy ? (
@@ -123,7 +136,7 @@ function PeopleHere({ peers, onFollow }: { peers: Peer[]; onFollow?: (peerId: st
   );
 }
 
-/** Read/Edit, the cheat sheet, History, Share and Delete. */
+/** Read/Edit, the cheat sheet, History, Share and Delete (sharing and deleting only from the doc's own organisation). */
 function DocTools({
   orgId,
   info,
@@ -171,8 +184,9 @@ function DocTools({
         <History data-icon="inline-start" />
         History
       </Button>
-      {me.features.sharing && <DocShareButton docId={info.id} canEdit={canEdit} />}
-      {canEdit && (
+      <OrgShareButton info={info} />
+      {me.features.sharing && !info.sharedFrom && <DocShareButton docId={info.id} canEdit={!!info.canManage} />}
+      {info.canManage && (
         <ConfirmButton
           title={`Delete "${info.title}"?`}
           description="Anyone with it open loses it, and links to it show as missing until it's back. You can restore it, with its text and history, from Deleted docs at the bottom of the sidebar."

@@ -81,6 +81,7 @@ public sealed partial class ChangeClock
         ["DocLinks"] = ChangeAreas.Docs | ChangeAreas.Comments,
         ["DocTags"] = ChangeAreas.Docs,
         ["DocTagStyles"] = ChangeAreas.Docs,
+        ["DocOrgShares"] = ChangeAreas.Docs,
         ["DocSearch"] = ChangeAreas.Docs,
         ["Notifications"] = ChangeAreas.Notifications,
     };

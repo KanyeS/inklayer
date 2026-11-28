@@ -103,6 +103,22 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
         // The preview is the line with the mention.
         var line = doc.Content.Split('\n').FirstOrDefault(l => added.Any(id => l.Contains(id.ToString(), StringComparison.OrdinalIgnoreCase))) ?? doc.Title;
         await NotifyAsync(NotificationKinds.Mention, added, doc.OrganizationId, actorUserId, null, doc, line, ct);
+
+        // People who have it through an organisation it's shared with hear of it there, once each.
+        var homeMembers = await db.OrganizationMembers.Where(m => m.OrganizationId == doc.OrganizationId && added.Contains(m.UserId)).Select(m => m.UserId).ToListAsync(ct);
+        var rest = added.Except(homeMembers).ToHashSet();
+        foreach (var orgId in await db.DocOrgShares.Where(s => s.DocId == doc.Id).Select(s => s.OrganizationId).ToListAsync(ct))
+        {
+            if (rest.Count == 0)
+            {
+                break;
+            }
+
+            var here = await db.OrganizationMembers.Where(m => m.OrganizationId == orgId && rest.Contains(m.UserId)).Select(m => m.UserId).ToListAsync(ct);
+            await NotifyAsync(NotificationKinds.Mention, here, orgId, actorUserId, null, doc, line, ct);
+            rest.ExceptWith(here);
+        }
+
         await db.SaveChangesAsync(ct);
     }
 
@@ -191,7 +207,7 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
             _ => "Inklayer",
         };
         var link = comment is not null ? $"{Origin()}/comments/{comment.Id}"
-            : doc is not null ? $"{Origin()}/orgs/{doc.OrganizationId}/docs/{doc.Id}"
+            : doc is not null ? $"{Origin()}/orgs/{organizationId}/docs/{doc.Id}"
             : product is { } p ? $"{Origin()}/projects/{p.Id}{(kind == NotificationKinds.AccessRequested ? "#access" : "")}"
             : Origin();
         var body = $"{subject}{(where.Length > 0 ? $" on {where}" : "")}:\n\n{preview}\n\nOpen it: {link}\n\n" +

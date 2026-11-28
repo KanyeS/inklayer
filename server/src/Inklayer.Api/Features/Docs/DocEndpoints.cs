@@ -19,7 +19,10 @@ public sealed record DocSummaryResponse(Guid Id, string Folder, string Title, Da
 
 /// <param name="Folders">Every folder, including ones that only exist because a doc is in them, sorted.</param>
 /// <param name="Tags">Every #tag in use, with how many docs have it and its icon and colour.</param>
-public sealed record DocTreeResponse(IReadOnlyList<string> Folders, IReadOnlyList<DocSummaryResponse> Docs, bool CanEdit, IReadOnlyList<DocTagCountResponse>? Tags = null);
+/// <param name="Shared">Docs other organisations share with this one, by title.</param>
+public sealed record DocTreeResponse(
+    IReadOnlyList<string> Folders, IReadOnlyList<DocSummaryResponse> Docs, bool CanEdit, IReadOnlyList<DocTagCountResponse>? Tags = null,
+    IReadOnlyList<SharedDocResponse>? Shared = null);
 
 public sealed record DocLinkResponse(string Text, Guid? DocId, string? Title, string? Folder);
 
@@ -28,12 +31,27 @@ public sealed record DocCommentLinkResponse(Guid AnnotationId, Guid ProjectId, s
 /// <param name="Backlinks">Docs that link here.</param>
 /// <param name="CommentBacklinks">Page comments that link here, in projects the caller can view.</param>
 /// <param name="Links">Docs this doc links to, including ones that don't exist yet (<c>DocId</c> null).</param>
+/// <param name="CanEdit">Whether the caller can edit the text.</param>
+/// <param name="CanManage">Whether the caller can rename, move, delete and share the doc: Commenters and above in its own organisation.</param>
+/// <param name="SharedFrom">When the caller has the doc only because it's shared with their organisation: the doc's own organisation.</param>
+/// <param name="SharedWith">The organisations it's shared with; only for members of its own organisation.</param>
 /// <param name="CommentLinks">Comments this doc links to (ids only; <c>GET /api/annotations/{id}</c> has the details).</param>
 public sealed record DocResponse(
     Guid Id, Guid OrganizationId, string Folder, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DocActor? UpdatedBy,
     bool CanEdit, IReadOnlyList<string> Tags, IReadOnlyList<DocSummaryResponse> Backlinks, IReadOnlyList<DocCommentLinkResponse> CommentBacklinks,
     IReadOnlyList<DocLinkResponse> Links, IReadOnlyList<Guid> CommentLinks, IReadOnlyList<Notifications.PersonResponse>? People = null,
-    string? Icon = null, string? Color = null);
+    string? Icon = null, string? Color = null, bool CanManage = false, DocOrganizationResponse? SharedFrom = null, IReadOnlyList<DocOrgShareResponse>? SharedWith = null);
+
+/// <param name="Id">The organisation.</param>
+public sealed record DocOrganizationResponse(Guid Id, string Name);
+
+/// <summary>An organisation a doc is shared with.</summary>
+/// <param name="CanEdit">Whether its Commenters and above edit the text, or everyone there only reads it.</param>
+public sealed record DocOrgShareResponse(Guid OrganizationId, string Name, bool CanEdit, DateTime SharedAt, DocActor SharedBy);
+
+/// <summary>A doc another organisation shares with this one.</summary>
+/// <param name="CanEdit">Whether the caller can edit its text.</param>
+public sealed record SharedDocResponse(Guid Id, string Title, DateTime UpdatedAt, DocOrganizationResponse From, bool CanEdit, string? Icon = null, string? Color = null);
 
 /// <param name="RelinkDocs">After a rename or move: docs whose text links the old name. The client that renamed rewrites those links.</param>
 public sealed record DocChangedResponse(DocResponse Doc, IReadOnlyList<Guid> RelinkDocs);
@@ -105,6 +123,7 @@ internal static class DocEndpoints
         docs.MapPost("/{docId:guid}/restore", RestoreAsync).Produces<DocSummaryResponse>().WithSummary("Bring back a deleted doc where it was (Commenter and above)");
         docs.MapGet("/{docId:guid}/history", HistoryAsync).Produces<List<DocRevisionResponse>>();
         docs.MapGet("/{docId:guid}/history/{revisionId:guid}", RevisionAsync).Produces<DocRevisionContentResponse>();
+        DocOrgShareEndpoints.Map(docs);
         return app;
     }
 
@@ -127,7 +146,8 @@ internal static class DocEndpoints
             [.. docs.OrderBy(d => d.Folder, StringComparer.OrdinalIgnoreCase).ThenBy(d => d.Title, StringComparer.OrdinalIgnoreCase)
                 .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, tags.GetValueOrDefault(d.Id, []), d.Icon, d.Color))],
             check.Role.Grants(Permission.Comment),
-            await TagCountsAsync(db, orgId, ct)));
+            await TagCountsAsync(db, orgId, ct),
+            await DocOrgShareEndpoints.SharedWithAsync(db, orgId, check.Role, ct)));
     }
 
     internal static async Task<IResult> CreateAsync(
@@ -175,8 +195,8 @@ internal static class DocEndpoints
             return TypedResults.NotFound();
         }
 
-        var check = await access.CheckOrganizationAsync(doc.OrganizationId, Permission.View, ct);
-        return check.IsAllowed ? TypedResults.Ok(await ResponseAsync(doc, check.Role, currentUser, db, ct)) : check.Denied!;
+        var check = await access.CheckDocAsync(doc.Id, Permission.View, ct);
+        return check.IsAllowed ? TypedResults.Ok(await ResponseAsync(doc, check.Access!, currentUser, db, ct)) : check.Denied!;
     }
 
     internal static async Task<IResult> UpdateAsync(
@@ -188,7 +208,7 @@ internal static class DocEndpoints
             return TypedResults.NotFound();
         }
 
-        var check = await access.CheckOrganizationAsync(doc.OrganizationId, Permission.Comment, ct);
+        var check = await access.CheckDocHomeAsync(doc.Id, Permission.Comment, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -215,7 +235,7 @@ internal static class DocEndpoints
         var moved = !string.Equals(folder, doc.Folder, StringComparison.Ordinal);
         if (!renamed && !moved)
         {
-            return TypedResults.Ok(new DocChangedResponse(await ResponseAsync(doc, check.Role, currentUser, db, ct), []));
+            return TypedResults.Ok(new DocChangedResponse(await ResponseAsync(doc, check.Access!, currentUser, db, ct), []));
         }
 
         // Docs that link the old name, found before the links are resolved again.
@@ -245,7 +265,7 @@ internal static class DocEndpoints
         await indexer.RelinkAsync(doc.OrganizationId, [oldPathKey, oldTitleKey, doc.PathKey, doc.TitleKey], ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return TypedResults.Ok(new DocChangedResponse(await ResponseAsync(doc, check.Role, currentUser, db, ct), relink));
+        return TypedResults.Ok(new DocChangedResponse(await ResponseAsync(doc, check.Access!, currentUser, db, ct), relink));
     }
 
     /// <summary>
@@ -261,7 +281,7 @@ internal static class DocEndpoints
             return TypedResults.NotFound();
         }
 
-        var check = await access.CheckOrganizationAsync(doc.OrganizationId, Permission.Comment, ct);
+        var check = await access.CheckDocHomeAsync(doc.Id, Permission.Comment, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -278,7 +298,7 @@ internal static class DocEndpoints
         await db.Docs.Where(d => d.Id == doc.Id).ExecuteUpdateAsync(u => u.SetProperty(d => d.Icon, icon).SetProperty(d => d.Color, color), ct);
         doc.Icon = icon;
         doc.Color = color;
-        return TypedResults.Ok(await ResponseAsync(doc, check.Role, currentUser, db, ct));
+        return TypedResults.Ok(await ResponseAsync(doc, check.Access!, currentUser, db, ct));
     }
 
     internal static async Task<IResult> DeleteAsync(
@@ -293,7 +313,7 @@ internal static class DocEndpoints
             return TypedResults.NotFound();
         }
 
-        var check = await access.CheckOrganizationAsync(doc.OrganizationId, Permission.Comment, ct);
+        var check = await access.CheckDocHomeAsync(doc.Id, Permission.Comment, ct);
         if (!check.IsAllowed)
         {
             return check.Denied!;
@@ -744,12 +764,22 @@ internal static class DocEndpoints
         }
     }
 
-    internal static async Task<DocResponse> ResponseAsync(Doc doc, Role role, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
+    internal static async Task<DocResponse> ResponseAsync(Doc doc, DocRole access, CurrentUser currentUser, InklayerDbContext db, CancellationToken ct)
     {
+        var role = access.Role;
         var tags = await db.DocTags.AsNoTracking().Where(t => t.DocId == doc.Id).Select(t => t.Tag).OrderBy(t => t).ToListAsync(ct);
 
         var incoming = await db.DocLinks.AsNoTracking().Where(l => l.TargetDocId == doc.Id).ToListAsync(ct);
         var sourceDocIds = incoming.Select(l => l.SourceDocId).OfType<Guid>().Where(id => id != doc.Id).Distinct().ToList();
+
+        // Someone who has the doc through a share sees only the docs around it that they can open themselves.
+        HashSet<Guid>? visible = null;
+        if (!access.IsHome)
+        {
+            var outgoingIds = await db.DocLinks.AsNoTracking().Where(l => l.SourceDocId == doc.Id && l.TargetDocId != null).Select(l => l.TargetDocId!.Value).ToListAsync(ct);
+            visible = await DocAccess.VisibleAsync(db, currentUser.Id!.Value, [.. sourceDocIds.Concat(outgoingIds).Distinct()], ct);
+            sourceDocIds = [.. sourceDocIds.Where(visible.Contains)];
+        }
         var backlinks = await db.Docs.AsNoTracking().Where(d => sourceDocIds.Contains(d.Id) && d.DeletedAt == null)
             .OrderBy(d => d.Title).Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, new List<string>(), d.Icon, d.Color)).ToListAsync(ct);
 
@@ -757,7 +787,7 @@ internal static class DocEndpoints
         var commentBacklinks = await CommentsAsync(sourceCommentIds, currentUser, db, ct);
 
         var outgoing = await db.DocLinks.AsNoTracking().Where(l => l.SourceDocId == doc.Id).ToListAsync(ct);
-        var targetIds = outgoing.Select(l => l.TargetDocId).OfType<Guid>().ToList();
+        var targetIds = outgoing.Select(l => l.TargetDocId).OfType<Guid>().Where(id => visible is null || visible.Contains(id)).ToList();
         var targets = await db.Docs.AsNoTracking().Where(d => targetIds.Contains(d.Id)).ToDictionaryAsync(d => d.Id, ct);
         var links = outgoing.Where(l => l.TargetAnnotationId is null)
             .Select(l => l.TargetDocId is { } id && targets.TryGetValue(id, out var t)
@@ -767,9 +797,13 @@ internal static class DocEndpoints
         var commentLinks = outgoing.Select(l => l.TargetAnnotationId).OfType<Guid>().Distinct().ToList();
 
         var updatedBy = await db.Users.AsNoTracking().Where(u => u.Id == doc.UpdatedByUserId).Select(u => new DocActor(u.Id, u.PreferredName ?? u.DisplayName, u.DisplayName)).SingleOrDefaultAsync(ct);
+        var canManage = access.HomeRole is { } home && home.Grants(Permission.Comment);
         return new DocResponse(doc.Id, doc.OrganizationId, doc.Folder, doc.Title, doc.Version, doc.CreatedAt, doc.UpdatedAt, updatedBy,
             role.Grants(Permission.Comment), tags, backlinks, commentBacklinks, links, commentLinks,
-            await Notifications.MentionedPeople.ForAsync(db, [doc.Content], ct), doc.Icon, doc.Color);
+            await Notifications.MentionedPeople.ForAsync(db, [doc.Content], ct), doc.Icon, doc.Color,
+            canManage,
+            access.IsHome ? null : await db.Organizations.AsNoTracking().Where(o => o.Id == doc.OrganizationId).Select(o => new DocOrganizationResponse(o.Id, o.Name)).SingleAsync(ct),
+            access.IsHome ? await DocOrgShareEndpoints.SharesAsync(db, doc.Id, ct) : null);
     }
 
     /// <summary>The comments, among <paramref name="ids"/>, that the caller can see.</summary>
@@ -808,13 +842,7 @@ internal static class DocEndpoints
 
     private static async Task<IResult?> ReadableDocAsync(Guid docId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
-        var orgId = await db.Docs.Where(d => d.Id == docId).Select(d => (Guid?)d.OrganizationId).SingleOrDefaultAsync(ct);
-        if (orgId is null)
-        {
-            return TypedResults.NotFound();
-        }
-
-        var check = await access.CheckOrganizationAsync(orgId.Value, Permission.View, ct);
+        var check = await access.CheckDocAsync(docId, Permission.View, ct, includeDeleted: true);
         return check.IsAllowed ? null : check.Denied;
     }
 

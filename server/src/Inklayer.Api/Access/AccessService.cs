@@ -17,6 +17,16 @@ public sealed record AccessResult(Role Role, Guid OrganizationId, IResult? Denie
         new(role, organizationId, TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Your role doesn't allow this."));
 }
 
+/// <summary>The outcome of a doc access check. When <see cref="Denied"/> is set, return it from the endpoint as-is.</summary>
+/// <param name="Access">The caller's access to the doc; set whenever they can see it, even if <see cref="Denied"/> is too.</param>
+public sealed record DocAccessResult(DocRole? Access, IResult? Denied)
+{
+    public bool IsAllowed => Denied is null;
+
+    /// <summary>The caller's role on the doc's text. Only when <see cref="IsAllowed"/>.</summary>
+    public Role Role => Access!.Role;
+}
+
 /// <summary>What one person can reach in one organisation: their organisation role, their teams and every grant to them or their teams.</summary>
 public sealed class CallerAccess(Role? organizationRole, IReadOnlySet<Guid> teamIds, IReadOnlyList<AccessGrant> grants)
 {
@@ -120,6 +130,42 @@ public sealed class AccessService(InklayerDbContext db, CurrentUser currentUser)
         return role.Grants(permission)
             ? new AccessResult(role, organizationId.Value, null)
             : AccessResult.Forbidden(role, organizationId.Value);
+    }
+
+    /// <summary>
+    /// The caller's access to a doc, through its organisation or an organisation it's shared with (see <see cref="DocAccess"/>),
+    /// checked against <paramref name="permission"/>. Use <see cref="CheckDocHomeAsync"/> for what only its own organisation does.
+    /// </summary>
+    public async Task<DocAccessResult> CheckDocAsync(Guid docId, Permission permission, CancellationToken cancellationToken, bool includeDeleted = false)
+    {
+        var doc = currentUser.Id is { } userId ? await DocAccess.RoleAsync(db, userId, docId, includeDeleted, cancellationToken) : null;
+        if (doc is null)
+        {
+            return new DocAccessResult(null, TypedResults.NotFound());
+        }
+
+        return doc.Role.Grants(permission) ? new DocAccessResult(doc, null) : new DocAccessResult(doc, AccessResult.Forbidden(doc.Role, doc.OrganizationId).Denied);
+    }
+
+    /// <summary>
+    /// For renaming, moving, deleting, restoring and sharing a doc: needs <paramref name="permission"/> in the doc's own
+    /// organisation. People who only have it through a share get 403, and say why.
+    /// </summary>
+    public async Task<DocAccessResult> CheckDocHomeAsync(Guid docId, Permission permission, CancellationToken cancellationToken, bool includeDeleted = false)
+    {
+        var check = await CheckDocAsync(docId, Permission.View, cancellationToken, includeDeleted);
+        if (!check.IsAllowed)
+        {
+            return check;
+        }
+
+        if (check.Access!.HomeRole is not { } home)
+        {
+            return new DocAccessResult(check.Access, TypedResults.Problem(statusCode: StatusCodes.Status403Forbidden,
+                title: "This doc is shared with your organisation. Only people in its own organisation can rename, move, delete or share it."));
+        }
+
+        return home.Grants(permission) ? check : new DocAccessResult(check.Access, AccessResult.Forbidden(home, check.Access.OrganizationId).Denied);
     }
 
     /// <summary>The caller's role in every product of an organisation they can see. Products they can't see are left out.</summary>

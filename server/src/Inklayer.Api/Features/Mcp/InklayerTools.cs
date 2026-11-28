@@ -363,11 +363,10 @@ internal static class InklayerTools
         await db.Annotations.Where(a => a.Id == commentId && a.DeletedAt == null).Select(a => (int?)a.Version).SingleOrDefaultAsync(ct)
             ?? throw new McpException("Not found, or you don't have access to it.");
 
-    /// <summary>Editing a doc's text needs Commenter or above in its organisation, as in the app.</summary>
+    /// <summary>Editing a doc's text needs Commenter or above in its organisation, or in one it's shared with for editing, as in the app.</summary>
     private static async Task RequireEditAsync(Guid docId, AccessService access, InklayerDbContext db, CancellationToken ct)
     {
-        var orgId = await db.Docs.Where(d => d.Id == docId && d.DeletedAt == null).Select(d => (Guid?)d.OrganizationId).SingleOrDefaultAsync(ct);
-        var check = orgId is null ? AccessResult.NotFound() : await access.CheckOrganizationAsync(orgId.Value, Permission.Comment, ct);
+        var check = await access.CheckDocAsync(docId, Permission.Comment, ct);
         if (!check.IsAllowed)
         {
             ToolResults.Ok(check.Denied!);

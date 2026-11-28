@@ -684,6 +684,30 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("DocLinks");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocOrgShare", b =>
+                {
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CanEdit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("SharedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SharedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("DocId", "OrganizationId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.ToTable("DocOrgShares");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Docs.DocRevision", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1916,6 +1940,21 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TargetDocId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.DocOrgShare", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithMany()
+                        .HasForeignKey("DocId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Inklayer.Domain.Organizations.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Docs.DocRevision", b =>

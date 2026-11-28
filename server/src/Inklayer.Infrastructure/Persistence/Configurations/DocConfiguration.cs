@@ -80,6 +80,17 @@ internal sealed class DocLinkConfiguration : IEntityTypeConfiguration<DocLink>
     }
 }
 
+internal sealed class DocOrgShareConfiguration : IEntityTypeConfiguration<DocOrgShare>
+{
+    public void Configure(EntityTypeBuilder<DocOrgShare> builder)
+    {
+        builder.HasKey(s => new { s.DocId, s.OrganizationId });
+        builder.HasIndex(s => s.OrganizationId);
+        builder.HasOne<Doc>().WithMany().HasForeignKey(s => s.DocId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Organization>().WithMany().HasForeignKey(s => s.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class DocTagStyleConfiguration : IEntityTypeConfiguration<DocTagStyle>
 {
     public void Configure(EntityTypeBuilder<DocTagStyle> builder)

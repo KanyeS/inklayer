@@ -136,17 +136,17 @@ internal sealed partial class DocsHub(
     public async Task<DocOpenResponse> Open(Guid docId, long clientId)
     {
         var me = Me();
-        var orgId = await db.Docs.AsNoTracking().Where(d => d.Id == docId && d.DeletedAt == null).Select(d => (Guid?)d.OrganizationId).SingleOrDefaultAsync();
-        var role = orgId is null ? null : await RoleAsync(db, me.Peer.UserId, orgId.Value, Context.ConnectionAborted);
-        if (role is null)
+        // Through its own organisation or one it's shared with: either way it's the same doc, so everyone edits one copy.
+        var access = await Inklayer.Api.Access.DocAccess.RoleAsync(db, me.Peer.UserId, docId, includeDeleted: false, Context.ConnectionAborted);
+        if (access is null)
         {
             throw new HubException("This doc doesn't exist or you can't see it.");
         }
 
         // Join first, so no update made while this one loads is missed; seeing one twice does no harm.
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(docId));
-        var canEdit = role.Value.Grants(Permission.Comment);
-        me.Docs[docId] = new OpenDoc(orgId!.Value, canEdit, clientId);
+        var canEdit = access.Role.Grants(Permission.Comment);
+        me.Docs[docId] = new OpenDoc(access.OrganizationId, canEdit, clientId);
 
         // Edits still waiting to be saved are written first, so they're among the updates read below.
         await edits.FlushAsync(Context.ConnectionAborted);
@@ -296,23 +296,6 @@ internal sealed partial class DocsHub(
                 db.DocRevisions.Add(DocEndpoints.Revision(doc, DocActions.Edited, editor, now));
             }
         }
-    }
-
-    /// <summary>The caller's role in the organisation, or null if they aren't a member. Instance administrators are Owners.</summary>
-    internal static async Task<Role?> RoleAsync(InklayerDbContext db, Guid userId, Guid organizationId, CancellationToken ct)
-    {
-        var user = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => new { u.IsDisabled, u.IsSystemAdmin }).SingleOrDefaultAsync(ct);
-        if (user is null || user.IsDisabled)
-        {
-            return null;
-        }
-
-        if (user.IsSystemAdmin)
-        {
-            return await db.Organizations.AnyAsync(o => o.Id == organizationId, ct) ? Role.Owner : null;
-        }
-
-        return await db.OrganizationMembers.Where(m => m.OrganizationId == organizationId && m.UserId == userId).Select(m => (Role?)m.Role).SingleOrDefaultAsync(ct);
     }
 
     private DocsConnection Me() => registry.Get(Context.ConnectionId) ?? throw new HubException("This connection is closing.");

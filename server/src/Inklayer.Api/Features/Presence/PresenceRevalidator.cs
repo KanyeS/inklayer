@@ -87,8 +87,9 @@ internal sealed partial class PresenceRevalidator(
 
             foreach (var (docId, open) in connection.Docs)
             {
-                var role = await DocsHub.RoleAsync(db, user.Id, open.OrganizationId, ct);
-                if (role is null)
+                // A doc deleted while it's open isn't closed here (its page says so); losing the organisation or the share is.
+                var access = await Inklayer.Api.Access.DocAccess.RoleAsync(db, user.Id, docId, includeDeleted: true, ct);
+                if (access is null)
                 {
                     connection.Docs.TryRemove(docId, out _);
                     await docsHub.Groups.RemoveFromGroupAsync(connection.ConnectionId, DocsHub.Group(docId), ct);
@@ -97,7 +98,7 @@ internal sealed partial class PresenceRevalidator(
                     continue;
                 }
 
-                var canEdit = role.Value.Grants(Permission.Comment);
+                var canEdit = access.Role.Grants(Permission.Comment);
                 if (canEdit != open.CanEdit)
                 {
                     open.CanEdit = canEdit;
