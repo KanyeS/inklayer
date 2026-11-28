@@ -9,6 +9,7 @@ export type GuideSection =
   | "issue-trackers"
   | "github"
   | "your-own-tracker-account"
+  | "registering-the-oauth-apps"
   | "gitlab"
   | "codeberg-forgejo-and-gitea"
   | "jira-cloud"

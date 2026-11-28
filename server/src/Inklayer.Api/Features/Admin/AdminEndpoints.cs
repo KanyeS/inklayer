@@ -33,6 +33,7 @@ internal static class AdminEndpoints
         admin.MapAdminFeatureEndpoints();
         admin.MapAdminEmailEndpoints();
         Auth.SignInProviderEndpoints.MapSignInProviderEndpoints(admin);
+        Issues.TrackerAppEndpoints.MapTrackerAppEndpoints(admin);
 
         admin.MapGet("/users", async (InklayerDbContext db, CancellationToken ct) =>
             TypedResults.Ok(await db.Users.AsNoTracking().OrderBy(u => u.Email)

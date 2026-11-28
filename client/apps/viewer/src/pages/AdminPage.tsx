@@ -13,6 +13,7 @@ import { ErrorText, Page, PageTitle, SectionTitle } from "@/components/Layout";
 import { NetworkAccessSection } from "@/components/NetworkAccessSection";
 import { AdminSharesSection } from "@/components/Shares";
 import { SignInProvidersSection } from "@/components/SignInProvidersSection";
+import { TrackerAppsSection } from "@/components/TrackerAppsSection";
 import { type AdminUser, api } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { queries } from "@/lib/queries";
@@ -81,6 +82,7 @@ export function AdminPage() {
       </div>
       <SignInProvidersSection />
       <FeaturesSection />
+      {me.features.issueTrackers && <TrackerAppsSection />}
       <EmailSetupSection />
       <NetworkAccessSection />
       {me.features.sharing && (

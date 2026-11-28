@@ -51,6 +51,8 @@ public static class AuditActions
     public const string AccessRequested = "access.requested";
     public const string AccessRequestApproved = "access.request_approved";
     public const string AccessRequestDeclined = "access.request_declined";
+    public const string DocSharedWithOrganization = "doc.shared_with_org";
+    public const string DocUnsharedWithOrganization = "doc.unshared_with_org";
     public const string UserDisabled = "user.disabled";
     public const string UserEnabled = "user.enabled";
     public const string NetworkAccessChanged = "network.changed";
@@ -58,4 +60,6 @@ public static class AuditActions
     public const string SignInProviderAdded = "sign_in_provider.added";
     public const string SignInProviderChanged = "sign_in_provider.changed";
     public const string SignInProviderRemoved = "sign_in_provider.removed";
+    public const string TrackerAppSaved = "tracker_app.saved";
+    public const string TrackerAppRemoved = "tracker_app.removed";
 }

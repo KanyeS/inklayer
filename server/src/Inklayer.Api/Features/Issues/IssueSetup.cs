@@ -7,6 +7,8 @@ internal static class IssueSetup
         services.AddSingleton<Trackers>();
         services.AddScoped<IssueService>();
         services.AddScoped<TrackerAccounts>();
+        services.AddSingleton<TrackerOAuthApps>();
+        services.AddHostedService(sp => sp.GetRequiredService<TrackerOAuthApps>());
         services.AddSingleton<TrackerOAuth>();
         services.AddOptions<TrackerOAuthOptions>().BindConfiguration(TrackerOAuthOptions.SectionName);
         services.AddSingleton<IssueSyncService>();

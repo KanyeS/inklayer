@@ -166,7 +166,7 @@ internal static class TrackerAccountEndpoints
         HttpOnly = true, Secure = http.Request.IsHttps, SameSite = SameSiteMode.Lax, Path = Path, MaxAge = Lifetime,
     };
 
-    private static string CallbackUrl(HttpContext http, string kind) => $"{McpResource.Origin(http.Request)}{Path}/{kind}/callback";
+    internal static string CallbackUrl(HttpContext http, string kind) => $"{McpResource.Origin(http.Request)}{Path}/{kind}/callback";
 
     /// <summary>Only paths on this server, so the connect link can't send people elsewhere.</summary>
     private static string LocalPath(string? returnTo) =>

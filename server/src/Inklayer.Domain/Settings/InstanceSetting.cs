@@ -12,6 +12,9 @@ public sealed class InstanceSetting
     /// <summary>OpenID Connect sign-in providers administrators added, as JSON. Client secrets are encrypted. Configured providers aren't in it.</summary>
     public const string SignInProviders = "auth.providers";
 
+    /// <summary>Tracker OAuth apps administrators added, as JSON. Client secrets are encrypted. Trackers set up in the configuration aren't in it.</summary>
+    public const string TrackerApps = "trackers.oauth";
+
     public required string Key { get; init; }
 
     public required string Value { get; set; }

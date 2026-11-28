@@ -27,6 +27,7 @@ export type {
   SignInProviderResponse as SignInProvider,
   TeamMemberResponse as TeamMember,
   TeamResponse as Team,
+  TrackerAppResponse as TrackerApp,
 } from "@inklayer/api";
 export { ApiError } from "@inklayer/api";
 

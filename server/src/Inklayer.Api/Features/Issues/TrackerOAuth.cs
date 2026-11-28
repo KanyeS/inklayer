@@ -94,7 +94,7 @@ internal sealed class TrackerOAuthSetupException(string message, Exception? inne
 /// The OAuth details of each tracker: where people allow Inklayer, how codes and refresh tokens become access tokens,
 /// who the account is, and how to give access back.
 /// </summary>
-internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpClientFactory http, TimeProvider clock)
+internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, TrackerOAuthApps apps, IHttpClientFactory http, TimeProvider clock)
 {
     private readonly Lazy<X509Certificate2> certificate = new(
         () => LoadCertificate(options.Value.AzureDevOps.CertificatePath, options.Value.AzureDevOps.CertificatePassword), LazyThreadSafetyMode.PublicationOnly);
@@ -104,18 +104,10 @@ internal sealed class TrackerOAuth(IOptions<TrackerOAuthOptions> options, IHttpC
 
     private const string AtlassianApi = "https://api.atlassian.com";
 
-    private TrackerOAuthOptions O => options.Value;
+    /// <summary>The configuration's apps, with those administrators added for the trackers it leaves out.</summary>
+    private TrackerOAuthOptions O => apps.Current;
 
-    private TrackerOAuthOptions.OAuthClientOptions? Client(string kind) => kind switch
-    {
-        TrackerKinds.GitHub => O.GitHub,
-        TrackerKinds.GitLab => O.GitLab,
-        TrackerKinds.Forgejo => O.Forgejo,
-        TrackerKinds.Linear => O.Linear,
-        TrackerKinds.Jira => O.Jira,
-        TrackerKinds.AzureDevOps => O.AzureDevOps,
-        _ => null,
-    };
+    private TrackerOAuthOptions.OAuthClientOptions? Client(string kind) => TrackerOAuthApps.Client(O, kind);
 
     public bool Available(string kind) => Client(kind) is { IsConfigured: true };
 

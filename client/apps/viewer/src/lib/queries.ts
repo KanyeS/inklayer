@@ -145,5 +145,7 @@ export const queries = {
         queryKey: ["admin", "sign-in-providers"],
         queryFn: () => api.get("/api/admin/sign-in-providers"),
       }),
+    trackerApps: () =>
+      queryOptions({ queryKey: ["admin", "tracker-apps"], queryFn: () => api.get("/api/admin/tracker-apps") }),
   },
 };

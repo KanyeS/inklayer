@@ -29,12 +29,17 @@ public sealed class AzureDevOpsCertificateTests : IDisposable
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 
-    private TrackerOAuth OAuth(string certificatePath, string password = "", string secret = "") => new(
-        Options.Create(new TrackerOAuthOptions
+    private TrackerOAuth OAuth(string certificatePath, string password = "", string secret = "")
+    {
+        var options = Options.Create(new TrackerOAuthOptions
         {
             AzureDevOps = new() { ClientId = "az-client", ClientSecret = secret, TenantId = "tenant-1", CertificatePath = certificatePath, CertificatePassword = password },
-        }),
-        new Factory(outbound), TimeProvider.System);
+        });
+        // Not started: only the configuration's apps, as here.
+        var apps = new TrackerOAuthApps(options, null!, new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider(), TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<TrackerOAuthApps>.Instance);
+        return new(options, apps, new Factory(outbound), TimeProvider.System);
+    }
 
     private void AnswerTokens() => outbound.Responders[TokenUrl] = (_, _) => new HttpResponseMessage(HttpStatusCode.OK)
     {

@@ -116,7 +116,7 @@ Which connections use people's own accounts:
 
 #### Registering the OAuth apps
 
-For each tracker you want, register an app, then give its client ID and secret to the server. With the Docker Compose files in `deploy/`, set the variables shown in `.env` and run `docker compose up -d`. The **callback URL** (also called redirect URI) is always:
+For each tracker you want, register an app, then give its client ID and secret to the server. The simplest way: an instance administrator opens the **Admin** page, chooses **Set up** next to the tracker under **Tracker apps**, and pastes them in. It works as soon as it's saved, with no restart; the secret is stored encrypted. Or, with the Docker Compose files in `deploy/`, set the variables shown in `.env` and run `docker compose up -d`; a tracker set up there can't be changed on the Admin page. Changing an app's client ID or instance on the Admin page, or removing it, disconnects the accounts connected through it. The **callback URL** (also called redirect URI), which the Admin page shows ready to copy, is always:
 
 ```
 https://<your Inklayer address>/api/me/tracker-accounts/<tracker>/callback
