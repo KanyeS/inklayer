@@ -130,10 +130,10 @@ internal static class DocOrgShareEndpoints
                 join d in db.Docs on s.DocId equals d.Id
                 where d.DeletedAt == null
                 join o in db.Organizations on d.OrganizationId equals o.Id
-                select new { d.Id, d.Title, d.UpdatedAt, d.Icon, d.Color, FromId = o.Id, FromName = o.Name, s.CanEdit })
+                select new { d.Id, d.Title, d.UpdatedAt, d.Icon, d.Color, d.Kind, FromId = o.Id, FromName = o.Name, s.CanEdit })
             .ToListAsync(ct);
         return [.. rows.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
             .Select(r => new SharedDocResponse(r.Id, r.Title, r.UpdatedAt, new DocOrganizationResponse(r.FromId, r.FromName),
-                DocAccess.SharedRole(r.CanEdit, role).Grants(Permission.Comment), r.Icon, r.Color))];
+                DocAccess.SharedRole(r.CanEdit, role).Grants(Permission.Comment), r.Icon, r.Color, r.Kind))];
     }
 }

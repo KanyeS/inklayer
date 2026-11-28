@@ -4222,6 +4222,151 @@
           }
         }
       }
+    },
+    "/api/boards/{boardId}/cards": {
+      "post": {
+        "tags": [
+          "Boards"
+        ],
+        "summary": "The docs on a board\u0027s cards that the caller can open, with the start of each one\u0027s text",
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardCardsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BoardDocCardResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/boards/{boardId}/media": {
+      "post": {
+        "tags": [
+          "Boards"
+        ],
+        "summary": "Add a picture to the board (Commenter and above): PNG, JPEG, WebP or GIF, at most 10 MB, sent as the body",
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardMediaResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/boards/{boardId}/media/{mediaId}": {
+      "get": {
+        "tags": [
+          "Boards"
+        ],
+        "summary": "A picture on the board",
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/boards/{boardId}/link-preview": {
+      "get": {
+        "tags": [
+          "Boards"
+        ],
+        "summary": "A web page\u0027s title, description and picture, for a link card: ?url=",
+        "parameters": [
+          {
+            "name": "boardId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "url",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkPreviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5438,6 +5583,88 @@
           }
         }
       },
+      "BoardCardsRequest": {
+        "required": [
+          "docIds"
+        ],
+        "type": "object",
+        "properties": {
+          "docIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "BoardDocCardResponse": {
+        "required": [
+          "id",
+          "organizationId",
+          "folder",
+          "title",
+          "kind",
+          "icon",
+          "color",
+          "updatedAt",
+          "excerpt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "doc",
+              "board"
+            ],
+            "type": "string"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "excerpt": {
+            "type": "string"
+          }
+        }
+      },
+      "BoardMediaResponse": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
+      },
       "ConnectedAppResponse": {
         "required": [
           "clientId",
@@ -5521,6 +5748,12 @@
           },
           "title": {
             "type": "string"
+          },
+          "kind": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -6058,6 +6291,10 @@
               "null",
               "string"
             ]
+          },
+          "board": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -6292,6 +6529,14 @@
             "items": {
               "$ref": "#/components/schemas/DocOrgShareResponse"
             }
+          },
+          "kind": {
+            "enum": [
+              "doc",
+              "board"
+            ],
+            "type": "string",
+            "default": "doc"
           }
         }
       },
@@ -6440,6 +6685,14 @@
               "null",
               "string"
             ]
+          },
+          "kind": {
+            "enum": [
+              "doc",
+              "board"
+            ],
+            "type": "string",
+            "default": "doc"
           }
         }
       },
@@ -6598,6 +6851,10 @@
           },
           "sharing": {
             "type": "boolean"
+          },
+          "boards": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -6997,6 +7254,38 @@
           "pullRequest": {
             "type": "boolean",
             "default": false
+          }
+        }
+      },
+      "LinkPreviewResponse": {
+        "required": [
+          "url",
+          "title",
+          "description",
+          "image"
+        ],
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "image": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8167,6 +8456,14 @@
               "null",
               "string"
             ]
+          },
+          "kind": {
+            "enum": [
+              "doc",
+              "board"
+            ],
+            "type": "string",
+            "default": "doc"
           }
         }
       },
@@ -8805,6 +9102,12 @@
               "null",
               "boolean"
             ]
+          },
+          "boards": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -9064,6 +9367,9 @@
     },
     {
       "name": "Docs"
+    },
+    {
+      "name": "Boards"
     }
   ]
 }

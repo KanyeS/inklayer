@@ -18,16 +18,22 @@ public sealed record TextEdit(int Index, int Delete, string Insert);
 internal sealed class DocText(
     InklayerDbContext db, DocIndexer indexer, DocEditBuffer edits, IHubContext<DocsHub> hub, TimeProvider clock, Notifications.NotificationService notifications)
 {
-    /// <summary>The doc's current text, including live edits not yet in a snapshot. Null if the doc doesn't exist.</summary>
+    /// <summary>The doc's current text, including live edits not yet in a snapshot. Null if the doc doesn't exist. For a board:
+    /// its markdown summary (the docs on it as links, and its notes), as of its last snapshot.</summary>
     public async Task<string?> ReadAsync(Guid docId, CancellationToken ct)
     {
         await edits.FlushAsync(ct);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var doc = await db.Docs.AsNoTracking().Where(d => d.Id == docId && d.DeletedAt == null)
-            .Select(d => new { d.State, d.SnapshotSeq }).SingleOrDefaultAsync(ct);
+            .Select(d => new { d.State, d.SnapshotSeq, d.Kind, d.Content }).SingleOrDefaultAsync(ct);
         if (doc is null)
         {
             return null;
+        }
+
+        if (doc.Kind == DocKinds.Board)
+        {
+            return doc.Content;
         }
 
         var updates = await db.DocUpdates.AsNoTracking().Where(u => u.DocId == docId && u.Seq > doc.SnapshotSeq).OrderBy(u => u.Seq).Select(u => u.Bytes).ToListAsync(ct);
@@ -40,6 +46,7 @@ internal sealed class DocText(
     /// Applies the edits <paramref name="plan"/> returns for the current text, as <paramref name="userId"/>. The result is saved
     /// as a snapshot straight away (so search, links and history see it) and sent to open editors. Returns the new text, or
     /// null if the doc doesn't exist. <paramref name="plan"/> may throw to refuse (e.g. text to replace wasn't found).
+    /// A board has no text to edit: it's left alone and its summary returned (its editors rewrite the summary from its cards).
     /// </summary>
     public async Task<string?> EditAsync(Guid docId, Guid userId, Func<string, IReadOnlyList<TextEdit>> plan, CancellationToken ct)
     {
@@ -52,10 +59,15 @@ internal sealed class DocText(
         await using (var tx = await db.Database.BeginTransactionAsync(ct))
         {
             var stored = await db.Docs.AsNoTracking().Where(d => d.Id == docId && d.DeletedAt == null)
-                .Select(d => new { d.State, d.SnapshotSeq, d.LastSeq }).SingleOrDefaultAsync(ct);
+                .Select(d => new { d.State, d.SnapshotSeq, d.LastSeq, d.Kind, d.Content }).SingleOrDefaultAsync(ct);
             if (stored is null)
             {
                 return null;
+            }
+
+            if (stored.Kind == DocKinds.Board)
+            {
+                return stored.Content;
             }
 
             (includedSeq, storedState) = (stored.LastSeq, stored.State);

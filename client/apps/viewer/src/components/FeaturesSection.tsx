@@ -17,6 +17,7 @@ const ENV_NAMES: Record<FeatureSetting["feature"], string> = {
   bugContext: "INKLAYER_FEATURE_BUG_CONTEXT",
   issueTrackers: "INKLAYER_FEATURE_ISSUE_TRACKERS",
   sharing: "INKLAYER_FEATURE_SHARING",
+  boards: "INKLAYER_FEATURE_BOARDS",
 };
 
 /** Instance admins turn major features on or off for everyone. Changes apply straight away. */

@@ -9,7 +9,7 @@ namespace Inklayer.Api.Hosting;
 public sealed record FeatureSettingResponse(string Feature, string Name, string Description, bool Enabled, FeatureSource Source, bool Configured);
 
 /// <summary>Only the features given change.</summary>
-public sealed record UpdateFeaturesRequest(bool? Docs, bool? LiveCursors, bool? Mcp, bool? BugContext = null, bool? IssueTrackers = null, bool? Sharing = null);
+public sealed record UpdateFeaturesRequest(bool? Docs, bool? LiveCursors, bool? Mcp, bool? BugContext = null, bool? IssueTrackers = null, bool? Sharing = null, bool? Boards = null);
 
 /// <summary>Which major features are on: everyone signed in can see; instance administrators change them (Admin panel).</summary>
 internal static class FeatureEndpoints
@@ -62,6 +62,11 @@ internal static class FeatureEndpoints
                 choices[Feature.Sharing] = sharing;
             }
 
+            if (request.Boards is { } boards)
+            {
+                choices[Feature.Boards] = boards;
+            }
+
             audit.Record(AuditActions.FeaturesChanged, null, "instance", (string?)null, choices.ToDictionary(c => c.Key.ToString(), c => c.Value));
             await switches.SaveAsync(choices, db, currentUser.Id, clock.GetUtcNow().UtcDateTime, ct);
             return TypedResults.Ok(Settings(await switches.StatesAsync(ct), options.Value));
@@ -84,6 +89,7 @@ internal static class FeatureEndpoints
         Feature.BugContext => "Capture a screenshot and page details (browser, window size, the element, console errors, failed requests) with each comment. People can still opt out per comment.",
         Feature.IssueTrackers => "Create GitHub, Jira or Linear issues from comments, and keep their status in step.",
         Feature.Sharing => "Read-only share links for a page's or project's comments, and public docs. Share links work from outside the network allow list; nothing else does.",
+        Feature.Boards => "Boards: a big canvas of doc cards, sticky notes, images and links, with arrows wherever docs link each other. Docs open and edit right on the board. Needs docs.",
         _ => "",
     };
 }

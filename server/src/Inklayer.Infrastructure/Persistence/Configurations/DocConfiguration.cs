@@ -18,6 +18,7 @@ internal sealed class DocConfiguration : IEntityTypeConfiguration<Doc>
         builder.Property(d => d.Content).HasMaxLength(Doc.MaxContentLength);
         builder.Property(d => d.Icon).HasMaxLength(Doc.MaxIconLength);
         builder.Property(d => d.Color).HasMaxLength(7);
+        builder.Property(d => d.Kind).HasMaxLength(16);
         builder.Property(d => d.Version).IsConcurrencyToken();
 
         // One doc per path among those that aren't deleted; deleted docs keep their history.

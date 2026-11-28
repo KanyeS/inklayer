@@ -2,7 +2,8 @@ import { Button } from "@inklayer/ui/components/button";
 import { cn } from "@inklayer/ui/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { useMe } from "@/App";
 import { ErrorText, Loading } from "@/components/Layout";
 import { queries } from "@/lib/queries";
 import { Link } from "@/lib/router";
@@ -12,6 +13,17 @@ import { DocIcon } from "./docIcons";
 import { type DocTree, docPath } from "./docsApi";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { Sidebar } from "./sidebar/Sidebar";
+
+// The board canvas (and its drawing library) loads only when a board is opened.
+const BoardView = lazy(() => import("../boards/BoardView").then((m) => ({ default: m.BoardView })));
+
+/** Whether a doc in the tree (or shared with the organisation) is a board. */
+function isBoard(tree: DocTree, docId: string): boolean {
+  return (
+    tree.docs.find((d) => d.id === docId)?.kind === "board" ||
+    tree.shared?.find((d) => d.id === docId)?.kind === "board"
+  );
+}
 
 /** Others add and rename docs too: refresh the tree this often. */
 const TREE_REFRESH_MS = 30_000;
@@ -26,6 +38,7 @@ export function DocsPage({ orgId, docId, deleted }: { orgId: string; docId?: str
   const tree = useQuery({ ...queries.docTree(orgId), refetchInterval: TREE_REFRESH_MS });
   const [tag, setTag] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const { me } = useMe();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -65,6 +78,20 @@ export function DocsPage({ orgId, docId, deleted }: { orgId: string; docId?: str
       />
       {deleted ? (
         <DeletedDocs orgId={orgId} canEdit={tree.data.canEdit} />
+      ) : docId && isBoard(tree.data, docId) ? (
+        me.features.boards ? (
+          <Suspense
+            fallback={
+              <div className="p-6 xl:col-span-2">
+                <Loading />
+              </div>
+            }
+          >
+            <BoardView key={docId} orgId={orgId} docId={docId} tree={tree.data} />
+          </Suspense>
+        ) : (
+          <p className="p-6 text-muted-foreground xl:col-span-2">Boards are turned off on this server.</p>
+        )
       ) : docId ? (
         <DocView key={docId} orgId={orgId} docId={docId} tree={tree.data} onTag={setTag} />
       ) : (
@@ -100,6 +127,7 @@ function Welcome({ orgId, tree, onSearch }: { orgId: string; tree: DocTree; onSe
                 >
                   <DocIcon
                     icon={d.icon}
+                    kind={d.kind}
                     color={d.color}
                     className={cn("size-4", !d.color && "text-muted-foreground")}
                   />

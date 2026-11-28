@@ -1,0 +1,152 @@
+/* Boards (boards/): the canvas, its cards, arrows and toolbar. In the components layer, like docs/layout.css, so a
+   utility class on the same element still wins. xyflow's own styles come from @xyflow/react/dist/style.css. */
+
+@layer components {
+  /* The board fills the docs page beside the sidebar (both of its right-hand columns). BoardView.tsx */
+  .board-page {
+    @apply flex min-w-0 flex-col xl:col-span-2 md:h-[calc(100svh-3.5rem)];
+    --board-arrow: var(--color-foreground);
+    --board-link: color-mix(in oklab, var(--color-primary) 70%, transparent);
+  }
+
+  .board-header {
+    @apply flex flex-wrap items-center gap-2 border-b px-4 py-2;
+  }
+
+  .board-canvas {
+    @apply relative min-h-[60svh] flex-1;
+  }
+
+  .board-canvas .react-flow {
+    --xy-background-color: var(--color-background);
+    --xy-node-border-radius: 0.75rem;
+  }
+
+  /* Every card. cards.tsx */
+  .board-card {
+    @apply relative flex h-full min-h-10 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-shadow;
+  }
+
+  .board-card-selected {
+    @apply ring-2 ring-primary;
+  }
+
+  .board-card-header {
+    @apply flex items-center gap-1.5 border-b px-3 py-2 text-sm;
+  }
+
+  .board-drag {
+    @apply cursor-grab active:cursor-grabbing;
+  }
+
+  .board-doc-preview {
+    @apply max-h-72 overflow-hidden px-3 pt-2 pb-3 text-sm [mask-image:linear-gradient(to_bottom,black_80%,transparent)];
+  }
+
+  .board-doc-preview h1,
+  .board-doc-preview h2,
+  .board-doc-preview h3 {
+    @apply text-base;
+  }
+
+  .board-doc-editor {
+    @apply min-h-0 flex-1 cursor-text overflow-y-auto px-3 py-2;
+  }
+
+  .board-note {
+    @apply border-black/10 text-zinc-900 dark:text-zinc-900;
+  }
+
+  .board-note-text {
+    @apply min-h-20 w-full flex-1 resize-none bg-transparent p-3 text-sm whitespace-pre-wrap outline-none;
+  }
+
+  .board-note-tools {
+    @apply absolute top-1 right-1 z-10 flex items-center gap-1 rounded-lg bg-white/80 p-0.5;
+  }
+
+  .board-image {
+    @apply bg-transparent p-0 shadow-none;
+  }
+
+  .board-link-image {
+    @apply h-28 w-full object-cover;
+  }
+
+  .board-column {
+    @apply bg-muted/60 shadow-none;
+  }
+
+  .board-column-title {
+    @apply w-full bg-transparent px-3 pt-2.5 pb-1 font-heading font-semibold outline-none;
+  }
+
+  /* A page comment linked from a doc on the board. */
+  .board-comment {
+    @apply flex w-56 items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs shadow-sm;
+  }
+
+  /* Handles show when the card is hovered, for drawing arrows. */
+  .board-handle.react-flow__handle {
+    @apply size-2.5 border-2 border-background bg-primary opacity-0 transition-opacity;
+  }
+
+  .react-flow__node:hover .board-handle.react-flow__handle,
+  .react-flow__node.selected .board-handle.react-flow__handle {
+    @apply opacity-100;
+  }
+
+  .board-resize-handle.react-flow__resize-control.handle {
+    @apply size-2 rounded-sm border-primary bg-background;
+  }
+
+  .board-resize-line.react-flow__resize-control.line {
+    @apply border-primary/40;
+  }
+
+  .board-edge-label {
+    @apply pointer-events-auto absolute rounded-md border bg-background px-2 py-0.5 text-xs shadow-sm;
+  }
+
+  /* Someone else's pointer, with their name. BoardCanvas.tsx */
+  .board-pointer {
+    @apply pointer-events-none absolute top-0 left-0 z-50 flex items-start gap-0.5 transition-transform duration-100 ease-linear;
+  }
+
+  .board-pointer span {
+    @apply mt-3 rounded-md px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-white;
+  }
+
+  /* The toolbar floating over the board. BoardToolbar.tsx */
+  .board-toolbar-wrap {
+    @apply flex flex-col items-start gap-2;
+  }
+
+  .board-toolbar {
+    @apply flex items-center gap-0.5 rounded-xl border bg-background/95 p-1 shadow-sm backdrop-blur;
+  }
+
+  .board-tool {
+    @apply grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4;
+  }
+
+  .board-tool-active {
+    @apply bg-primary/12 text-foreground;
+  }
+
+  .board-toolbar-gap {
+    @apply mx-1 h-5 w-px bg-border;
+  }
+
+  .board-popup {
+    @apply w-80 rounded-xl border bg-background p-2 shadow-lg;
+  }
+
+  .board-toolbar-error {
+    @apply rounded-lg border border-destructive/40 bg-background px-3 py-1.5 text-sm text-destructive;
+  }
+
+  .board-minimap.react-flow__minimap {
+    @apply hidden rounded-lg border md:block;
+  }
+}

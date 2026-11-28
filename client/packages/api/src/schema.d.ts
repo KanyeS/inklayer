@@ -4260,6 +4260,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/boards/{boardId}/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The docs on a board's cards that the caller can open, with the start of each one's text */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    boardId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BoardCardsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BoardDocCardResponse"][];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/boards/{boardId}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a picture to the board (Commenter and above): PNG, JPEG, WebP or GIF, at most 10 MB, sent as the body */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    boardId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BoardMediaResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/boards/{boardId}/media/{mediaId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A picture on the board */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    boardId: string;
+                    mediaId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/boards/{boardId}/link-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A web page's title, description and picture, for a link card: ?url= */
+        get: {
+            parameters: {
+                query?: {
+                    url?: string;
+                };
+                header?: never;
+                path: {
+                    boardId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LinkPreviewResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4551,6 +4708,27 @@ export interface components {
             fullName?: null | string;
             role?: null | components["schemas"]["Role"];
         };
+        BoardCardsRequest: {
+            docIds: string[];
+        };
+        BoardDocCardResponse: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            folder: string;
+            title: string;
+            /** @enum {string} */
+            kind: "doc" | "board";
+            icon: null | string;
+            color: null | string;
+            /** Format: date-time */
+            updatedAt: string;
+            excerpt: string;
+        };
+        BoardMediaResponse: {
+            id: string;
+        };
         ConnectedAppResponse: {
             clientId: string;
             name: string;
@@ -4570,6 +4748,7 @@ export interface components {
         CreateDocRequest: {
             folder?: null | string;
             title: string;
+            kind?: null | string;
         };
         CreateIntegrationRequest: {
             kind: string;
@@ -4696,6 +4875,8 @@ export interface components {
             folder: null | string;
             icon?: null | string;
             color?: null | string;
+            /** @default false */
+            board?: boolean;
         };
         DocGraphResponse: {
             nodes: components["schemas"]["DocGraphNode"][];
@@ -4749,6 +4930,11 @@ export interface components {
             canManage?: boolean;
             sharedFrom?: null | components["schemas"]["DocOrganizationResponse"];
             sharedWith?: null | components["schemas"]["DocOrgShareResponse"][];
+            /**
+             * @default doc
+             * @enum {string}
+             */
+            kind?: "doc" | "board";
         };
         DocRevisionContentResponse: {
             /** Format: uuid */
@@ -4792,6 +4978,11 @@ export interface components {
             tags: string[];
             icon?: null | string;
             color?: null | string;
+            /**
+             * @default doc
+             * @enum {string}
+             */
+            kind?: "doc" | "board";
         };
         DocTagCountResponse: {
             tag: string;
@@ -4828,6 +5019,8 @@ export interface components {
             bugContext: boolean;
             issueTrackers: boolean;
             sharing: boolean;
+            /** @default false */
+            boards?: boolean;
         };
         FolderRequest: {
             path: string;
@@ -4933,6 +5126,12 @@ export interface components {
             addComment?: boolean;
             /** @default false */
             pullRequest?: boolean;
+        };
+        LinkPreviewResponse: {
+            url: string;
+            title: null | string;
+            description: null | string;
+            image: null | string;
         };
         LivePageAnnotationsResponse: {
             /** Format: uuid */
@@ -5236,6 +5435,11 @@ export interface components {
             canEdit: boolean;
             icon?: null | string;
             color?: null | string;
+            /**
+             * @default doc
+             * @enum {string}
+             */
+            kind?: "doc" | "board";
         };
         SignInProvider: {
             id: string;
@@ -5383,6 +5587,7 @@ export interface components {
             bugContext?: null | boolean;
             issueTrackers?: null | boolean;
             sharing?: null | boolean;
+            boards?: null | boolean;
         };
         UpdateIntegrationRequest: {
             name?: null | string;
@@ -5460,6 +5665,9 @@ export type AnnotationStatus = components['schemas']['AnnotationStatus'];
 export type ApproveAccessRequest = components['schemas']['ApproveAccessRequest'];
 export type AuditEventResponse = components['schemas']['AuditEventResponse'];
 export type AuthorSummary = components['schemas']['AuthorSummary'];
+export type BoardCardsRequest = components['schemas']['BoardCardsRequest'];
+export type BoardDocCardResponse = components['schemas']['BoardDocCardResponse'];
+export type BoardMediaResponse = components['schemas']['BoardMediaResponse'];
 export type ConnectedAppResponse = components['schemas']['ConnectedAppResponse'];
 export type ConsoleEntry = components['schemas']['ConsoleEntry'];
 export type CreateAccessRequest = components['schemas']['CreateAccessRequest'];
@@ -5510,6 +5718,7 @@ export type IssueTypesRequest = components['schemas']['IssueTypesRequest'];
 export type IssueTypesResponse = components['schemas']['IssueTypesResponse'];
 export type JsonElement = components['schemas']['JsonElement'];
 export type LinkIssueRequest = components['schemas']['LinkIssueRequest'];
+export type LinkPreviewResponse = components['schemas']['LinkPreviewResponse'];
 export type LivePageAnnotationsResponse = components['schemas']['LivePageAnnotationsResponse'];
 export type LivePageSummaryResponse = components['schemas']['LivePageSummaryResponse'];
 export type LiveProjectResponse = components['schemas']['LiveProjectResponse'];

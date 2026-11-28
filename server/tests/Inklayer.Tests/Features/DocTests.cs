@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Inklayer.Tests.Features;
 
-public sealed record DocSummaryDto(Guid Id, string Folder, string Title, List<string> Tags, string? Icon = null, string? Color = null);
+public sealed record DocSummaryDto(Guid Id, string Folder, string Title, List<string> Tags, string? Icon = null, string? Color = null, string Kind = "doc");
 
 public sealed record DocTreeDto(List<string> Folders, List<DocSummaryDto> Docs, bool CanEdit, List<DocTagDto>? Tags = null);
 
@@ -18,7 +18,7 @@ public sealed record DocCommentLinkDto(Guid AnnotationId, string Body);
 
 public sealed record DocDto(
     Guid Id, string Folder, string Title, int Version, bool CanEdit, List<string> Tags, List<DocSummaryDto> Backlinks,
-    List<DocCommentLinkDto> CommentBacklinks, List<DocLinkDto> Links, List<Guid> CommentLinks, string? Icon = null, string? Color = null);
+    List<DocCommentLinkDto> CommentBacklinks, List<DocLinkDto> Links, List<Guid> CommentLinks, string? Icon = null, string? Color = null, string Kind = "doc");
 
 public sealed record DocChangedDto(DocDto Doc, List<Guid> RelinkDocs);
 
@@ -28,7 +28,7 @@ public sealed record DocTagDto(string Tag, int Count, string? Icon = null, strin
 
 public sealed record DocGraphDto(List<DocGraphNodeDto> Nodes, List<DocGraphEdgeDto> Edges);
 
-public sealed record DocGraphNodeDto(string Id, string Kind, string Label, string? Icon = null, string? Color = null);
+public sealed record DocGraphNodeDto(string Id, string Kind, string Label, string? Icon = null, string? Color = null, bool Board = false);
 
 public sealed record DocGraphEdgeDto(string Source, string Target);
 

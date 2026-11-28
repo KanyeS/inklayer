@@ -76,7 +76,7 @@ export function buildGraph(
       label: n.label,
       degree: 0,
       href: n.kind === "doc" ? docPath(orgId, n.docId ?? "") : `/comments/${n.annotationId}`,
-      icon: n.icon ?? DEFAULT_ICONS[n.kind],
+      icon: n.icon ?? (n.board ? DEFAULT_ICONS.board : DEFAULT_ICONS[n.kind]),
       color: n.color ?? null,
     }));
   const ids = new Set(nodes.map((n) => n.id));

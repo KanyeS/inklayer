@@ -13,7 +13,7 @@ export interface FolderNode {
 }
 
 /** What's being typed in the sidebar: a new doc or folder (in `parent`), or a folder's new name. */
-export type Draft = { kind: "doc" | "folder"; parent: string } | { kind: "rename"; path: string } | null;
+export type Draft = { kind: "doc" | "board" | "folder"; parent: string } | { kind: "rename"; path: string } | null;
 
 /** Drag-and-drop data types for moving docs and folders. */
 export const DRAG_DOC = "application/x-inklayer-doc";

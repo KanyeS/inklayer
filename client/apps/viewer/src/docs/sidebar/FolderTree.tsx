@@ -1,8 +1,18 @@
 import { Button } from "@inklayer/ui/components/button";
 import { Input } from "@inklayer/ui/components/input";
 import { cn } from "@inklayer/ui/lib/utils";
-import { ChevronDown, ChevronRight, FilePlus2, Folder, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FilePlus2,
+  Folder,
+  FolderPlus,
+  LayoutDashboard,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useRef, useState } from "react";
+import { useMe } from "@/App";
 import { Link } from "@/lib/router";
 import { DocIcon } from "../docIcons";
 import { type DocSummary, docPath } from "../docsApi";
@@ -81,7 +91,8 @@ function FolderRow({
   onDrop,
   onDeleteFolder,
 }: FolderTreeProps & { folder: FolderNode; isOpen: boolean }) {
-  const createHere = (kind: "doc" | "folder") => {
+  const { me } = useMe();
+  const createHere = (kind: "doc" | "board" | "folder") => {
     setDraft({ kind, parent: folder.path });
     if (!isOpen) toggle(folder.path);
   };
@@ -112,6 +123,11 @@ function FolderRow({
           <IconButton small title="New doc here" onClick={() => createHere("doc")}>
             <FilePlus2 />
           </IconButton>
+          {me.features.boards && (
+            <IconButton small title="New board here" onClick={() => createHere("board")}>
+              <LayoutDashboard />
+            </IconButton>
+          )}
           <IconButton small title="New folder here" onClick={() => createHere("folder")}>
             <FolderPlus />
           </IconButton>
@@ -159,6 +175,7 @@ export function DocRow({
     >
       <DocIcon
         icon={doc.icon}
+        kind={doc.kind}
         color={doc.color}
         className={cn("size-3.5 shrink-0", !doc.color && "text-muted-foreground")}
       />
@@ -178,7 +195,7 @@ export function DraftInput({
   onSubmit,
   onCancel,
 }: {
-  kind: "doc" | "folder";
+  kind: "doc" | "board" | "folder";
   depth: number;
   initial?: string;
   onSubmit: (value: string) => void;
@@ -201,8 +218,8 @@ export function DraftInput({
       <Input
         autoFocus
         className="h-7 text-sm"
-        placeholder={kind === "doc" ? "Doc title" : "Folder name"}
-        aria-label={kind === "doc" ? "New doc title" : "Folder name"}
+        placeholder={kind === "doc" ? "Doc title" : kind === "board" ? "Board title" : "Folder name"}
+        aria-label={kind === "doc" ? "New doc title" : kind === "board" ? "New board title" : "Folder name"}
         value={value}
         maxLength={200}
         onChange={(e) => setValue(e.target.value)}

@@ -1,6 +1,7 @@
 import { cn } from "@inklayer/ui/lib/utils";
-import { Building2, FilePlus2, FolderPlus, Network, Search, Trash2 } from "lucide-react";
+import { Building2, FilePlus2, FolderPlus, LayoutDashboard, Network, Search, Trash2 } from "lucide-react";
 import { type DragEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useMe } from "@/App";
 import { ErrorText } from "@/components/Layout";
 import { useAction } from "@/lib/query";
 import { Link, navigate } from "@/lib/router";
@@ -98,8 +99,9 @@ export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch, 
       await rewriteLinks(result.relinkDocs, [{ from: info, to: { folder, title: info.title } }]);
     });
 
-  const createDoc = async (parent: string, title: string) => {
-    const doc = await docsApi.create(orgId, title, parent);
+  const { me } = useMe();
+  const createDoc = async (parent: string, title: string, kind: "doc" | "board" = "doc") => {
+    const doc = await docsApi.create(orgId, title, parent, kind);
     navigate(docPath(orgId, doc.id));
   };
 
@@ -115,8 +117,9 @@ export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch, 
     setDraft(null);
     if (!name || !current) return run(async () => undefined);
     if (current.kind === "rename") return run(() => moveFolder(current.path, joinPath(parentOf(current.path), name)));
-    if (current.kind === "doc") return run(() => createDoc(current.parent, name));
-    return run(() => createFolder(current.parent, name));
+    const { kind, parent } = current;
+    if (kind !== "folder") return run(() => createDoc(parent, name, kind));
+    return run(() => createFolder(parent, name));
   };
 
   /** A doc or folder dropped on `folder` ("" for the top level). */
@@ -152,6 +155,11 @@ export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch, 
               <IconButton title="New doc" onClick={() => setDraft({ kind: "doc", parent: "" })}>
                 <FilePlus2 />
               </IconButton>
+              {me.features.boards && (
+                <IconButton title="New board" onClick={() => setDraft({ kind: "board", parent: "" })}>
+                  <LayoutDashboard />
+                </IconButton>
+              )}
               <IconButton title="New folder" onClick={() => setDraft({ kind: "folder", parent: "" })}>
                 <FolderPlus />
               </IconButton>
@@ -262,6 +270,7 @@ function SharedDocs({ orgId, docs, activeId }: { orgId: string; docs: SharedDoc[
         >
           <DocIcon
             icon={d.icon}
+            kind={d.kind}
             color={d.color}
             className={cn("size-3.5 shrink-0", !d.color && "text-muted-foreground")}
           />

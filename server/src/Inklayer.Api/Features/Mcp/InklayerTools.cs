@@ -255,10 +255,11 @@ internal static class InklayerTools
     [McpServerTool(Name = "create_doc", OpenWorld = false), Description("Create a doc in an organisation, optionally with markdown. Titles are unique per folder and can't contain [ ] | # / \\ or ^.")]
     public static async Task<string> CreateDoc(
         [Description("Organisation id")] Guid orgId, [Description("Title")] string title,
-        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, DocText text, TimeProvider clock, CancellationToken ct,
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, DocText text, TimeProvider clock, FeatureSwitches features,
+        CancellationToken ct,
         [Description("Folder path, e.g. Research/Interviews; empty for the top level")] string? folder = null, [Description("Markdown to start with")] string? content = null)
     {
-        var created = ToolResults.Value<DocSummaryResponse>(await DocEndpoints.CreateAsync(orgId, new CreateDocRequest(folder, title), access, currentUser, db, indexer, clock, ct));
+        var created = ToolResults.Value<DocSummaryResponse>(await DocEndpoints.CreateAsync(orgId, new CreateDocRequest(folder, title), access, currentUser, db, indexer, clock, features, ct));
         if (!string.IsNullOrEmpty(content))
         {
             await text.EditAsync(created.Id, currentUser.Id!.Value, before => [new TextEdit(0, before.Length, content)], ct);
@@ -276,6 +277,11 @@ internal static class InklayerTools
         [Description("For replace_text: the exact text to replace")] string? find = null)
     {
         await RequireEditAsync(docId, access, db, ct);
+        if (await db.Docs.AnyAsync(d => d.Id == docId && d.Kind == DocKinds.Board, ct))
+        {
+            throw new McpException("That's a board: its cards are arranged in the browser, not edited as text. Edit the docs on it instead.");
+        }
+
         var result = await docText.EditAsync(docId, currentUser.Id!.Value, before => mode switch
         {
             "replace_all" => [Minimal(before, text)],

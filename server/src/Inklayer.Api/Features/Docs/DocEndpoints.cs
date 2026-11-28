@@ -15,7 +15,10 @@ public sealed record DocActor(Guid Id, string DisplayName, string? FullName = nu
 
 /// <param name="Icon">A Lucide icon name chosen for the doc, or null for the default.</param>
 /// <param name="Color">The icon's colour, <c>#rrggbb</c>, or null for the theme's.</param>
-public sealed record DocSummaryResponse(Guid Id, string Folder, string Title, DateTime UpdatedAt, IReadOnlyList<string> Tags, string? Icon = null, string? Color = null);
+/// <param name="Kind">A markdown doc or a board of cards.</param>
+public sealed record DocSummaryResponse(
+    Guid Id, string Folder, string Title, DateTime UpdatedAt, IReadOnlyList<string> Tags, string? Icon = null, string? Color = null,
+    [property: AllowedValues("doc", "board")] string Kind = DocKinds.Doc);
 
 /// <param name="Folders">Every folder, including ones that only exist because a doc is in them, sorted.</param>
 /// <param name="Tags">Every #tag in use, with how many docs have it and its icon and colour.</param>
@@ -40,7 +43,8 @@ public sealed record DocResponse(
     Guid Id, Guid OrganizationId, string Folder, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DocActor? UpdatedBy,
     bool CanEdit, IReadOnlyList<string> Tags, IReadOnlyList<DocSummaryResponse> Backlinks, IReadOnlyList<DocCommentLinkResponse> CommentBacklinks,
     IReadOnlyList<DocLinkResponse> Links, IReadOnlyList<Guid> CommentLinks, IReadOnlyList<Notifications.PersonResponse>? People = null,
-    string? Icon = null, string? Color = null, bool CanManage = false, DocOrganizationResponse? SharedFrom = null, IReadOnlyList<DocOrgShareResponse>? SharedWith = null);
+    string? Icon = null, string? Color = null, bool CanManage = false, DocOrganizationResponse? SharedFrom = null, IReadOnlyList<DocOrgShareResponse>? SharedWith = null,
+    [property: AllowedValues("doc", "board")] string Kind = DocKinds.Doc);
 
 /// <param name="Id">The organisation.</param>
 public sealed record DocOrganizationResponse(Guid Id, string Name);
@@ -51,12 +55,15 @@ public sealed record DocOrgShareResponse(Guid OrganizationId, string Name, bool 
 
 /// <summary>A doc another organisation shares with this one.</summary>
 /// <param name="CanEdit">Whether the caller can edit its text.</param>
-public sealed record SharedDocResponse(Guid Id, string Title, DateTime UpdatedAt, DocOrganizationResponse From, bool CanEdit, string? Icon = null, string? Color = null);
+public sealed record SharedDocResponse(
+    Guid Id, string Title, DateTime UpdatedAt, DocOrganizationResponse From, bool CanEdit, string? Icon = null, string? Color = null,
+    [property: AllowedValues("doc", "board")] string Kind = DocKinds.Doc);
 
 /// <param name="RelinkDocs">After a rename or move: docs whose text links the old name. The client that renamed rewrites those links.</param>
 public sealed record DocChangedResponse(DocResponse Doc, IReadOnlyList<Guid> RelinkDocs);
 
-public sealed record CreateDocRequest(string? Folder, string Title);
+/// <param name="Kind">"doc" (the default) or "board".</param>
+public sealed record CreateDocRequest(string? Folder, string Title, string? Kind = null);
 
 public sealed record UpdateDocRequest(int Version, string? Title, string? Folder);
 
@@ -85,7 +92,10 @@ public sealed record DocSearchResultResponse(Guid Id, string Folder, string Titl
 /// <param name="Color">The tag's colour, <c>#rrggbb</c>, or null for the theme's.</param>
 public sealed record DocTagCountResponse(string Tag, int Count, string? Icon = null, string? Color = null);
 
-public sealed record DocGraphNode(string Id, [property: AllowedValues("doc", "comment")] string Kind, string Label, Guid? DocId, Guid? AnnotationId, string? Folder, string? Icon = null, string? Color = null);
+/// <param name="Board">For a doc node: whether it's a board.</param>
+public sealed record DocGraphNode(
+    string Id, [property: AllowedValues("doc", "comment")] string Kind, string Label, Guid? DocId, Guid? AnnotationId, string? Folder, string? Icon = null,
+    string? Color = null, bool Board = false);
 
 public sealed record DocGraphEdge(string Source, string Target);
 
@@ -138,20 +148,21 @@ internal static class DocEndpoints
         }
 
         var docs = await db.Docs.AsNoTracking().Where(d => d.OrganizationId == orgId && d.DeletedAt == null)
-            .Select(d => new { d.Id, d.Folder, d.Title, d.UpdatedAt, d.Icon, d.Color }).ToListAsync(ct);
+            .Select(d => new { d.Id, d.Folder, d.Title, d.UpdatedAt, d.Icon, d.Color, d.Kind }).ToListAsync(ct);
         var tags = await TagsByDocAsync(db, orgId, ct);
         var folders = await FoldersAsync(db, orgId, ct);
         return TypedResults.Ok(new DocTreeResponse(
             folders,
             [.. docs.OrderBy(d => d.Folder, StringComparer.OrdinalIgnoreCase).ThenBy(d => d.Title, StringComparer.OrdinalIgnoreCase)
-                .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, tags.GetValueOrDefault(d.Id, []), d.Icon, d.Color))],
+                .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, tags.GetValueOrDefault(d.Id, []), d.Icon, d.Color, d.Kind))],
             check.Role.Grants(Permission.Comment),
             await TagCountsAsync(db, orgId, ct),
             await DocOrgShareEndpoints.SharedWithAsync(db, orgId, check.Role, ct)));
     }
 
     internal static async Task<IResult> CreateAsync(
-        Guid orgId, CreateDocRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, CancellationToken ct)
+        Guid orgId, CreateDocRequest request, AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock,
+        FeatureSwitches features, CancellationToken ct)
     {
         var check = await access.CheckOrganizationAsync(orgId, Permission.Comment, ct);
         if (!check.IsAllowed)
@@ -164,6 +175,17 @@ internal static class DocEndpoints
             return invalid;
         }
 
+        var kind = string.IsNullOrEmpty(request.Kind) ? DocKinds.Doc : request.Kind;
+        if (!DocKinds.IsValid(kind))
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["kind"] = ["A doc's kind is \"doc\" or \"board\"."] });
+        }
+
+        if (kind == DocKinds.Board && !await features.IsEnabledAsync(Feature.Boards, ct))
+        {
+            return FeatureSwitchExtensions.TurnedOff(Feature.Boards);
+        }
+
         if (await db.Docs.AnyAsync(d => d.OrganizationId == orgId && d.DeletedAt == null && d.PathKey == DocPaths.Key(folder, title), ct))
         {
             return Taken(folder, title);
@@ -171,7 +193,7 @@ internal static class DocEndpoints
 
         var userId = currentUser.Id!.Value;
         var now = clock.GetUtcNow().UtcDateTime;
-        var doc = new Doc { OrganizationId = orgId, CreatedByUserId = userId, CreatedAt = now, UpdatedByUserId = userId, UpdatedAt = now };
+        var doc = new Doc { OrganizationId = orgId, Kind = kind, CreatedByUserId = userId, CreatedAt = now, UpdatedByUserId = userId, UpdatedAt = now };
         doc.Place(folder, title);
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -182,7 +204,7 @@ internal static class DocEndpoints
         await indexer.RelinkAsync(orgId, [doc.PathKey, doc.TitleKey], ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return TypedResults.Created($"/api/docs/{doc.Id}", new DocSummaryResponse(doc.Id, doc.Folder, doc.Title, doc.UpdatedAt, []));
+        return TypedResults.Created($"/api/docs/{doc.Id}", new DocSummaryResponse(doc.Id, doc.Folder, doc.Title, doc.UpdatedAt, [], Kind: doc.Kind));
     }
 
     /* ------------------------------------------------------------------ one doc */
@@ -398,7 +420,7 @@ internal static class DocEndpoints
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         var tags = await db.DocTags.AsNoTracking().Where(t => t.DocId == doc.Id).Select(t => t.Tag).OrderBy(t => t).ToListAsync(ct);
-        return TypedResults.Ok(new DocSummaryResponse(doc.Id, doc.Folder, doc.Title, doc.UpdatedAt, tags, doc.Icon, doc.Color));
+        return TypedResults.Ok(new DocSummaryResponse(doc.Id, doc.Folder, doc.Title, doc.UpdatedAt, tags, doc.Icon, doc.Color, doc.Kind));
     }
 
     internal static async Task<IResult> HistoryAsync(Guid docId, AccessService access, InklayerDbContext db, CancellationToken ct)
@@ -604,13 +626,13 @@ internal static class DocEndpoints
         var term = (q ?? "").Trim().ToLowerInvariant();
         var docs = await db.Docs.AsNoTracking()
             .Where(d => d.OrganizationId == orgId && d.DeletedAt == null && (term.Length == 0 || d.TitleKey.Contains(term)))
-            .Select(d => new { d.Id, d.Folder, d.Title, d.TitleKey, d.UpdatedAt, d.Icon, d.Color })
+            .Select(d => new { d.Id, d.Folder, d.Title, d.TitleKey, d.UpdatedAt, d.Icon, d.Color, d.Kind })
             .ToListAsync(ct);
         return TypedResults.Ok(docs
             .OrderBy(d => d.TitleKey.StartsWith(term, StringComparison.Ordinal) ? 0 : 1)
             .ThenByDescending(d => d.UpdatedAt)
             .Take(10)
-            .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, [], d.Icon, d.Color))
+            .Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, [], d.Icon, d.Color, d.Kind))
             .ToList());
     }
 
@@ -692,7 +714,7 @@ internal static class DocEndpoints
         }
 
         var docs = await db.Docs.AsNoTracking().Where(d => d.OrganizationId == orgId && d.DeletedAt == null)
-            .Select(d => new { d.Id, d.Title, d.Folder, d.Icon, d.Color }).ToListAsync(ct);
+            .Select(d => new { d.Id, d.Title, d.Folder, d.Icon, d.Color, d.Kind }).ToListAsync(ct);
         var links = await db.DocLinks.AsNoTracking().Where(l => l.OrganizationId == orgId).ToListAsync(ct);
 
         // Comments only appear if the caller can see them.
@@ -703,7 +725,7 @@ internal static class DocEndpoints
             .Select(a => new { a.Id, a.Body, a.ProjectId }).ToListAsync(ct);
         comments = [.. comments.Where(c => visibleProjects.Contains(c.ProjectId))];
 
-        var nodes = docs.Select(d => new DocGraphNode($"d:{d.Id}", "doc", d.Title, d.Id, null, d.Folder, d.Icon, d.Color))
+        var nodes = docs.Select(d => new DocGraphNode($"d:{d.Id}", "doc", d.Title, d.Id, null, d.Folder, d.Icon, d.Color, d.Kind == DocKinds.Board))
             .Concat(comments.Select(c => new DocGraphNode($"c:{c.Id}", "comment", Preview(c.Body, 60), null, c.Id, null)))
             .ToList();
         var ids = nodes.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
@@ -781,7 +803,7 @@ internal static class DocEndpoints
             sourceDocIds = [.. sourceDocIds.Where(visible.Contains)];
         }
         var backlinks = await db.Docs.AsNoTracking().Where(d => sourceDocIds.Contains(d.Id) && d.DeletedAt == null)
-            .OrderBy(d => d.Title).Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, new List<string>(), d.Icon, d.Color)).ToListAsync(ct);
+            .OrderBy(d => d.Title).Select(d => new DocSummaryResponse(d.Id, d.Folder, d.Title, d.UpdatedAt, new List<string>(), d.Icon, d.Color, d.Kind)).ToListAsync(ct);
 
         var sourceCommentIds = incoming.Select(l => l.SourceAnnotationId).OfType<Guid>().Distinct().ToList();
         var commentBacklinks = await CommentsAsync(sourceCommentIds, currentUser, db, ct);
@@ -803,7 +825,8 @@ internal static class DocEndpoints
             await Notifications.MentionedPeople.ForAsync(db, [doc.Content], ct), doc.Icon, doc.Color,
             canManage,
             access.IsHome ? null : await db.Organizations.AsNoTracking().Where(o => o.Id == doc.OrganizationId).Select(o => new DocOrganizationResponse(o.Id, o.Name)).SingleAsync(ct),
-            access.IsHome ? await DocOrgShareEndpoints.SharesAsync(db, doc.Id, ct) : null);
+            access.IsHome ? await DocOrgShareEndpoints.SharesAsync(db, doc.Id, ct) : null,
+            doc.Kind);
     }
 
     /// <summary>The comments, among <paramref name="ids"/>, that the caller can see.</summary>

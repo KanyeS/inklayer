@@ -43,6 +43,7 @@ try
     builder.Services.AddInklayerNotifications(builder.Configuration);
     builder.Services.AddInklayerIssues();
     builder.Services.AddInklayerSharing(builder.Configuration);
+    Inklayer.Api.Features.Docs.LinkPreviewer.Configure(builder.Services);
     builder.Services.AddValidation();
     builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
@@ -79,6 +80,7 @@ try
     app.MapLiveEndpoints();
     app.MapPresenceEndpoints();
     app.MapDocEndpoints();
+    app.MapBoardEndpoints();
     app.MapInklayerMcp();
     app.MapActivityEndpoints();
     app.MapViewerFallback();

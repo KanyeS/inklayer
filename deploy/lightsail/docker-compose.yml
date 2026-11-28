@@ -102,6 +102,7 @@ services:
       Inklayer__Features__BugContext: ${INKLAYER_FEATURE_BUG_CONTEXT:-true}
       Inklayer__Features__IssueTrackers: ${INKLAYER_FEATURE_ISSUE_TRACKERS:-true}
       Inklayer__Features__Sharing: ${INKLAYER_FEATURE_SHARING:-true}
+      Inklayer__Features__Boards: ${INKLAYER_FEATURE_BOARDS:-true}
       # Links in emails and Slack posts from background work (requests use their own address).
       Inklayer__PublicUrl: https://${INKLAYER_DOMAIN}
       # Notification emails (optional; e.g. Amazon SES's SMTP interface).

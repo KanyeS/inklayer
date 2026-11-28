@@ -67,7 +67,7 @@ export function HistoryDialog({ docId, session, canEdit, open, onOpenChange }: H
           </ul>
           <div className="min-h-40 overflow-y-auto rounded-xl border bg-muted/30 p-3">
             {shown ? (
-              <RevisionPreview revision={shown} canRestore={canEdit} onRestore={restore} />
+              <RevisionPreview revision={shown} canRestore={canEdit && session.kind === "doc"} onRestore={restore} />
             ) : (
               <p className="text-sm text-muted-foreground">Pick a version to see it.</p>
             )}

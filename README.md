@@ -265,6 +265,7 @@ To start with features off, set them when the server starts. These are starting 
 | Bug context | `INKLAYER_FEATURE_BUG_CONTEXT=false` | `Inklayer:Features:BugContext=false` |
 | Issue trackers | `INKLAYER_FEATURE_ISSUE_TRACKERS=false` | `Inklayer:Features:IssueTrackers=false` |
 | Sharing | `INKLAYER_FEATURE_SHARING=false` | `Inklayer:Features:Sharing=false` |
+| Boards | `INKLAYER_FEATURE_BOARDS=false` | `Inklayer:Features:Boards=false` |
 
 For example, `dotnet Inklayer.Api.dll --Inklayer:Features:Mcp=false`, or the environment variable `Inklayer__Features__Mcp=false`.
 

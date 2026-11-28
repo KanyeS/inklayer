@@ -17,6 +17,11 @@ public sealed class Doc
 
     public required Guid OrganizationId { get; init; }
 
+    /// <summary>What it is: a markdown doc or a board (<see cref="DocKinds"/>). A board's Yjs document holds cards and arrows
+    /// instead of text, and its <see cref="Content"/> is a markdown summary its editors write (the docs on it as links, and its notes'
+    /// text), so links, backlinks and search work for boards too.</summary>
+    public string Kind { get; init; } = DocKinds.Doc;
+
     /// <summary>Folder path, e.g. <c>Research/Interviews</c>; empty for the top level.</summary>
     public string Folder { get; private set; } = "";
 
@@ -97,6 +102,14 @@ public sealed class DocUpdate
     public required Guid UserId { get; init; }
 
     public DateTime At { get; init; }
+}
+
+public static class DocKinds
+{
+    public const string Doc = "doc";
+    public const string Board = "board";
+
+    public static bool IsValid(string? kind) => kind is Doc or Board;
 }
 
 public static class DocActions

@@ -36,7 +36,11 @@ interface OpenResult {
   canEdit: boolean;
   me: Peer;
   peers: Peer[];
+  kind?: DocKind;
 }
+
+/** A markdown doc, or a board of cards (whose Yjs document holds maps, not text). */
+export type DocKind = "doc" | "board";
 
 export type SessionStatus = "connecting" | "live" | "offline" | "closed";
 
@@ -134,8 +138,16 @@ export const docsHub = new DocsHubConnection();
 export class DocSession {
   readonly docId: string;
   readonly doc = new Y.Doc();
-  readonly text: Y.Text;
   readonly awareness: Awareness;
+  /** What the server says it is, once loaded. */
+  kind: DocKind = "doc";
+  /** The markdown saved with the last snapshot, as the server sent it on opening. */
+  savedMarkdown = "";
+  /**
+   * The markdown saved with each snapshot, for search, links and history. A doc's is its text; a board sets its own
+   * (the docs on it as links, and its notes), since its Yjs document has no text.
+   */
+  markdown: () => string = () => this.text.toString();
 
   status: SessionStatus = "connecting";
   canEdit = false;
@@ -163,7 +175,6 @@ export class DocSession {
 
   constructor(docId: string) {
     this.docId = docId;
-    this.text = this.doc.getText("content");
     this.awareness = new Awareness(this.doc);
     this.doc.on("update", (update: Uint8Array, origin: unknown) => {
       if (origin === REMOTE || this.#closed) return;
@@ -184,6 +195,11 @@ export class DocSession {
       },
     );
     docsHub.register(this);
+  }
+
+  /** A doc's text. Only docs have it: a board's cards live in maps (see boards/boardModel.ts). */
+  get text(): Y.Text {
+    return this.doc.getText("content");
   }
 
   /** Re-renders on any change of status, people or access. */
@@ -226,6 +242,8 @@ export class DocSession {
     this.#contiguous = result.snapshotSeq + result.updates.length;
 
     this.canEdit = result.canEdit;
+    this.kind = result.kind ?? "doc";
+    this.savedMarkdown = result.content;
     this.me = result.me;
     this.peers.clear();
     for (const peer of result.peers) this.peers.set(peer.id, peer);
@@ -283,9 +301,10 @@ export class DocSession {
         "Snapshot",
         this.docId,
         toBase64(Y.encodeStateAsUpdate(this.doc)),
-        this.text.toString(),
+        this.markdown(),
         this.#contiguous,
       );
+      this.savedMarkdown = this.markdown();
       this.#dirty = false;
     } catch (e) {
       this.error = cleanError(e);
@@ -359,12 +378,16 @@ export class DocSession {
   }
 }
 
-/** Opens a doc just long enough to change its text, e.g. to rewrite links after a rename. */
+/**
+ * Opens a doc just long enough to change its text, e.g. to rewrite links after a rename. A board has no text: the change
+ * is made to its saved summary instead (so its links follow the rename), and its cards are left as they are.
+ */
 export async function editDoc(docId: string, change: (text: Y.Text) => void): Promise<void> {
   // Already open in this tab: edit that copy (a second one would take its place on the connection).
   const open = docsHub.find(docId);
   if (open) {
-    if (open.loaded && open.canEdit) open.doc.transact(() => change(open.text));
+    if (open.loaded && open.canEdit && open.kind === "doc") open.doc.transact(() => change(open.text));
+    else if (open.loaded && open.canEdit) await open.snapshot(); // a board writes its summary afresh
     return;
   }
 
@@ -372,7 +395,18 @@ export async function editDoc(docId: string, change: (text: Y.Text) => void): Pr
   try {
     await session.open();
     if (!session.loaded || !session.canEdit) return;
-    session.doc.transact(() => change(session.text));
+    if (session.kind === "board") {
+      const summary = new Y.Doc();
+      const text = summary.getText("summary");
+      text.insert(0, session.savedMarkdown);
+      change(text);
+      const rewritten = text.toString();
+      summary.destroy();
+      if (rewritten === session.savedMarkdown) return;
+      session.markdown = () => rewritten;
+    } else {
+      session.doc.transact(() => change(session.text));
+    }
     await session.snapshot();
   } finally {
     await session.close();

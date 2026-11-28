@@ -27,7 +27,7 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
         return await response.ReadAsync<List<FeatureSettingDto>>();
     }
 
-    private static Task AllOnAsync(HttpClient admin) => SaveAsync(admin, new { docs = true, liveCursors = true, mcp = true, bugContext = true, issueTrackers = true, sharing = true });
+    private static Task AllOnAsync(HttpClient admin) => SaveAsync(admin, new { docs = true, liveCursors = true, mcp = true, bugContext = true, issueTrackers = true, sharing = true, boards = true });
 
     [Fact]
     public async Task Turning_docs_off_hides_them_everywhere_until_turned_back_on()
@@ -121,6 +121,44 @@ public sealed class FeatureSwitchTests(InklayerApiFactory factory)
         finally
         {
             await AllOnAsync(admin);
+        }
+
+        member.Dispose();
+    }
+
+    [Fact]
+    public async Task Turning_boards_off_refuses_new_boards_and_opening_them_but_docs_keep_working()
+    {
+        using var admin = await factory.SignInAsAdminAsync();
+        var org = await Scenario.CreateOrganizationAsync(admin);
+        var (member, _) = await Scenario.AddMemberAsync(factory, admin, org.Id, "Commenter");
+        using var created = await member.PostJsonAsync($"/api/orgs/{org.Id}/docs", new { title = "Planning", kind = "board" });
+        var board = await created.ReadAsync<DocSummaryDto>(HttpStatusCode.Created);
+        try
+        {
+            await SaveAsync(admin, new { boards = false });
+            using (var refused = await member.PostJsonAsync($"/api/orgs/{org.Id}/docs", new { title = "Another", kind = "board" }))
+            {
+                Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
+                Assert.Contains("Boards are turned off", await refused.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+            }
+
+            await member.PostJsonAsync($"/api/orgs/{org.Id}/docs", new { title = "Still a doc" }).ExpectAsync(HttpStatusCode.Created);
+            await member.GetAsync(new Uri($"/api/boards/{board.Id}/media/x", UriKind.Relative)).ExpectAsync(HttpStatusCode.NotFound);
+            await using (var live = await DocsProbe.ConnectAsync(factory, member))
+            {
+                var error = await Assert.ThrowsAsync<Microsoft.AspNetCore.SignalR.HubException>(() => live.OpenAsync(board.Id));
+                Assert.Contains("Boards are turned off", error.Message, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            await SaveAsync(admin, new { boards = true });
+        }
+
+        await using (var live = await DocsProbe.ConnectAsync(factory, member))
+        {
+            await live.OpenAsync(board.Id);
         }
 
         member.Dispose();

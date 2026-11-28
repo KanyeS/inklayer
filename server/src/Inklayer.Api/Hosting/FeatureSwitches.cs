@@ -27,6 +27,9 @@ public enum Feature
 
     /// <summary>Read-only share links for comments and public docs, reachable from outside the network allow list.</summary>
     Sharing,
+
+    /// <summary>Boards: a canvas of doc cards, notes, images and links, with arrows for the links between them. Needs docs.</summary>
+    Boards,
 }
 
 /// <summary>
@@ -50,6 +53,8 @@ public sealed class FeatureOptions
 
     public bool Sharing { get; set; } = true;
 
+    public bool Boards { get; set; } = true;
+
     public bool this[Feature feature] => feature switch
     {
         Feature.Docs => Docs,
@@ -58,6 +63,7 @@ public sealed class FeatureOptions
         Feature.BugContext => BugContext,
         Feature.IssueTrackers => IssueTrackers,
         Feature.Sharing => Sharing,
+        Feature.Boards => Boards,
         _ => true,
     };
 }
@@ -157,11 +163,13 @@ public sealed class FeatureSwitches(IOptions<FeatureOptions> options, IServiceSc
 }
 
 /// <summary>What the apps need to know: which features to show.</summary>
-public sealed record FeaturesResponse(bool Docs, bool LiveCursors, bool Mcp, bool BugContext, bool IssueTrackers, bool Sharing)
+/// <param name="Boards">On only while docs are on too: boards are made of docs.</param>
+public sealed record FeaturesResponse(bool Docs, bool LiveCursors, bool Mcp, bool BugContext, bool IssueTrackers, bool Sharing, bool Boards = false)
 {
     public static FeaturesResponse From(IReadOnlyDictionary<Feature, FeatureState> states) =>
         new(states[Feature.Docs].Enabled, states[Feature.LiveCursors].Enabled, states[Feature.Mcp].Enabled,
-            states[Feature.BugContext].Enabled, states[Feature.IssueTrackers].Enabled, states[Feature.Sharing].Enabled);
+            states[Feature.BugContext].Enabled, states[Feature.IssueTrackers].Enabled, states[Feature.Sharing].Enabled,
+            states[Feature.Boards].Enabled && states[Feature.Docs].Enabled);
 }
 
 internal static class FeatureSwitchExtensions
@@ -182,26 +190,28 @@ internal static class FeatureSwitchExtensions
         app.Use(async (context, next) =>
         {
             var path = context.Request.Path;
-            Feature[] needs =
-                path.StartsWithSegments("/api/docs", StringComparison.OrdinalIgnoreCase) || IsOrgDocs(path) ? [Feature.Docs]
-                : path.StartsWithSegments(Features.Presence.PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors]
-                : path.StartsWithSegments("/api/presence/ticket", StringComparison.OrdinalIgnoreCase) ? [Feature.LiveCursors, Feature.Docs]
-                : IsCommentPart(path, "context") || IsCommentPart(path, "screenshot") || IsCommentPart(path, "media") ? [Feature.BugContext]
-                : IsCommentPart(path, "issues") || IsProjectPart(path, "issue-trackers") ? [Feature.IssueTrackers]
+            Feature[][] needs =
+                path.StartsWithSegments("/api/boards", StringComparison.OrdinalIgnoreCase) ? [[Feature.Docs], [Feature.Boards]]
+                : path.StartsWithSegments("/api/docs", StringComparison.OrdinalIgnoreCase) || IsOrgDocs(path) ? [[Feature.Docs]]
+                : path.StartsWithSegments(Features.Presence.PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase) ? [[Feature.LiveCursors]]
+                : path.StartsWithSegments("/api/presence/ticket", StringComparison.OrdinalIgnoreCase) ? [[Feature.LiveCursors, Feature.Docs]]
+                : IsCommentPart(path, "context") || IsCommentPart(path, "screenshot") || IsCommentPart(path, "media") ? [[Feature.BugContext]]
+                : IsCommentPart(path, "issues") || IsProjectPart(path, "issue-trackers") ? [[Feature.IssueTrackers]]
                 : path.StartsWithSegments("/api/shares", StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/api/public", StringComparison.OrdinalIgnoreCase)
-                    || path.StartsWithSegments("/api/admin/shares", StringComparison.OrdinalIgnoreCase) ? [Feature.Sharing]
+                    || path.StartsWithSegments("/api/admin/shares", StringComparison.OrdinalIgnoreCase) ? [[Feature.Sharing]]
                 : path.StartsWithSegments(McpResource.Path, StringComparison.OrdinalIgnoreCase)
                     || path.StartsWithSegments("/connect/register", StringComparison.OrdinalIgnoreCase)
-                    || path.StartsWithSegments("/.well-known/oauth-protected-resource", StringComparison.OrdinalIgnoreCase) ? [Feature.Mcp]
+                    || path.StartsWithSegments("/.well-known/oauth-protected-resource", StringComparison.OrdinalIgnoreCase) ? [[Feature.Mcp]]
                 : [];
+            // Every group must have a feature that's on.
             if (needs.Length > 0)
             {
                 var switches = context.RequestServices.GetRequiredService<FeatureSwitches>();
                 var states = await switches.StatesAsync(context.RequestAborted);
-                if (!needs.Any(f => states[f].Enabled))
+                if (needs.FirstOrDefault(group => !group.Any(f => states[f].Enabled)) is { } off)
                 {
-                    await TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: $"{Name(needs[0])} are turned off on this server.").ExecuteAsync(context);
+                    await TurnedOff(off[0]).ExecuteAsync(context);
                     return;
                 }
             }
@@ -211,6 +221,9 @@ internal static class FeatureSwitchExtensions
         return app;
     }
 
+    public static IResult TurnedOff(Feature feature) =>
+        TypedResults.Problem(statusCode: StatusCodes.Status404NotFound, title: $"{Name(feature)} are turned off on this server.");
+
     public static string Name(Feature feature) => feature switch
     {
         Feature.Docs => "Docs",
@@ -219,6 +232,7 @@ internal static class FeatureSwitchExtensions
         Feature.BugContext => "Bug context",
         Feature.IssueTrackers => "Issue trackers",
         Feature.Sharing => "Sharing",
+        Feature.Boards => "Boards",
         _ => feature.ToString(),
     };
 

@@ -560,6 +560,11 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastRevisionAt")
                         .HasColumnType("TEXT");
 

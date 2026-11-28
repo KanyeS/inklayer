@@ -19,7 +19,8 @@ public sealed record DocUpdateMessage(long Seq, byte[] Bytes);
 /// <param name="Content">The markdown as of the snapshot; used to start a doc that has text but no Yjs state yet.</param>
 /// <param name="Me">How others see this connection.</param>
 public sealed record DocOpenResponse(
-    Guid DocId, byte[]? State, string Content, long SnapshotSeq, IReadOnlyList<DocUpdateMessage> Updates, bool CanEdit, PresencePeer Me, IReadOnlyList<PresencePeer> Peers);
+    Guid DocId, byte[]? State, string Content, long SnapshotSeq, IReadOnlyList<DocUpdateMessage> Updates, bool CanEdit, PresencePeer Me, IReadOnlyList<PresencePeer> Peers,
+    string Kind = DocKinds.Doc);
 
 /// <summary>One doc open on a connection.</summary>
 internal sealed class OpenDoc(Guid organizationId, bool canEdit, long clientId)
@@ -143,6 +144,12 @@ internal sealed partial class DocsHub(
             throw new HubException("This doc doesn't exist or you can't see it.");
         }
 
+        var kind = await db.Docs.AsNoTracking().Where(d => d.Id == docId).Select(d => d.Kind).SingleAsync(Context.ConnectionAborted);
+        if (kind == DocKinds.Board && !await features.IsEnabledAsync(Feature.Boards, Context.ConnectionAborted))
+        {
+            throw new HubException("Boards are turned off on this server.");
+        }
+
         // Join first, so no update made while this one loads is missed; seeing one twice does no harm.
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(docId));
         var canEdit = access.Role.Grants(Permission.Comment);
@@ -160,7 +167,7 @@ internal sealed partial class DocsHub(
 
         await Clients.OthersInGroup(Group(docId)).SendAsync("peerJoin", docId, me.Peer);
         var peers = registry.PeersOf(docId, Context.ConnectionId).Select(c => c.Peer).ToList();
-        return new DocOpenResponse(docId, doc.State, doc.Content, doc.SnapshotSeq, updates, canEdit, me.Peer, peers);
+        return new DocOpenResponse(docId, doc.State, doc.Content, doc.SnapshotSeq, updates, canEdit, me.Peer, peers, kind);
     }
 
     public async Task Close(Guid docId)

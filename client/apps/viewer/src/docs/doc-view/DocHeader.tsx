@@ -84,7 +84,7 @@ export function DocHeader(props: DocHeaderProps) {
 }
 
 /** A coloured dot and "Live · saved automatically", "Offline · edits kept", etc. */
-function SaveStatus({ status, canEdit }: { status: SessionStatus; canEdit: boolean }) {
+export function SaveStatus({ status, canEdit }: { status: SessionStatus; canEdit: boolean }) {
   const live = status === "live";
   return (
     <span
@@ -100,7 +100,7 @@ function SaveStatus({ status, canEdit }: { status: SessionStatus; canEdit: boole
 const MAX_FACES = 5;
 
 /** The faces of others with the doc open; clicking one scrolls to their pointer. */
-function PeopleHere({ peers, onFollow }: { peers: Peer[]; onFollow?: (peerId: string) => void }) {
+export function PeopleHere({ peers, onFollow }: { peers: Peer[]; onFollow?: (peerId: string) => void }) {
   if (peers.length === 0) return null;
   const shown = peers.slice(0, MAX_FACES);
   const rest = peers.slice(shown.length);
@@ -205,7 +205,15 @@ function appearanceOf(info: DocInfo): Appearance {
 }
 
 /** The doc's icon (click to change it) and its title (edit in place; Enter saves, Escape puts it back). */
-function TitleRow({ info, canEdit, onError }: { info: DocInfo; canEdit: boolean; onError: (e: Error | null) => void }) {
+export function TitleRow({
+  info,
+  canEdit,
+  onError,
+}: {
+  info: DocInfo;
+  canEdit: boolean;
+  onError: (e: Error | null) => void;
+}) {
   const [title, setTitle] = useState(info.title);
   useEffect(() => setTitle(info.title), [info.title]);
 

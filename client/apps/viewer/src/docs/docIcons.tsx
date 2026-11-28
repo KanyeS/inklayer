@@ -27,7 +27,12 @@ export interface IconLibrary {
 }
 
 /** The defaults when nothing is chosen. */
-export const DEFAULT_ICONS = { doc: "file-text", comment: "message-square", tag: "hash" } as const;
+export const DEFAULT_ICONS = {
+  doc: "file-text",
+  board: "layout-dashboard",
+  comment: "message-square",
+  tag: "hash",
+} as const;
 
 /** Colours to pick from; any other #rrggbb works too. The first three are the graph's defaults for docs, comments and tags. */
 export const ICON_COLORS = [
@@ -114,13 +119,16 @@ export function DocIcon({
   icon,
   color,
   className,
+  kind,
 }: {
   icon?: string | null;
   color?: string | null;
   className?: string;
+  /** Boards get their own default icon. */
+  kind?: string | null;
 }) {
   const library = useIcons();
-  const node = library?.get(icon) ?? library?.get(DEFAULT_ICONS.doc);
+  const node = library?.get(icon) ?? library?.get(kind === "board" ? DEFAULT_ICONS.board : DEFAULT_ICONS.doc);
   const style = color ? { color } : undefined;
   if (!node) return <FileText className={className} style={style} />;
   return <IconSvg node={node} className={className} style={style} />;
