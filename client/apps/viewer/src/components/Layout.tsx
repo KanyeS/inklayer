@@ -1,54 +1,13 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@inklayer/ui/components/avatar";
-import { Button } from "@inklayer/ui/components/button";
 import { Spinner } from "@inklayer/ui/components/spinner";
 import { cn } from "@inklayer/ui/lib/utils";
 import type { ReactNode } from "react";
-import { useMe } from "@/App";
-import { NotificationBell } from "@/components/NotificationBell";
-import { api } from "@/lib/api";
-import { Link } from "@/lib/router";
+import { AppHeader } from "@/components/AppHeader";
 
 /** @param wide Full-width pages (docs) use the whole window; others sit in a centred column. */
 export function Layout({ children, wide }: { children: ReactNode; wide?: boolean }) {
-  const { me } = useMe();
-  const signOut = async () => {
-    await api.post("/auth/logout");
-    window.location.href = "/";
-  };
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
-        <div className={cn("mx-auto flex h-14 items-center justify-between gap-4 px-5", !wide && "max-w-6xl")}>
-          <Link to="/" className="font-heading text-lg font-bold tracking-tight">
-            Inklayer
-          </Link>
-          <nav className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/pages" />}>
-              Pages
-            </Button>
-            <NotificationBell />
-            {me.isSystemAdmin && (
-              <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/admin" />}>
-                Admin
-              </Button>
-            )}
-            <Link
-              to="/settings"
-              className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground hover:bg-muted"
-              title={`${me.fullName} · ${me.email} · Settings`}
-            >
-              <Avatar size="sm">
-                {me.avatarUrl && <AvatarImage src={me.avatarUrl} alt="" referrerPolicy="no-referrer" />}
-                <AvatarFallback>{initials(me.displayName)}</AvatarFallback>
-              </Avatar>
-              <span className="hidden sm:inline">{me.displayName}</span>
-            </Link>
-            <Button variant="outline" size="sm" onClick={signOut}>
-              Sign out
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <AppHeader wide={wide} />
       <main className="flex-1">{children}</main>
     </div>
   );
@@ -85,15 +44,4 @@ export function ErrorText({ error }: { error: Error | null | undefined }) {
       {error.message}
     </p>
   ) : null;
-}
-
-function initials(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]!.toUpperCase())
-      .join("") || "?"
-  );
 }

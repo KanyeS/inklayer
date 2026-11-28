@@ -144,64 +144,34 @@ export function ProjectSharesSection({ projectId }: { projectId: string }) {
   );
 }
 
-/** "Make public" for a doc: one read-only link, which Commenters and above can turn on and off. */
-export function DocShareButton({ docId, canEdit }: { docId: string; canEdit: boolean }) {
-  const shares = useQuery(queries.docShares(docId));
+/**
+ * A doc's public link: one read-only link, which Commenters and above can turn on and off. The doc's menu shows the
+ * actions; the "Public" badge shows while the link works.
+ */
+export function useDocPublicLink(docId: string, enabled: boolean) {
+  const shares = useQuery({ ...queries.docShares(docId), enabled });
   const { run, error } = useAction();
-  const [copied, setCopied] = useState(false);
   const live = shares.data?.find((s) => !s.expired);
+  return {
+    live,
+    error,
+    /** Turns the link on and copies it. */
+    makePublic: () =>
+      void run(async () => {
+        const created = await api.post("/api/shares", { body: { kind: "doc", docId } });
+        await navigator.clipboard.writeText(created.url).catch(() => undefined);
+      }),
+    copy: () => live && void navigator.clipboard.writeText(live.url).catch(() => undefined),
+    makePrivate: () => live && void run(() => api.delete("/api/shares/{id}", { params: { path: { id: live.id } } })),
+  };
+}
 
-  if (!live) {
-    if (!canEdit) return null;
-    return (
-      <span className="inline-flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          title="Anyone with the link can read this doc, without an account"
-          onClick={() =>
-            void run(async () => {
-              const created = await api.post("/api/shares", { body: { kind: "doc", docId } });
-              await navigator.clipboard.writeText(created.url).catch(() => undefined);
-            })
-          }
-        >
-          <Globe data-icon="inline-start" />
-          Make public
-        </Button>
-        <ErrorText error={error} />
-      </span>
-    );
-  }
-
+export function PublicBadge({ share }: { share: Share }) {
   return (
-    <span className="inline-flex items-center gap-1">
-      <Badge variant="outline" title={`Anyone with the link can read this doc. ${live.viewCount} views.`}>
-        <Globe data-icon="inline-start" />
-        Public
-      </Badge>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={async () => {
-          await navigator.clipboard.writeText(live.url);
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        }}
-      >
-        {copied ? "Copied" : "Copy link"}
-      </Button>
-      {live.canRevoke && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void run(() => api.delete("/api/shares/{id}", { params: { path: { id: live.id } } }))}
-        >
-          Make private
-        </Button>
-      )}
-      <ErrorText error={error} />
-    </span>
+    <Badge variant="outline" title={`Anyone with the link can read this doc. ${share.viewCount} views.`}>
+      <Globe data-icon="inline-start" />
+      Public
+    </Badge>
   );
 }
 

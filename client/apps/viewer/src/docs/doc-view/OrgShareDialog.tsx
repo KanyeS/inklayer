@@ -22,19 +22,26 @@ function AccessSelect({ value, onChange, label }: { value: Access; onChange: (va
   );
 }
 
-/**
- * Shares the doc with other organisations you're in. It stays one doc: they open the same live text, so it can't get out
- * of step. Only people in the doc's own organisation see this.
- */
-export function OrgShareButton({ info }: { info: DocInfo }) {
+/** The organisations this doc is shared with and those it could be, or null when there's nothing to show. */
+export function useOrgShareOptions(info: DocInfo) {
   const { me } = useMe();
-  const [open, setOpen] = useState(false);
   const shares = info.sharedWith ?? [];
   const shared = new Set(shares.map((s) => s.organizationId));
   const candidates = me.organizations.filter(
     (o) => o.id !== info.organizationId && CAN_SHARE_INTO.has(o.role) && !shared.has(o.id),
   );
   if (!info.canManage || (shares.length === 0 && candidates.length === 0)) return null;
+  return { shares, candidates, label: shares.length > 0 ? `Shared with ${shares.length}` : "Share with org" };
+}
+
+/**
+ * Shares the doc with other organisations you're in. It stays one doc: they open the same live text, so it can't get out
+ * of step. Only people in the doc's own organisation see this.
+ */
+export function OrgShareButton({ info }: { info: DocInfo }) {
+  const [open, setOpen] = useState(false);
+  const options = useOrgShareOptions(info);
+  if (!options) return null;
 
   return (
     <>
@@ -45,21 +52,37 @@ export function OrgShareButton({ info }: { info: DocInfo }) {
         onClick={() => setOpen(true)}
       >
         <Building2 data-icon="inline-start" />
-        {shares.length > 0 ? `Shared with ${shares.length}` : "Share with org"}
+        {options.label}
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Share with other organisations</DialogTitle>
-            <DialogDescription>
-              It stays one doc, not a copy: people there open the same live text, and edits from either side show up for
-              everyone. Only this organisation can rename, move, delete or share it.
-            </DialogDescription>
-          </DialogHeader>
-          <OrgShareList info={info} candidates={candidates} />
-        </DialogContent>
-      </Dialog>
+      <OrgShareDialog info={info} open={open} onOpenChange={setOpen} />
     </>
+  );
+}
+
+/** The dialog behind "Share with org", for opening from a button or a menu. */
+export function OrgShareDialog({
+  info,
+  open,
+  onOpenChange,
+}: {
+  info: DocInfo;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const options = useOrgShareOptions(info);
+  return (
+    <Dialog open={open && !!options} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Share with other organisations</DialogTitle>
+          <DialogDescription>
+            It stays one doc, not a copy: people there open the same live text, and edits from either side show up for
+            everyone. Only this organisation can rename, move, delete or share it.
+          </DialogDescription>
+        </DialogHeader>
+        {options && <OrgShareList info={info} candidates={options.candidates} />}
+      </DialogContent>
+    </Dialog>
   );
 }
 

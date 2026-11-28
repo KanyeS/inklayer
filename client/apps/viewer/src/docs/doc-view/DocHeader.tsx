@@ -1,13 +1,29 @@
 import { initials, safeColor } from "@inklayer/overlay";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@inklayer/ui/components/alert-dialog";
 import { Badge } from "@inklayer/ui/components/badge";
 import { Button } from "@inklayer/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@inklayer/ui/components/dropdown-menu";
 import { cn } from "@inklayer/ui/lib/utils";
-import { BookOpen, Building2, History, Info, PenLine, Trash2 } from "lucide-react";
+import { BookOpen, Building2, Globe, History, Info, Link2, Lock, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useState } from "react";
 import { useMe } from "@/App";
-import { ConfirmButton } from "@/components/ConfirmButton";
 import { ErrorText } from "@/components/Layout";
-import { DocShareButton } from "@/components/Shares";
+import { PublicBadge, useDocPublicLink } from "@/components/Shares";
 import { timeAgo } from "@/lib/format";
 import { personTitle } from "@/lib/people";
 import { refreshAll } from "@/lib/query";
@@ -19,7 +35,7 @@ import { type Appearance, IconPicker } from "../IconPicker";
 import { rewriteLinks } from "../links";
 import { TagBar } from "../tags";
 import { statusDotClass, statusLabel } from "./docViewText";
-import { OrgShareButton } from "./OrgShareDialog";
+import { OrgShareDialog, useOrgShareOptions } from "./OrgShareDialog";
 import { useSessionState } from "./useSessionState";
 
 export type Mode = "edit" | "read";
@@ -136,7 +152,10 @@ export function PeopleHere({ peers, onFollow }: { peers: Peer[]; onFollow?: (pee
   );
 }
 
-/** Read/Edit, the cheat sheet, History, Share and Delete (sharing and deleting only from the doc's own organisation). */
+/**
+ * Read/Edit and the cheat sheet, then a menu with History, sharing and Delete (sharing and deleting only from the doc's
+ * own organisation), so the header stays short.
+ */
 function DocTools({
   orgId,
   info,
@@ -148,6 +167,14 @@ function DocTools({
   onError,
 }: DocHeaderProps & { onError: (e: Error | null) => void }) {
   const { me } = useMe();
+  const [orgShareOpen, setOrgShareOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const orgShare = useOrgShareOptions(info);
+  const publicLinks = me.features.sharing && !info.sharedFrom;
+  const publicLink = useDocPublicLink(info.id, publicLinks);
+  const live = publicLinks ? publicLink.live : undefined;
+  const canPublish = publicLinks && !live && !!info.canManage;
+
   const remove = async () => {
     try {
       await docsApi.delete(info.id, info.version);
@@ -159,6 +186,7 @@ function DocTools({
   const editing = mode === "edit";
   return (
     <>
+      {live && <PublicBadge share={live} />}
       {canEdit && (
         <Button
           variant="ghost"
@@ -180,22 +208,71 @@ function DocTools({
       >
         <Info />
       </Button>
-      <Button variant="ghost" size="sm" onClick={onHistory}>
-        <History data-icon="inline-start" />
-        History
-      </Button>
-      <OrgShareButton info={info} />
-      {me.features.sharing && !info.sharedFrom && <DocShareButton docId={info.id} canEdit={!!info.canManage} />}
-      {info.canManage && (
-        <ConfirmButton
-          title={`Delete "${info.title}"?`}
-          description="Anyone with it open loses it, and links to it show as missing until it's back. You can restore it, with its text and history, from Deleted docs at the bottom of the sidebar."
-          confirmLabel="Delete doc"
-          onConfirm={() => void remove()}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="ghost" size="icon" className="size-8" title="More" aria-label="More" />}
         >
-          <Trash2 />
-        </ConfirmButton>
-      )}
+          <MoreHorizontal />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem onClick={onHistory}>
+            <History />
+            History
+          </DropdownMenuItem>
+          {orgShare && (
+            <DropdownMenuItem onClick={() => setOrgShareOpen(true)}>
+              <Building2 />
+              {orgShare.label}
+            </DropdownMenuItem>
+          )}
+          {canPublish && (
+            <DropdownMenuItem onClick={publicLink.makePublic}>
+              <Globe />
+              Make public
+            </DropdownMenuItem>
+          )}
+          {live && (
+            <DropdownMenuItem onClick={publicLink.copy}>
+              <Link2 />
+              Copy public link
+            </DropdownMenuItem>
+          )}
+          {live?.canRevoke && (
+            <DropdownMenuItem onClick={publicLink.makePrivate}>
+              <Lock />
+              Make private
+            </DropdownMenuItem>
+          )}
+          {info.canManage && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+                <Trash2 />
+                Delete doc
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ErrorText error={publicLinks ? publicLink.error : null} />
+      <OrgShareDialog info={info} open={orgShareOpen} onOpenChange={setOrgShareOpen} />
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{info.title}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anyone with it open loses it, and links to it show as missing until it's back. You can restore it, with
+              its text and history, from Deleted docs at the bottom of the sidebar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void remove()}>
+              Delete doc
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
