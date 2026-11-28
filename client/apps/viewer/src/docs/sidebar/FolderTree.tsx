@@ -9,6 +9,7 @@ import {
   FolderPlus,
   LayoutDashboard,
   Pencil,
+  SquareKanban,
   Trash2,
 } from "lucide-react";
 import { type DragEvent, type FormEvent, type ReactNode, useRef, useState } from "react";
@@ -92,7 +93,7 @@ function FolderRow({
   onDeleteFolder,
 }: FolderTreeProps & { folder: FolderNode; isOpen: boolean }) {
   const { me } = useMe();
-  const createHere = (kind: "doc" | "board" | "folder") => {
+  const createHere = (kind: "doc" | "board" | "kanban" | "folder") => {
     setDraft({ kind, parent: folder.path });
     if (!isOpen) toggle(folder.path);
   };
@@ -126,6 +127,11 @@ function FolderRow({
           {me.features.boards && (
             <IconButton small title="New board here" onClick={() => createHere("board")}>
               <LayoutDashboard />
+            </IconButton>
+          )}
+          {me.features.kanban && (
+            <IconButton small title="New kanban here" onClick={() => createHere("kanban")}>
+              <SquareKanban />
             </IconButton>
           )}
           <IconButton small title="New folder here" onClick={() => createHere("folder")}>
@@ -195,7 +201,7 @@ export function DraftInput({
   onSubmit,
   onCancel,
 }: {
-  kind: "doc" | "board" | "folder";
+  kind: "doc" | "board" | "kanban" | "folder";
   depth: number;
   initial?: string;
   onSubmit: (value: string) => void;
@@ -218,8 +224,8 @@ export function DraftInput({
       <Input
         autoFocus
         className="h-7 text-sm"
-        placeholder={kind === "doc" ? "Doc title" : kind === "board" ? "Board title" : "Folder name"}
-        aria-label={kind === "doc" ? "New doc title" : kind === "board" ? "New board title" : "Folder name"}
+        placeholder={DRAFT_LABELS[kind].placeholder}
+        aria-label={DRAFT_LABELS[kind].label}
         value={value}
         maxLength={200}
         onChange={(e) => setValue(e.target.value)}
@@ -229,6 +235,13 @@ export function DraftInput({
     </form>
   );
 }
+
+const DRAFT_LABELS: Record<"doc" | "board" | "kanban" | "folder", { placeholder: string; label: string }> = {
+  doc: { placeholder: "Doc title", label: "New doc title" },
+  board: { placeholder: "Board title", label: "New board title" },
+  kanban: { placeholder: "Kanban title", label: "New kanban title" },
+  folder: { placeholder: "Folder name", label: "Folder name" },
+};
 
 /** A small icon-only button in the sidebar, labelled by its title. */
 export function IconButton({

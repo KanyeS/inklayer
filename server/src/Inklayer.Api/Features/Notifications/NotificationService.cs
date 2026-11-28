@@ -153,11 +153,50 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>People were assigned tasks on a kanban: tell each (not whoever assigned them).</summary>
+    public async Task TasksAssignedAsync(Doc kanban, IReadOnlyList<Kanban.KanbanIndexer.Assignment> assigned, Guid actorUserId, CancellationToken ct)
+    {
+        foreach (var a in assigned)
+        {
+            await NotifyTaskAsync(NotificationKinds.TaskAssigned, a.Added, kanban, actorUserId, a.Task, $"{a.Task.Key} {a.Task.Title}", ct);
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>A task is due today, or overdue: tell its assignees.</summary>
+    public async Task TaskDueAsync(Doc kanban, KanbanTask task, bool overdue, CancellationToken ct)
+    {
+        var due = task.Due?.ToString("d MMM yyyy", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        await NotifyTaskAsync(overdue ? NotificationKinds.TaskOverdue : NotificationKinds.TaskDue, [.. task.Assignees.Select(a => a.UserId)], kanban, null, task,
+            overdue ? $"{task.Key} {task.Title} was due {due}" : $"{task.Key} {task.Title} is due today", ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>To the people on the kanban's own organisation, or else an organisation it's shared with (as mentions in docs).</summary>
+    private async Task NotifyTaskAsync(string kind, IReadOnlyList<Guid> people, Doc kanban, Guid? actorUserId, KanbanTask task, string text, CancellationToken ct)
+    {
+        await NotifyAsync(kind, people, kanban.OrganizationId, actorUserId, null, kanban, text, ct, taskKey: task.Key);
+        var homeMembers = await db.OrganizationMembers.Where(m => m.OrganizationId == kanban.OrganizationId && people.Contains(m.UserId)).Select(m => m.UserId).ToListAsync(ct);
+        var rest = people.Except(homeMembers).ToHashSet();
+        foreach (var orgId in await db.DocOrgShares.Where(s => s.DocId == kanban.Id).Select(s => s.OrganizationId).ToListAsync(ct))
+        {
+            if (rest.Count == 0)
+            {
+                break;
+            }
+
+            var here = await db.OrganizationMembers.Where(m => m.OrganizationId == orgId && rest.Contains(m.UserId)).Select(m => m.UserId).ToListAsync(ct);
+            await NotifyAsync(kind, here, orgId, actorUserId, null, kanban, text, ct, taskKey: task.Key);
+            rest.ExceptWith(here);
+        }
+    }
+
     /* ------------------------------------------------------------------ in-app and email */
 
     private async Task NotifyAsync(
         string kind, IReadOnlyCollection<Guid> recipients, Guid organizationId, Guid? actorUserId, Annotation? comment, Doc? doc, string text, CancellationToken ct,
-        (Guid Id, string Name)? product = null)
+        (Guid Id, string Name)? product = null, string? taskKey = null)
     {
         var ids = recipients.Where(r => r != actorUserId).Distinct().ToList();
         if (ids.Count == 0)
@@ -182,7 +221,7 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
             db.Notifications.Add(new Notification
             {
                 UserId = person.Id, OrganizationId = organizationId, Kind = kind, ActorUserId = actorUserId, AnnotationId = comment?.Id, DocId = doc?.Id,
-                ProjectId = product?.Id,
+                ProjectId = product?.Id, TaskKey = taskKey,
                 Preview = preview, Where = Clip(where, 300), CreatedAt = now,
             });
         }
@@ -204,10 +243,13 @@ internal sealed class NotificationService(InklayerDbContext db, IEmailSender ema
             NotificationKinds.AccessRequested => $"{actor} asked for access",
             NotificationKinds.AccessGranted => $"{actor} gave you access",
             NotificationKinds.AccessDeclined => $"{actor} declined your access request",
+            NotificationKinds.TaskAssigned => $"{actor} assigned you a task",
+            NotificationKinds.TaskDue => "A task of yours is due today",
+            NotificationKinds.TaskOverdue => "A task of yours is overdue",
             _ => "Inklayer",
         };
         var link = comment is not null ? $"{Origin()}/comments/{comment.Id}"
-            : doc is not null ? $"{Origin()}/orgs/{organizationId}/docs/{doc.Id}"
+            : doc is not null ? $"{Origin()}/orgs/{organizationId}/docs/{doc.Id}{(taskKey is null ? "" : $"?task={Uri.EscapeDataString(taskKey)}")}"
             : product is { } p ? $"{Origin()}/projects/{p.Id}{(kind == NotificationKinds.AccessRequested ? "#access" : "")}"
             : Origin();
         var body = $"{subject}{(where.Length > 0 ? $" on {where}" : "")}:\n\n{preview}\n\nOpen it: {link}\n\n" +

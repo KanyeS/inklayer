@@ -4417,6 +4417,492 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kanbans/{kanbanId}/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reserve keys for new tasks (Commenter and above), so two people adding tasks at once never get the same key */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReserveKeysRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReservedKeysResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The kanban's key prefix and tracker sync */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KanbanSettingsResponse"];
+                    };
+                };
+            };
+        };
+        /** Change the prefix of new tasks' keys (Commenter and above in the kanban's organisation) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateKanbanSettingsRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KanbanSettingsResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everyone a task on the kanban can be assigned to: members of its organisation and of those it's shared with */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PersonResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The kanban's tasks, as of its last save */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaskSummaryResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/mentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The docs (that the caller can open) that link one of the kanban's tasks with [[task:KEY]]: ?key=WEB-12 */
+        get: {
+            parameters: {
+                query: {
+                    key: string;
+                };
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaskMentionResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{orgId}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tasks across the organisation's kanbans (and those shared with it): ?assignee=me, ?status=open|done|all, ?tag=, ?due=overdue|week, ?q= */
+        get: {
+            parameters: {
+                query?: {
+                    assignee?: string;
+                    status?: string;
+                    tag?: string;
+                    due?: string;
+                    q?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    orgId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaskSummaryResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{orgId}/tasks/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A task by its key, e.g. WEB-12, for links to it from docs */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    orgId: string;
+                    key: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaskSummaryResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/tracker/choices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Jira connections of the organisation's products (that the caller can use) the kanban can sync with */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KanbanTrackerChoiceResponse"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/tracker/statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A connection's statuses, and the columns they'd go in: ?connectionId= */
+        get: {
+            parameters: {
+                query: {
+                    connectionId: string;
+                };
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KanbanTrackerStatusesResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/tracker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Connect the kanban to a tracker and sync it straight away */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ConnectKanbanTrackerRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KanbanSyncResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Stop syncing. Tasks keep their links to their issues. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KanbanSettingsResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/kanbans/{kanbanId}/tracker/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sync with the tracker now */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    kanbanId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KanbanSyncResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4719,7 +5205,7 @@ export interface components {
             folder: string;
             title: string;
             /** @enum {string} */
-            kind: "doc" | "board";
+            kind: "doc" | "board" | "kanban";
             icon: null | string;
             color: null | string;
             /** Format: date-time */
@@ -4728,6 +5214,22 @@ export interface components {
         };
         BoardMediaResponse: {
             id: string;
+        };
+        ConnectKanbanTrackerRequest: {
+            /** Format: uuid */
+            connectionId: string;
+            /**
+             * @default both
+             * @enum {string}
+             */
+            direction?: "both" | "from-tracker";
+            statusMap?: null | {
+                [key: string]: string;
+            };
+            /** @default false */
+            addColumns?: boolean;
+            /** @default false */
+            pushExisting?: boolean;
         };
         ConnectedAppResponse: {
             clientId: string;
@@ -4749,6 +5251,7 @@ export interface components {
             folder?: null | string;
             title: string;
             kind?: null | string;
+            keyPrefix?: null | string;
         };
         CreateIntegrationRequest: {
             kind: string;
@@ -4877,6 +5380,8 @@ export interface components {
             color?: null | string;
             /** @default false */
             board?: boolean;
+            /** @default false */
+            kanban?: boolean;
         };
         DocGraphResponse: {
             nodes: components["schemas"]["DocGraphNode"][];
@@ -4934,7 +5439,7 @@ export interface components {
              * @default doc
              * @enum {string}
              */
-            kind?: "doc" | "board";
+            kind?: "doc" | "board" | "kanban";
         };
         DocRevisionContentResponse: {
             /** Format: uuid */
@@ -4984,7 +5489,7 @@ export interface components {
              * @default doc
              * @enum {string}
              */
-            kind?: "doc" | "board";
+            kind?: "doc" | "board" | "kanban";
         };
         DocTagCountResponse: {
             tag: string;
@@ -5023,6 +5528,8 @@ export interface components {
             sharing: boolean;
             /** @default false */
             boards?: boolean;
+            /** @default false */
+            kanban?: boolean;
         };
         FolderRequest: {
             path: string;
@@ -5120,6 +5627,60 @@ export interface components {
             suggested: null | string;
         };
         JsonElement: unknown;
+        KanbanSettingsResponse: {
+            /** Format: uuid */
+            id: string;
+            keyPrefix: string;
+            canManage: boolean;
+            tracker: null | components["schemas"]["KanbanTrackerResponse"];
+        };
+        KanbanSyncResponse: {
+            settings: components["schemas"]["KanbanSettingsResponse"];
+            result: null | components["schemas"]["KanbanSyncResult"];
+        };
+        KanbanSyncResult: {
+            /** Format: int32 */
+            pulled: number;
+            /** Format: int32 */
+            pushed: number;
+            /** Format: int32 */
+            created: number;
+            error: null | string;
+        };
+        KanbanTrackerChoiceResponse: {
+            /** Format: uuid */
+            connectionId: string;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            kind: string;
+            name: string;
+            site: null | string;
+            projectKey: null | string;
+        };
+        KanbanTrackerResponse: {
+            /** Format: uuid */
+            connectionId: string;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            kind: string;
+            name: string;
+            statusMap: {
+                [key: string]: string;
+            };
+            /** @enum {string} */
+            direction: "both" | "from-tracker";
+            /** Format: date-time */
+            syncedAt: null | string;
+            syncError: null | string;
+        };
+        KanbanTrackerStatusesResponse: {
+            statuses: components["schemas"]["TrackerStatusResponse"][];
+            suggestedMap: {
+                [key: string]: string;
+            };
+        };
         LinkIssueRequest: {
             /** Format: uuid */
             connectionId: string;
@@ -5246,7 +5807,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "mention" | "reply" | "resolved" | "issue_closed" | "issue_comment" | "access_requested" | "access_granted" | "access_declined";
+            kind: "mention" | "reply" | "resolved" | "issue_closed" | "issue_comment" | "access_requested" | "access_granted" | "access_declined" | "task_assigned" | "task_due" | "task_overdue";
             actor: null | components["schemas"]["NotificationActor"];
             /** Format: uuid */
             organizationId: string;
@@ -5261,6 +5822,7 @@ export interface components {
             read: boolean;
             /** Format: uuid */
             projectId?: null | string;
+            taskKey?: null | string;
         };
         OrganizationResponse: {
             /** Format: uuid */
@@ -5371,6 +5933,20 @@ export interface components {
             canEdit: boolean;
             canDelete: boolean;
         };
+        ReserveKeysRequest: {
+            /**
+             * Format: int32
+             * @default 1
+             */
+            count?: number;
+        };
+        ReservedKeysResponse: {
+            prefix: string;
+            /** Format: int64 */
+            first: number;
+            /** Format: int32 */
+            count: number;
+        };
         /** @enum {unknown} */
         Role: "Viewer" | "Commenter" | "Editor" | "Manager" | "Admin" | "Owner";
         SaveSignInProviderRequest: {
@@ -5441,7 +6017,7 @@ export interface components {
              * @default doc
              * @enum {string}
              */
-            kind?: "doc" | "board";
+            kind?: "doc" | "board" | "kanban";
         };
         SignInProvider: {
             id: string;
@@ -5472,6 +6048,40 @@ export interface components {
             providers: components["schemas"]["SignInProviderResponse"][];
             redirectUriPrefix: string;
             yourProviders: string[];
+        };
+        TaskMentionResponse: {
+            /** Format: uuid */
+            docId: string;
+            /** Format: uuid */
+            organizationId: string;
+            folder: string;
+            title: string;
+        };
+        TaskSummaryResponse: {
+            /** Format: uuid */
+            kanbanId: string;
+            kanbanTitle: string;
+            /** Format: uuid */
+            organizationId: string;
+            taskId: string;
+            key: string;
+            title: string;
+            column: string;
+            /** @enum {string} */
+            category: "todo" | "doing" | "done";
+            type: string;
+            priority: string;
+            /** Format: date */
+            due: null | string;
+            assignees: components["schemas"]["PersonResponse"][];
+            tags: string[];
+            parentTaskId: null | string;
+            /** Format: uuid */
+            linkedDocId: null | string;
+            externalKey: null | string;
+            externalUrl: null | string;
+            /** Format: date-time */
+            updatedAt: string;
         };
         TeamMemberResponse: {
             /** Format: uuid */
@@ -5565,6 +6175,12 @@ export interface components {
             email?: null | string;
             teamId?: null | string;
         };
+        TrackerStatusResponse: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            category: "todo" | "doing" | "done";
+        };
         UpdateAnnotationRequest: {
             /** Format: int32 */
             version: number;
@@ -5590,6 +6206,7 @@ export interface components {
             issueTrackers?: null | boolean;
             sharing?: null | boolean;
             boards?: null | boolean;
+            kanban?: null | boolean;
         };
         UpdateIntegrationRequest: {
             name?: null | string;
@@ -5600,6 +6217,9 @@ export interface components {
             projectId?: null | string;
             /** @default false */
             clearProject?: boolean;
+        };
+        UpdateKanbanSettingsRequest: {
+            keyPrefix?: null | string;
         };
         UpdateMeRequest: {
             preferredName?: null | string;
@@ -5670,6 +6290,7 @@ export type AuthorSummary = components['schemas']['AuthorSummary'];
 export type BoardCardsRequest = components['schemas']['BoardCardsRequest'];
 export type BoardDocCardResponse = components['schemas']['BoardDocCardResponse'];
 export type BoardMediaResponse = components['schemas']['BoardMediaResponse'];
+export type ConnectKanbanTrackerRequest = components['schemas']['ConnectKanbanTrackerRequest'];
 export type ConnectedAppResponse = components['schemas']['ConnectedAppResponse'];
 export type ConsoleEntry = components['schemas']['ConsoleEntry'];
 export type CreateAccessRequest = components['schemas']['CreateAccessRequest'];
@@ -5719,6 +6340,12 @@ export type IssueResponse = components['schemas']['IssueResponse'];
 export type IssueTypesRequest = components['schemas']['IssueTypesRequest'];
 export type IssueTypesResponse = components['schemas']['IssueTypesResponse'];
 export type JsonElement = components['schemas']['JsonElement'];
+export type KanbanSettingsResponse = components['schemas']['KanbanSettingsResponse'];
+export type KanbanSyncResponse = components['schemas']['KanbanSyncResponse'];
+export type KanbanSyncResult = components['schemas']['KanbanSyncResult'];
+export type KanbanTrackerChoiceResponse = components['schemas']['KanbanTrackerChoiceResponse'];
+export type KanbanTrackerResponse = components['schemas']['KanbanTrackerResponse'];
+export type KanbanTrackerStatusesResponse = components['schemas']['KanbanTrackerStatusesResponse'];
 export type LinkIssueRequest = components['schemas']['LinkIssueRequest'];
 export type LinkPreviewResponse = components['schemas']['LinkPreviewResponse'];
 export type LivePageAnnotationsResponse = components['schemas']['LivePageAnnotationsResponse'];
@@ -5748,6 +6375,8 @@ export type PublicShareResponse = components['schemas']['PublicShareResponse'];
 export type PullRequestCommentResponse = components['schemas']['PullRequestCommentResponse'];
 export type PullRequestPageResponse = components['schemas']['PullRequestPageResponse'];
 export type ReplyResponse = components['schemas']['ReplyResponse'];
+export type ReserveKeysRequest = components['schemas']['ReserveKeysRequest'];
+export type ReservedKeysResponse = components['schemas']['ReservedKeysResponse'];
 export type Role = components['schemas']['Role'];
 export type SaveSignInProviderRequest = components['schemas']['SaveSignInProviderRequest'];
 export type SaveTrackerAppRequest = components['schemas']['SaveTrackerAppRequest'];
@@ -5760,6 +6389,8 @@ export type SignInProvider = components['schemas']['SignInProvider'];
 export type SignInProviderResponse = components['schemas']['SignInProviderResponse'];
 export type SignInProviderSource = components['schemas']['SignInProviderSource'];
 export type SignInProvidersResponse = components['schemas']['SignInProvidersResponse'];
+export type TaskMentionResponse = components['schemas']['TaskMentionResponse'];
+export type TaskSummaryResponse = components['schemas']['TaskSummaryResponse'];
 export type TeamMemberResponse = components['schemas']['TeamMemberResponse'];
 export type TeamRequest = components['schemas']['TeamRequest'];
 export type TeamResponse = components['schemas']['TeamResponse'];
@@ -5771,10 +6402,12 @@ export type TrackerAppSource = components['schemas']['TrackerAppSource'];
 export type TrackerChoiceResponse = components['schemas']['TrackerChoiceResponse'];
 export type TrackerConnectionResponse = components['schemas']['TrackerConnectionResponse'];
 export type TrackerSettings = components['schemas']['TrackerSettings'];
+export type TrackerStatusResponse = components['schemas']['TrackerStatusResponse'];
 export type UpdateAnnotationRequest = components['schemas']['UpdateAnnotationRequest'];
 export type UpdateDocRequest = components['schemas']['UpdateDocRequest'];
 export type UpdateFeaturesRequest = components['schemas']['UpdateFeaturesRequest'];
 export type UpdateIntegrationRequest = components['schemas']['UpdateIntegrationRequest'];
+export type UpdateKanbanSettingsRequest = components['schemas']['UpdateKanbanSettingsRequest'];
 export type UpdateMeRequest = components['schemas']['UpdateMeRequest'];
 export type UpdateNetworkAccessRequest = components['schemas']['UpdateNetworkAccessRequest'];
 export type UpdateOrganizationRequest = components['schemas']['UpdateOrganizationRequest'];

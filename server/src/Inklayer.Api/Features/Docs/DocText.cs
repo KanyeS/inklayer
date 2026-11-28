@@ -31,7 +31,7 @@ internal sealed class DocText(
             return null;
         }
 
-        if (doc.Kind == DocKinds.Board)
+        if (DocKinds.HasCards(doc.Kind))
         {
             return doc.Content;
         }
@@ -114,7 +114,7 @@ internal sealed class DocText(
 
             if (stored.Kind != kind)
             {
-                return stored.Kind == DocKinds.Board ? stored.Content : throw new InvalidOperationException("That's a doc, not a board.");
+                return DocKinds.HasCards(stored.Kind) ? stored.Content : throw new InvalidOperationException($"That's a doc, not a {kind}.");
             }
 
             (includedSeq, storedState, storedContent) = (stored.LastSeq, stored.State, stored.Content);
@@ -144,9 +144,12 @@ internal sealed class DocText(
 
         if (after.Length > Inklayer.Domain.Docs.Doc.MaxContentLength || state.Length > DocsHub.MaxStateBytes)
         {
-            throw new InvalidOperationException(kind == DocKinds.Board
-                ? "That would make the board too large. Split it into smaller boards."
-                : "That would make the doc too large. Split it into smaller docs.");
+            throw new InvalidOperationException(kind switch
+            {
+                DocKinds.Board => "That would make the board too large. Split it into smaller boards.",
+                DocKinds.Kanban => "That would make the kanban too large. Archive done tasks or split it.",
+                _ => "That would make the doc too large. Split it into smaller docs.",
+            });
         }
 
         // Numbered and sent like a browser's edit, so open editors merge it.
@@ -177,6 +180,10 @@ internal sealed class DocText(
         {
             edits.SnapshotSaved(docId, upToSeq);
             await notifications.DocEditedAsync(s.Doc, before, userId, ct);
+            if (s.Assigned.Count > 0)
+            {
+                await notifications.TasksAssignedAsync(s.Doc, s.Assigned, userId, ct);
+            }
         }
 
         // Not saved only if an editor saved a newer snapshot meanwhile; theirs then includes this edit, or their next will.

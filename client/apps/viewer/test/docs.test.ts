@@ -21,6 +21,21 @@ describe("doc links and tags (same rules as the server)", () => {
     expect(extractLinks("[[comment:nope]]")).toEqual([]);
   });
 
+  it("parses task links, by key in capitals", () => {
+    const [a, b] = extractLinks("Ships with [[task:wp-1]] and [[task:WEB-12|the copy]]; not [[task:nope]]");
+    expect([a?.taskKey, a?.target, a?.commentId]).toEqual(["WP-1", null, null]);
+    expect([b?.taskKey, b?.alias]).toEqual(["WEB-12", "the copy"]);
+    expect(extractLinks("[[task:nope]] [[task:W-1]]")).toEqual([]);
+    // Renaming a doc never touches them.
+    expect(
+      relinkEdits(
+        "[[task:WP-1]]",
+        () => true,
+        () => "x",
+      ),
+    ).toEqual([]);
+  });
+
   it("ignores code", () => {
     const text = "Before [[Real]]\n```\n[[Not a link]] #nottag\n```\nInline `[[No]] #no` and #yes";
     expect(extractLinks(text).map((l) => l.target)).toEqual(["Real"]);
@@ -77,6 +92,12 @@ describe("reading view", () => {
     expect(html).toContain('data-create="Missing"');
     expect(html).toContain('data-tag="idea"');
     expect(html).toContain('data-comment-id="0193a6b2-1111-7222-8333-944455556666"');
+  });
+
+  it("shows task links as placeholders the page fills in", () => {
+    const html = render("Waiting on [[task:web-12]] and [[task:WEB-13|the copy]]");
+    expect(html).toContain('data-task-key="WEB-12"');
+    expect(html).toContain('data-task-key="WEB-13">the copy</a>');
   });
 });
 

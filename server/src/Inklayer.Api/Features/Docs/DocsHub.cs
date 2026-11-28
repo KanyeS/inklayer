@@ -150,6 +150,11 @@ internal sealed partial class DocsHub(
             throw new HubException("Boards are turned off on this server.");
         }
 
+        if (kind == DocKinds.Kanban && !await features.IsEnabledAsync(Feature.Kanban, Context.ConnectionAborted))
+        {
+            throw new HubException("Kanban boards are turned off on this server.");
+        }
+
         // Join first, so no update made while this one loads is missed; seeing one twice does no harm.
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(docId));
         var canEdit = access.Role.Grants(Permission.Comment);
@@ -238,6 +243,11 @@ internal sealed partial class DocsHub(
             await notifications.DocEditedAsync(saved.Value.Doc, saved.Value.OldContent, saved.Value.LastEditor, Context.ConnectionAborted);
         }
 
+        if (saved.Value.Assigned.Count > 0)
+        {
+            await notifications.TasksAssignedAsync(saved.Value.Doc, saved.Value.Assigned, saved.Value.LastEditor, Context.ConnectionAborted);
+        }
+
         return true;
     }
 
@@ -248,7 +258,8 @@ internal sealed partial class DocsHub(
     /// </summary>
     /// <param name="editedBy">Someone whose edit the state includes beyond <paramref name="upToSeq"/> (a server-side edit): recorded as the
     /// last editor, and in history.</param>
-    internal static async Task<(Doc Doc, string OldContent, Guid LastEditor)?> SaveSnapshotAsync(
+    /// <returns>For a kanban, also the people newly assigned to its tasks, to tell.</returns>
+    internal static async Task<(Doc Doc, string OldContent, Guid LastEditor, IReadOnlyList<Kanban.KanbanIndexer.Assignment> Assigned)?> SaveSnapshotAsync(
         InklayerDbContext db, DocIndexer indexer, Guid docId, byte[] state, string markdown, long upToSeq, Guid savedBy, DateTime now, CancellationToken ct,
         Guid? editedBy = null)
     {
@@ -276,7 +287,7 @@ internal sealed partial class DocsHub(
         var lastEditor = editors.Count > 0 ? editors[^1] : savedBy;
         var textChanged = !string.Equals(doc.Content, markdown, StringComparison.Ordinal);
         // A board's summary stays the same when cards only move, resize or get arrows: any edit it includes counts.
-        var boardEdited = doc.Kind == DocKinds.Board && editors.Count > 0;
+        var boardEdited = DocKinds.HasCards(doc.Kind) && editors.Count > 0;
         if (textChanged || boardEdited)
         {
             doc.Content = markdown;
@@ -292,9 +303,16 @@ internal sealed partial class DocsHub(
             }
         }
 
+        // A kanban's tasks, for "My tasks", reminders and the tracker sync.
+        List<Kanban.KanbanIndexer.Assignment> assigned = [];
+        if (doc.Kind == DocKinds.Kanban && (boardEdited || textChanged))
+        {
+            assigned = await Kanban.KanbanIndexer.IndexAsync(db, doc, state, now, ct);
+        }
+
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
-        return (doc, oldContent, lastEditor);
+        return (doc, oldContent, lastEditor, assigned);
     }
 
     /// <summary>History: an "edited" entry per person, at most every few minutes each. Call after the doc's content changed.</summary>

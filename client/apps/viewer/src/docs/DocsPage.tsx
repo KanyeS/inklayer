@@ -14,15 +14,13 @@ import { type DocTree, docPath } from "./docsApi";
 import { QuickSwitcher } from "./QuickSwitcher";
 import { Sidebar } from "./sidebar/Sidebar";
 
-// The board canvas (and its drawing library) loads only when a board is opened.
+// The board canvas (and its drawing library) loads only when a board is opened; a kanban's columns likewise.
 const BoardView = lazy(() => import("../boards/BoardView").then((m) => ({ default: m.BoardView })));
+const KanbanView = lazy(() => import("../kanban/KanbanView").then((m) => ({ default: m.KanbanView })));
 
-/** Whether a doc in the tree (or shared with the organisation) is a board. */
-function isBoard(tree: DocTree, docId: string): boolean {
-  return (
-    tree.docs.find((d) => d.id === docId)?.kind === "board" ||
-    tree.shared?.find((d) => d.id === docId)?.kind === "board"
-  );
+/** What a doc in the tree (or shared with the organisation) is: a doc, a board or a kanban. */
+function kindOf(tree: DocTree, docId: string): string | undefined {
+  return tree.docs.find((d) => d.id === docId)?.kind ?? tree.shared?.find((d) => d.id === docId)?.kind;
 }
 
 /** Others add and rename docs too: refresh the tree this often. */
@@ -78,7 +76,21 @@ export function DocsPage({ orgId, docId, deleted }: { orgId: string; docId?: str
       />
       {deleted ? (
         <DeletedDocs orgId={orgId} canEdit={tree.data.canEdit} />
-      ) : docId && isBoard(tree.data, docId) ? (
+      ) : docId && kindOf(tree.data, docId) === "kanban" ? (
+        me.features.kanban ? (
+          <Suspense
+            fallback={
+              <div className="p-6 xl:col-span-2">
+                <Loading />
+              </div>
+            }
+          >
+            <KanbanView key={docId} orgId={orgId} docId={docId} tree={tree.data} />
+          </Suspense>
+        ) : (
+          <p className="p-6 text-muted-foreground xl:col-span-2">Kanban boards are turned off on this server.</p>
+        )
+      ) : docId && kindOf(tree.data, docId) === "board" ? (
         me.features.boards ? (
           <Suspense
             fallback={

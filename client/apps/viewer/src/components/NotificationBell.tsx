@@ -17,10 +17,13 @@ const KIND_TEXT: Record<InboxItem["kind"], string> = {
   access_requested: "asked for access",
   access_granted: "gave you access",
   access_declined: "declined your access request",
+  task_assigned: "assigned you a task",
+  task_due: "A task of yours is due today",
+  task_overdue: "A task of yours is overdue",
 };
 
 /** Notifications that come from a tracker, not a person: no name in front. */
-const FROM_TRACKER = new Set<InboxItem["kind"]>(["issue_closed", "issue_comment"]);
+const FROM_TRACKER = new Set<InboxItem["kind"]>(["issue_closed", "issue_comment", "task_due", "task_overdue"]);
 
 /** The in-app inbox: a bell with the unread count, and the recent notifications. Checks for new ones every minute. */
 export function NotificationBell() {
@@ -58,7 +61,7 @@ export function NotificationBell() {
       item.annotationId
         ? `/comments/${item.annotationId}`
         : item.docId
-          ? `/orgs/${item.organizationId}/docs/${item.docId}`
+          ? `/orgs/${item.organizationId}/docs/${item.docId}${item.taskKey ? `?task=${encodeURIComponent(item.taskKey)}` : ""}`
           : item.projectId
             ? `/projects/${item.projectId}${item.kind === "access_requested" ? "#access" : ""}`
             : "/",

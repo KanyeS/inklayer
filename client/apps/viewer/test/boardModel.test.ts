@@ -199,3 +199,18 @@ describe("boards the server changed", () => {
     expect(note?.type === "note" && note.text.toString()).toBe("Ship 👋 the beta");
   });
 });
+
+describe("tasks pinned from a kanban", () => {
+  it("are read back, and link their task in the summary", () => {
+    const doc = new Y.Doc();
+    const id = addCard(doc, { x: 0, y: 0 }, { type: "task", kanbanId: "k1", taskId: "t1", key: "WEB-12" });
+    expect(readCards(doc).find((c) => c.id === id)).toMatchObject({
+      type: "task",
+      kanbanId: "k1",
+      taskId: "t1",
+      key: "WEB-12",
+      w: 260,
+    });
+    expect(summaryMarkdown(doc, new Map())).toBe("- [[task:WEB-12]]");
+  });
+});

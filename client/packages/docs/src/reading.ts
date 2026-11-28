@@ -186,7 +186,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   return fence(tokens, idx, options, env, self);
 };
 
-// [[Doc]], [[Folder/Doc#Heading|text]], ![[embed]] and [[comment:id]]. Runs before markdown's own links.
+// [[Doc]], [[Folder/Doc#Heading|text]], ![[embed]], [[comment:id]] and [[task:KEY]]. Runs before markdown's own links.
 md.inline.ruler.before("link", "wikilink", (state: StateInline, silent: boolean) => {
   const src = state.src.slice(state.pos);
   const m = /^(!)?\[\[([^[\]\n]+?)\]\]/.exec(src);
@@ -256,6 +256,10 @@ export function renderMarkdown(text: string, resolver: LinkResolver): string {
     if (link.commentId) {
       if (resolver.guest) return "";
       return `<span class="doc-comment-embed" data-comment-id="${escapeHtml(link.commentId)}">${escapeHtml(link.alias ?? "Comment")}</span>`;
+    }
+    if (link.taskKey) {
+      if (resolver.guest) return `<span class="doc-wikilink-text">${escapeHtml(link.alias ?? link.taskKey)}</span>`;
+      return `<a class="doc-task-link" href="#" data-task-key="${escapeHtml(link.taskKey)}">${escapeHtml(link.alias ?? link.taskKey)}</a>`;
     }
     const shown = link.alias ?? (link.heading ? `${link.target} › ${link.heading}` : link.target!);
     const target = resolver.doc(link);

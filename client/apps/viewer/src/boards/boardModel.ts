@@ -11,7 +11,7 @@
 
 import * as Y from "yjs";
 
-export type CardType = "doc" | "note" | "image" | "link" | "column";
+export type CardType = "doc" | "note" | "image" | "link" | "column" | "task";
 
 interface CardBase {
   id: string;
@@ -60,7 +60,16 @@ export interface ColumnCard extends CardBase {
   title: string;
 }
 
-export type Card = DocCard | NoteCard | ImageCard | LinkCard | ColumnCard;
+/** One task from a kanban, pinned to the board. The task itself stays on its kanban. */
+export interface TaskCard extends CardBase {
+  type: "task";
+  kanbanId: string;
+  taskId: string;
+  /** WEB-12, for the summary's [[task:WEB-12]] link. */
+  key: string;
+}
+
+export type Card = DocCard | NoteCard | ImageCard | LinkCard | ColumnCard | TaskCard;
 
 export interface Arrow {
   id: string;
@@ -77,7 +86,11 @@ export const CARD_SIZES: Record<CardType, { w: number; h: number }> = {
   image: { w: 260, h: 200 },
   link: { w: 280, h: 120 },
   column: { w: 300, h: 400 },
+  task: { w: 260, h: 110 },
 };
+
+/** A kanban's doc card, made big enough to show its columns. */
+export const KANBAN_CARD_SIZE = { w: 900, h: 480 };
 
 /** An expanded doc card: big enough to write in. */
 export const EXPANDED_DOC_SIZE = { w: 560, h: 520 };
@@ -146,6 +159,11 @@ export function readCard(id: string, map: Y.Map<unknown>): Card | null {
     }
     case "column":
       return { ...base, type, title: str(map.get("title")) ?? "" };
+    case "task": {
+      const kanbanId = str(map.get("kanbanId"));
+      const taskId = str(map.get("taskId"));
+      return kanbanId && taskId ? { ...base, type, kanbanId, taskId, key: str(map.get("key")) ?? "" } : null;
+    }
     default:
       return null;
   }
@@ -187,7 +205,8 @@ type NewCard =
   | { type: "note"; text?: string; color?: string }
   | { type: "image"; mediaId: string; alt?: string; w?: number; h?: number }
   | { type: "link"; url: string; title?: string; description?: string; image?: string }
-  | { type: "column"; title?: string };
+  | { type: "column"; title?: string }
+  | { type: "task"; kanbanId: string; taskId: string; key: string };
 
 /** Adds a card with its top-left corner at (x, y), on top of the others. Returns its id. */
 export function addCard(doc: Y.Doc, at: { x: number; y: number }, card: NewCard): string {
@@ -222,6 +241,11 @@ export function addCard(doc: Y.Doc, at: { x: number; y: number }, card: NewCard)
         break;
       case "column":
         map.set("title", card.title ?? "Column");
+        break;
+      case "task":
+        map.set("kanbanId", card.kanbanId);
+        map.set("taskId", card.taskId);
+        map.set("key", card.key);
         break;
     }
     cardsOf(doc).set(id, map);
@@ -413,6 +437,35 @@ export interface DocRef {
   title: string;
 }
 
+/** What one card adds to the summary: a link, or text. */
+function summarize(card: Card, docs: Map<string, DocRef>, links: string[], text: string[]): void {
+  switch (card.type) {
+    case "doc": {
+      const ref = docs.get(card.docId);
+      if (ref) links.push(`- [[${ref.folder ? `${ref.folder}/${ref.title}` : ref.title}]]`);
+      break;
+    }
+    case "note": {
+      const note = card.text.toString().trim();
+      if (note) text.push(note);
+      break;
+    }
+    case "column":
+      if (card.title.trim()) text.push(`## ${card.title.trim()}`);
+      break;
+    case "link":
+      text.push(`[${(card.title ?? card.url).replace(/[[\]]/g, "")}](${card.url})`);
+      break;
+    case "image":
+      if (card.alt) text.push(card.alt);
+      break;
+    case "task":
+      // Links the task (and so its kanban, which lists the board in its backlinks).
+      if (card.key) links.push(`- [[task:${card.key}]]`);
+      break;
+  }
+}
+
 /**
  * The markdown saved with the board: the docs on it as [[links]] (so they show the board in their backlinks), then the
  * notes, columns, links and arrow labels as text (so search finds the board). Read top to bottom, left to right.
@@ -428,29 +481,7 @@ export function summaryMarkdown(doc: Y.Doc, docs: Map<string, DocRef>): string {
 
   const links: string[] = [];
   const text: string[] = [];
-  for (const card of ordered) {
-    switch (card.type) {
-      case "doc": {
-        const ref = docs.get(card.docId);
-        if (ref) links.push(`- [[${ref.folder ? `${ref.folder}/${ref.title}` : ref.title}]]`);
-        break;
-      }
-      case "note": {
-        const note = card.text.toString().trim();
-        if (note) text.push(note);
-        break;
-      }
-      case "column":
-        if (card.title.trim()) text.push(`## ${card.title.trim()}`);
-        break;
-      case "link":
-        text.push(`[${(card.title ?? card.url).replace(/[[\]]/g, "")}](${card.url})`);
-        break;
-      case "image":
-        if (card.alt) text.push(card.alt);
-        break;
-    }
-  }
+  for (const card of ordered) summarize(card, docs, links, text);
   for (const arrow of readArrows(doc)) if (arrow.label?.trim()) text.push(arrow.label.trim());
 
   return [...(links.length ? [links.join("\n")] : []), ...text].join("\n\n");

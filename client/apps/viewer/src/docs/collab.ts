@@ -39,8 +39,8 @@ interface OpenResult {
   kind?: DocKind;
 }
 
-/** A markdown doc, or a board of cards (whose Yjs document holds maps, not text). */
-export type DocKind = "doc" | "board";
+/** A markdown doc, a board of cards or a kanban of tasks (whose Yjs documents hold maps, not text). */
+export type DocKind = "doc" | "board" | "kanban";
 
 export type SessionStatus = "connecting" | "live" | "offline" | "closed";
 
@@ -395,7 +395,7 @@ export async function editDoc(docId: string, change: (text: Y.Text) => void): Pr
   try {
     await session.open();
     if (!session.loaded || !session.canEdit) return;
-    if (session.kind === "board") {
+    if (session.kind !== "doc") {
       const summary = new Y.Doc();
       const text = summary.getText("summary");
       text.insert(0, session.savedMarkdown);

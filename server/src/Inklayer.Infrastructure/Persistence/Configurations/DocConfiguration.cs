@@ -114,3 +114,66 @@ internal sealed class DocTagConfiguration : IEntityTypeConfiguration<DocTag>
         builder.HasOne<Doc>().WithMany().HasForeignKey(t => t.DocId).OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+internal sealed class KanbanBoardConfiguration : IEntityTypeConfiguration<KanbanBoard>
+{
+    public void Configure(EntityTypeBuilder<KanbanBoard> builder)
+    {
+        builder.HasKey(k => k.DocId);
+        builder.Property(k => k.KeyPrefix).HasMaxLength(KanbanBoard.MaxKeyPrefixLength);
+        builder.Property(k => k.SyncDirection).HasMaxLength(16);
+        builder.Property(k => k.SyncError).HasMaxLength(1000);
+        builder.Property(k => k.SyncVersion).IsConcurrencyToken();
+        builder.HasIndex(k => new { k.OrganizationId, k.KeyPrefix }).IsUnique();
+        builder.HasIndex(k => k.TrackerConnectionId);
+        builder.HasOne<Doc>().WithOne().HasForeignKey<KanbanBoard>(k => k.DocId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<Inklayer.Domain.Issues.IssueTrackerConnection>().WithMany().HasForeignKey(k => k.TrackerConnectionId).OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+internal sealed class KanbanTaskConfiguration : IEntityTypeConfiguration<KanbanTask>
+{
+    public void Configure(EntityTypeBuilder<KanbanTask> builder)
+    {
+        builder.HasKey(t => new { t.DocId, t.TaskId });
+        builder.Property(t => t.TaskId).HasMaxLength(64);
+        builder.Property(t => t.Key).HasMaxLength(32);
+        builder.Property(t => t.Title).HasMaxLength(KanbanTask.MaxTitleLength);
+        builder.Property(t => t.ColumnId).HasMaxLength(64);
+        builder.Property(t => t.ColumnName).HasMaxLength(200);
+        builder.Property(t => t.Category).HasMaxLength(16);
+        builder.Property(t => t.Type).HasMaxLength(16);
+        builder.Property(t => t.Priority).HasMaxLength(16);
+        builder.Property(t => t.ParentTaskId).HasMaxLength(64);
+        builder.Property(t => t.ExternalId).HasMaxLength(200);
+        builder.Property(t => t.ExternalKey).HasMaxLength(200);
+        builder.Property(t => t.ExternalUrl).HasMaxLength(2000);
+        builder.HasIndex(t => new { t.OrganizationId, t.Key });
+        builder.HasIndex(t => new { t.OrganizationId, t.Due });
+        builder.HasIndex(t => t.LinkedDocId);
+        builder.HasOne<Doc>().WithMany().HasForeignKey(t => t.DocId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(t => t.Assignees).WithOne().HasForeignKey(a => new { a.DocId, a.TaskId }).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(t => t.Tags).WithOne().HasForeignKey(a => new { a.DocId, a.TaskId }).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class KanbanTaskAssigneeConfiguration : IEntityTypeConfiguration<KanbanTaskAssignee>
+{
+    public void Configure(EntityTypeBuilder<KanbanTaskAssignee> builder)
+    {
+        builder.HasKey(a => new { a.DocId, a.TaskId, a.UserId });
+        builder.Property(a => a.TaskId).HasMaxLength(64);
+        builder.HasIndex(a => a.UserId);
+    }
+}
+
+internal sealed class KanbanTaskTagConfiguration : IEntityTypeConfiguration<KanbanTaskTag>
+{
+    public void Configure(EntityTypeBuilder<KanbanTaskTag> builder)
+    {
+        builder.HasKey(a => new { a.DocId, a.TaskId, a.Tag });
+        builder.Property(a => a.TaskId).HasMaxLength(64);
+        builder.Property(a => a.Tag).HasMaxLength(DocTagStyle.MaxTagLength);
+        builder.HasIndex(a => a.Tag);
+    }
+}

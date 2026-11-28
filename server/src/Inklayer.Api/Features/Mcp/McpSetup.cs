@@ -22,7 +22,7 @@ internal static class McpSetup
                 o.ServerInstructions = InklayerTools.Instructions;
             })
             .WithHttpTransport(o => o.Stateless = true)
-            .WithTools([typeof(InklayerTools)])
+            .WithTools([typeof(InklayerTools), typeof(KanbanTools)])
             // Tools of a turned-off feature (docs, issue trackers) are hidden and refused.
             .WithRequestFilters(filters =>
             {
@@ -46,7 +46,7 @@ internal static class McpSetup
     {
         var states = await services.GetRequiredService<FeatureSwitches>().StatesAsync(ct);
         var off = new Dictionary<string, Feature>(StringComparer.Ordinal);
-        foreach (var (feature, tools) in new[] { (Feature.Docs, InklayerTools.DocTools), (Feature.Boards, InklayerTools.BoardTools), (Feature.IssueTrackers, InklayerTools.IssueTools) })
+        foreach (var (feature, tools) in new[] { (Feature.Docs, InklayerTools.DocTools), (Feature.Docs, KanbanTools.Names), (Feature.Boards, InklayerTools.BoardTools), (Feature.Kanban, KanbanTools.Names), (Feature.IssueTrackers, InklayerTools.IssueTools) })
         {
             if (!states[feature].Enabled)
             {

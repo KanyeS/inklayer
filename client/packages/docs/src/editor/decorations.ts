@@ -50,8 +50,9 @@ export const linkMarks = matchPlugin(
     decoration: (m) => {
       const inner = m[2] ?? "";
       const isComment = /^\s*comment:/i.test(inner);
+      const isTask = /^\s*task:/i.test(inner);
       return Decoration.mark({
-        class: isComment ? "cm-wikilink cm-commentlink" : "cm-wikilink",
+        class: isComment ? "cm-wikilink cm-commentlink" : isTask ? "cm-wikilink cm-tasklink" : "cm-wikilink",
         attributes: { "data-link": inner, title: `${isMac ? "⌘" : "Ctrl"}+click to open` },
       });
     },
@@ -159,6 +160,60 @@ export function commentChips(hooks: EditorHooks): Extension {
       if (!link?.commentId) continue;
       const label = link.alias ?? hooks.commentLabel(link.commentId) ?? "Comment";
       chips.push({ from, to, widget: new CommentChip(link.commentId, label, hooks.openComment) });
+    }
+    return chips;
+  });
+}
+
+class TaskChip extends WidgetType {
+  constructor(
+    readonly key: string,
+    readonly label: string,
+    readonly open: ((key: string, newTab: boolean) => void) | undefined,
+  ) {
+    super();
+  }
+
+  override eq(other: TaskChip) {
+    return other.key === this.key && other.label === this.label;
+  }
+
+  toDOM() {
+    const chip = document.createElement("span");
+    chip.className = "cm-task-chip";
+    chip.title = "Task: click to open";
+    const key = document.createElement("span");
+    key.className = "cm-task-chip-key";
+    key.textContent = this.key;
+    chip.append(key);
+    if (this.label) {
+      const text = document.createElement("span");
+      text.textContent = this.label;
+      chip.append(text);
+    }
+    chip.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      this.open?.(this.key, e.metaKey || e.ctrlKey || e.shiftKey);
+    });
+    return chip;
+  }
+
+  override ignoreEvent() {
+    return true;
+  }
+}
+
+/** [[task:WEB-12]] shows as a chip with the task's key and title (or its alias). */
+export function taskChips(hooks: EditorHooks): Extension {
+  return chipPlugin((text, offset) => {
+    const chips: Chip[] = [];
+    for (const m of text.matchAll(new RegExp(LINK_PATTERN.source, "g"))) {
+      const from = offset + m.index;
+      const to = from + m[0].length;
+      const link = parseLink(m[2] ?? "", Boolean(m[1]), from, to);
+      if (!link?.taskKey) continue;
+      const label = link.alias ?? hooks.taskLabel?.(link.taskKey) ?? "";
+      chips.push({ from, to, widget: new TaskChip(link.taskKey, label, hooks.openTask) });
     }
     return chips;
   });

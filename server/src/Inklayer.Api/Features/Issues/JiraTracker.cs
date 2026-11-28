@@ -8,7 +8,7 @@ using Inklayer.Domain.Issues;
 namespace Inklayer.Api.Features.Issues;
 
 /// <summary>Jira Cloud (REST v3). Token: an Atlassian API token for <see cref="TrackerSettings.Email"/>.</summary>
-internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues, IIssueFiles
+internal sealed partial class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIssueTypes, IChildIssues, IIssueFiles, IBoardSync
 {
     private static HttpRequestMessage Request(HttpMethod method, TrackerSettings s, string path, TrackerAuth token, object? body = null)
     {
@@ -116,7 +116,7 @@ internal sealed class JiraTracker(IHttpClientFactory http) : IIssueTracker, IIss
     private static readonly string[] SearchFields = ["summary", "status"];
 
     /// <summary>Text as Atlassian Document Format, which Jira wants for descriptions and comments: one paragraph per line.</summary>
-    private static object Adf(string text) => new
+    internal static object Adf(string text) => new
     {
         type = "doc",
         version = 1,

@@ -27,7 +27,7 @@ const doc = (docId: string) => ({ params: { path: { docId } } });
 
 export const docsApi = {
   tree: (orgId: string) => api.get("/api/orgs/{orgId}/docs", org(orgId)),
-  create: (orgId: string, title: string, folder = "", kind: "doc" | "board" = "doc") =>
+  create: (orgId: string, title: string, folder = "", kind: "doc" | "board" | "kanban" = "doc") =>
     api.post("/api/orgs/{orgId}/docs", { ...org(orgId), body: { title, folder, kind } }),
   createFolder: (orgId: string, path: string) =>
     api.post("/api/orgs/{orgId}/docs/folders", { ...org(orgId), body: { path } }),

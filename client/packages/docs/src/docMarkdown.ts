@@ -2,18 +2,20 @@
  * Links and tags in docs, with the same rules as the server (DocMarkdown.cs):
  * <ul>
  * <li><code>[[Title]]</code>, <code>[[Folder/Title]]</code>, <code>[[Title#Heading]]</code>, <code>[[Title|shown text]]</code>, <code>![[embed]]</code></li>
- * <li><code>[[comment:&lt;id&gt;]]</code> links a page comment</li>
+ * <li><code>[[comment:&lt;id&gt;]]</code> links a page comment; <code>[[task:WEB-12]]</code> a task on a kanban</li>
  * <li><code>#tag</code> at the start of a line or after a space; not headings, not all digits</li>
  * </ul>
  * Nothing in fenced code blocks or inline code counts.
  */
 
 export interface WikiLink {
-  /** The doc as written, e.g. "Roadmap" or "Research/Interviews". Null for comment links. */
+  /** The doc as written, e.g. "Roadmap" or "Research/Interviews". Null for comment and task links. */
   target: string | null;
   heading: string | null;
   alias: string | null;
   commentId: string | null;
+  /** For [[task:WEB-12]]: the task's key, in capitals. */
+  taskKey: string | null;
   embed: boolean;
   /** Where the whole [[…]] is in the text. */
   from: number;
@@ -24,6 +26,9 @@ export const LINK_PATTERN = /(!)?\[\[([^[\]\n]+?)\]\]/g;
 const TAG_PATTERN = /(^|\s)#([\p{L}\p{N}_/-]+)/gu;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const COMMENT_PREFIX = "comment:";
+export const TASK_PREFIX = "task:";
+/** A task's key: its kanban's prefix (2–10 capitals or digits, starting with a letter), a dash and a number. */
+export const TASK_KEY = /^[A-Z][A-Z0-9]{1,9}-[0-9]{1,9}$/;
 
 export function parseLink(raw: string, embed: boolean, from: number, to: number): WikiLink | null {
   let inner = raw;
@@ -36,7 +41,15 @@ export function parseLink(raw: string, embed: boolean, from: number, to: number)
   inner = inner.trim();
   if (inner.toLowerCase().startsWith(COMMENT_PREFIX)) {
     const id = inner.slice(COMMENT_PREFIX.length).trim();
-    return GUID.test(id) ? { target: null, heading: null, alias, commentId: id.toLowerCase(), embed, from, to } : null;
+    return GUID.test(id)
+      ? { target: null, heading: null, alias, commentId: id.toLowerCase(), taskKey: null, embed, from, to }
+      : null;
+  }
+  if (inner.toLowerCase().startsWith(TASK_PREFIX)) {
+    const key = inner.slice(TASK_PREFIX.length).trim().toUpperCase();
+    return TASK_KEY.test(key)
+      ? { target: null, heading: null, alias, commentId: null, taskKey: key, embed, from, to }
+      : null;
   }
   let heading: string | null = null;
   const hash = inner.indexOf("#");
@@ -51,7 +64,7 @@ export function parseLink(raw: string, embed: boolean, from: number, to: number)
     .filter(Boolean)
     .join("/");
   if (target.toLowerCase().endsWith(".md")) target = target.slice(0, -3);
-  return target ? { target, heading, alias, commentId: null, embed, from, to } : null;
+  return target ? { target, heading, alias, commentId: null, taskKey: null, embed, from, to } : null;
 }
 
 /** Ranges of the text that are code (fenced blocks and inline code), where links and tags don't count. */

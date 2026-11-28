@@ -30,6 +30,7 @@ export interface IconLibrary {
 export const DEFAULT_ICONS = {
   doc: "file-text",
   board: "layout-dashboard",
+  kanban: "square-kanban",
   comment: "message-square",
   tag: "hash",
 } as const;
@@ -124,11 +125,13 @@ export function DocIcon({
   icon?: string | null;
   color?: string | null;
   className?: string;
-  /** Boards get their own default icon. */
+  /** Boards and kanbans get their own default icons. */
   kind?: string | null;
 }) {
   const library = useIcons();
-  const node = library?.get(icon) ?? library?.get(kind === "board" ? DEFAULT_ICONS.board : DEFAULT_ICONS.doc);
+  const node =
+    library?.get(icon) ??
+    library?.get(kind === "board" ? DEFAULT_ICONS.board : kind === "kanban" ? DEFAULT_ICONS.kanban : DEFAULT_ICONS.doc);
   const style = color ? { color } : undefined;
   if (!node) return <FileText className={className} style={style} />;
   return <IconSvg node={node} className={className} style={style} />;

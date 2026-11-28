@@ -30,6 +30,9 @@ public enum Feature
 
     /// <summary>Boards: a canvas of doc cards, notes, images and links, with arrows for the links between them. Needs docs.</summary>
     Boards,
+
+    /// <summary>Kanban boards: Jira-style columns of tasks with assignees, due dates, tags and sub-tasks. Needs docs.</summary>
+    Kanban,
 }
 
 /// <summary>
@@ -55,6 +58,8 @@ public sealed class FeatureOptions
 
     public bool Boards { get; set; } = true;
 
+    public bool Kanban { get; set; } = true;
+
     public bool this[Feature feature] => feature switch
     {
         Feature.Docs => Docs,
@@ -64,6 +69,7 @@ public sealed class FeatureOptions
         Feature.IssueTrackers => IssueTrackers,
         Feature.Sharing => Sharing,
         Feature.Boards => Boards,
+        Feature.Kanban => Kanban,
         _ => true,
     };
 }
@@ -164,12 +170,13 @@ public sealed class FeatureSwitches(IOptions<FeatureOptions> options, IServiceSc
 
 /// <summary>What the apps need to know: which features to show.</summary>
 /// <param name="Boards">On only while docs are on too: boards are made of docs.</param>
-public sealed record FeaturesResponse(bool Docs, bool LiveCursors, bool Mcp, bool BugContext, bool IssueTrackers, bool Sharing, bool Boards = false)
+/// <param name="Kanban">On only while docs are on too: kanbans are docs.</param>
+public sealed record FeaturesResponse(bool Docs, bool LiveCursors, bool Mcp, bool BugContext, bool IssueTrackers, bool Sharing, bool Boards = false, bool Kanban = false)
 {
     public static FeaturesResponse From(IReadOnlyDictionary<Feature, FeatureState> states) =>
         new(states[Feature.Docs].Enabled, states[Feature.LiveCursors].Enabled, states[Feature.Mcp].Enabled,
             states[Feature.BugContext].Enabled, states[Feature.IssueTrackers].Enabled, states[Feature.Sharing].Enabled,
-            states[Feature.Boards].Enabled && states[Feature.Docs].Enabled);
+            states[Feature.Boards].Enabled && states[Feature.Docs].Enabled, states[Feature.Kanban].Enabled && states[Feature.Docs].Enabled);
 }
 
 internal static class FeatureSwitchExtensions
@@ -192,6 +199,9 @@ internal static class FeatureSwitchExtensions
             var path = context.Request.Path;
             Feature[][] needs =
                 path.StartsWithSegments("/api/boards", StringComparison.OrdinalIgnoreCase) ? [[Feature.Docs], [Feature.Boards]]
+                : path.StartsWithSegments("/api/kanbans", StringComparison.OrdinalIgnoreCase) && (path.Value ?? "").Contains("/tracker", StringComparison.OrdinalIgnoreCase)
+                    ? [[Feature.Docs], [Feature.Kanban], [Feature.IssueTrackers]]
+                : path.StartsWithSegments("/api/kanbans", StringComparison.OrdinalIgnoreCase) || IsOrgPart(path, "tasks") ? [[Feature.Docs], [Feature.Kanban]]
                 : path.StartsWithSegments("/api/docs", StringComparison.OrdinalIgnoreCase) || IsOrgDocs(path) ? [[Feature.Docs]]
                 : path.StartsWithSegments(Features.Presence.PresenceEndpoints.HubPath, StringComparison.OrdinalIgnoreCase) ? [[Feature.LiveCursors]]
                 : path.StartsWithSegments("/api/presence/ticket", StringComparison.OrdinalIgnoreCase) ? [[Feature.LiveCursors, Feature.Docs]]
@@ -233,6 +243,7 @@ internal static class FeatureSwitchExtensions
         Feature.IssueTrackers => "Issue trackers",
         Feature.Sharing => "Sharing",
         Feature.Boards => "Boards",
+        Feature.Kanban => "Kanban boards",
         _ => feature.ToString(),
     };
 
@@ -250,6 +261,14 @@ internal static class FeatureSwitchExtensions
         var parts = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length >= 4 && parts[0].Equals("api", StringComparison.OrdinalIgnoreCase)
             && parts[1].Equals("projects", StringComparison.OrdinalIgnoreCase) && parts[3].Equals(part, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>/api/orgs/{id}/{part} and below.</summary>
+    private static bool IsOrgPart(PathString path, string part)
+    {
+        var parts = (path.Value ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 4 && parts[0].Equals("api", StringComparison.OrdinalIgnoreCase)
+            && parts[1].Equals("orgs", StringComparison.OrdinalIgnoreCase) && parts[3].Equals(part, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>/api/orgs/{id}/docs and below.</summary>

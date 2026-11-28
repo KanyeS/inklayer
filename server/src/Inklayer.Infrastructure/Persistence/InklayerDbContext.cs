@@ -94,6 +94,14 @@ public sealed class InklayerDbContext(DbContextOptions<InklayerDbContext> option
 
     public DbSet<DocOrgShare> DocOrgShares => Set<DocOrgShare>();
 
+    public DbSet<KanbanBoard> KanbanBoards => Set<KanbanBoard>();
+
+    public DbSet<KanbanTask> KanbanTasks => Set<KanbanTask>();
+
+    public DbSet<KanbanTaskAssignee> KanbanTaskAssignees => Set<KanbanTaskAssignee>();
+
+    public DbSet<KanbanTaskTag> KanbanTaskTags => Set<KanbanTaskTag>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);

@@ -109,7 +109,13 @@ public static class DocKinds
     public const string Doc = "doc";
     public const string Board = "board";
 
-    public static bool IsValid(string? kind) => kind is Doc or Board;
+    /// <summary>A Jira-style board of tasks in columns (<see cref="KanbanBoard"/>).</summary>
+    public const string Kanban = "kanban";
+
+    public static bool IsValid(string? kind) => kind is Doc or Board or Kanban;
+
+    /// <summary>Kinds whose Yjs document holds maps, not text: any edit is a change, and history keeps the whole state.</summary>
+    public static bool HasCards(string? kind) => kind is Board or Kanban;
 }
 
 public static class DocActions

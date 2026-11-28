@@ -1,5 +1,5 @@
 import { cn } from "@inklayer/ui/lib/utils";
-import { Building2, FilePlus2, FolderPlus, LayoutDashboard, Network, Search, Trash2 } from "lucide-react";
+import { Building2, FilePlus2, FolderPlus, LayoutDashboard, Network, Search, SquareKanban, Trash2 } from "lucide-react";
 import { type DragEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useMe } from "@/App";
 import { ErrorText } from "@/components/Layout";
@@ -100,7 +100,7 @@ export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch, 
     });
 
   const { me } = useMe();
-  const createDoc = async (parent: string, title: string, kind: "doc" | "board" = "doc") => {
+  const createDoc = async (parent: string, title: string, kind: "doc" | "board" | "kanban" = "doc") => {
     const doc = await docsApi.create(orgId, title, parent, kind);
     navigate(docPath(orgId, doc.id));
   };
@@ -158,6 +158,11 @@ export function Sidebar({ orgId, orgName, tree, activeId, tag, onTag, onSearch, 
               {me.features.boards && (
                 <IconButton title="New board" onClick={() => setDraft({ kind: "board", parent: "" })}>
                   <LayoutDashboard />
+                </IconButton>
+              )}
+              {me.features.kanban && (
+                <IconButton title="New kanban" onClick={() => setDraft({ kind: "kanban", parent: "" })}>
+                  <SquareKanban />
                 </IconButton>
               )}
               <IconButton title="New folder" onClick={() => setDraft({ kind: "folder", parent: "" })}>

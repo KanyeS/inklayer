@@ -27,6 +27,15 @@ public static class NotificationKinds
 
     /// <summary>Your request for access was declined.</summary>
     public const string AccessDeclined = "access_declined";
+
+    /// <summary>Someone assigned you a task on a kanban.</summary>
+    public const string TaskAssigned = "task_assigned";
+
+    /// <summary>A task you're assigned is due today.</summary>
+    public const string TaskDue = "task_due";
+
+    /// <summary>A task you're assigned is past its due date.</summary>
+    public const string TaskOverdue = "task_overdue";
 }
 
 /// <summary>Something for one person to look at, shown in their in-app inbox (and emailed, if their organisation sends emails).</summary>
@@ -48,6 +57,9 @@ public sealed class Notification
 
     /// <summary>The product, for access requests.</summary>
     public Guid? ProjectId { get; init; }
+
+    /// <summary>For a task on a kanban (<see cref="DocId"/>): its key, e.g. <c>WEB-12</c>, to open it.</summary>
+    public string? TaskKey { get; init; }
 
     /// <summary>A short preview of what happened (comment or reply text), with mentions written as names.</summary>
     public string Preview { get; init; } = "";

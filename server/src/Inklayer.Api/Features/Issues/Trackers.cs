@@ -65,6 +65,49 @@ internal interface IIssueTracker
     Task<string> AddCommentAsync(TrackerSettings settings, TrackerAuth token, string externalId, string markdown, CancellationToken ct);
 }
 
+/// <summary>A status issues can be in, and the kind of status it is: todo, doing or done (Jira's status categories).</summary>
+internal sealed record BoardStatus(string Id, string Name, string Category);
+
+/// <summary>A link from one issue to another: blocks, relates, duplicates or clones, from <see cref="BoardIssue"/>'s side.</summary>
+internal sealed record BoardLink(string Type, string OtherKey, bool Outward);
+
+/// <summary>An issue as a kanban task sees it. <see cref="Description"/> is plain text; dates are yyyy-mm-dd.</summary>
+internal sealed record BoardIssue(
+    string Id, string Key, string Url, string Title, string Description, string StatusId, string StatusCategory, string? AssigneeAccountId,
+    string? AssigneeName, string? Due, IReadOnlyList<string> Labels, string? Priority, string Type, string? ParentKey, DateTime Updated,
+    IReadOnlyList<BoardLink> Links);
+
+/// <summary>Fields to change on an issue; null leaves one as it is. <see cref="Due"/> and <see cref="Assignee"/> are set (or cleared) when their Set flag is.</summary>
+internal sealed record BoardChange(
+    string? Title = null, string? Description = null, bool SetDue = false, string? Due = null, IReadOnlyList<string>? Labels = null, string? Priority = null,
+    bool SetAssignee = false, string? Assignee = null)
+{
+    public bool IsEmpty => Title is null && Description is null && !SetDue && Labels is null && Priority is null && !SetAssignee;
+}
+
+/// <summary>A tracker whose project can be kept in step with a kanban board (Jira).</summary>
+internal interface IBoardSync
+{
+    Task<IReadOnlyList<BoardStatus>> StatusesAsync(TrackerSettings settings, TrackerAuth token, CancellationToken ct);
+
+    /// <summary>The project's issues changed in the last <paramref name="minutes"/> minutes (null: the open ones, and those done in the last 30 days), at most 500.</summary>
+    Task<IReadOnlyList<BoardIssue>> ChangedAsync(TrackerSettings settings, TrackerAuth token, int? minutes, CancellationToken ct);
+
+    Task UpdateAsync(TrackerSettings settings, TrackerAuth token, string key, BoardChange change, CancellationToken ct);
+
+    /// <summary>Moves the issue into the status, by whichever of its workflow's transitions leads there.</summary>
+    Task TransitionAsync(TrackerSettings settings, TrackerAuth token, string key, string statusId, CancellationToken ct);
+
+    /// <summary>Links two issues: <paramref name="fromKey"/> blocks (relates to, duplicates, clones) <paramref name="toKey"/>.</summary>
+    Task LinkAsync(TrackerSettings settings, TrackerAuth token, string type, string fromKey, string toKey, CancellationToken ct);
+
+    /// <summary>The tracker's account for this email address, if it has one it shows.</summary>
+    Task<string?> FindAccountAsync(TrackerSettings settings, TrackerAuth token, string email, CancellationToken ct);
+
+    /// <summary>A new issue of this kind of task (task, bug, story, epic), under <paramref name="parentKey"/> when it's a sub-task.</summary>
+    Task<CreatedIssue> CreateTaskAsync(TrackerSettings settings, TrackerAuth token, string title, string description, string type, string? parentKey, CancellationToken ct);
+}
+
 /// <summary>A tracker whose projects have their own issue types (Azure DevOps work item types, Jira issue types).</summary>
 internal interface IIssueTypes
 {

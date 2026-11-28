@@ -7,6 +7,7 @@ using Inklayer.Api.Features.Admin;
 using Inklayer.Api.Features.Annotations;
 using Inklayer.Api.Features.Docs;
 using Inklayer.Api.Features.Issues;
+using Inklayer.Api.Features.Kanban;
 using Inklayer.Api.Features.Live;
 using Inklayer.Api.Features.Mcp;
 using Inklayer.Api.Features.Notifications;
@@ -42,6 +43,7 @@ try
     builder.Services.AddInklayerMcp();
     builder.Services.AddInklayerNotifications(builder.Configuration);
     builder.Services.AddInklayerIssues();
+    builder.Services.AddInklayerKanban();
     builder.Services.AddInklayerSharing(builder.Configuration);
     Inklayer.Api.Features.Docs.LinkPreviewer.Configure(builder.Services);
     builder.Services.AddValidation();
@@ -81,6 +83,8 @@ try
     app.MapPresenceEndpoints();
     app.MapDocEndpoints();
     app.MapBoardEndpoints();
+    app.MapKanbanEndpoints();
+    app.MapKanbanTrackerEndpoints();
     app.MapInklayerMcp();
     app.MapActivityEndpoints();
     app.MapViewerFallback();

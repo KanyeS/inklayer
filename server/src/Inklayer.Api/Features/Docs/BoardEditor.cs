@@ -64,6 +64,7 @@ internal sealed partial class BoardEditor(InklayerDbContext db, DocText docText,
     private static readonly Dictionary<string, (double W, double H)> Sizes = new(StringComparer.Ordinal)
     {
         ["doc"] = (280, 180), ["note"] = (220, 120), ["image"] = (260, 200), ["link"] = (280, 120), ["column"] = (300, 400),
+        ["task"] = (260, 110),
     };
 
     /// <summary>A card while it's being changed. <see cref="Changed"/> lists the fields to write.</summary>
@@ -204,7 +205,10 @@ internal sealed partial class BoardEditor(InklayerDbContext db, DocText docText,
                 Parent = Str(map.Get(read, "parent")), Color = Str(map.Get(read, "color")),
                 DocId = Guid.TryParse(Str(map.Get(read, "docId")), out var docId) ? docId : null,
                 Text = text?.Tag == OutputTag.Text ? text.Text.String(read) : null,
-                Url = Str(map.Get(read, "url")), Title = Str(map.Get(read, "title")), Description = Str(map.Get(read, "description")),
+                Url = Str(map.Get(read, "url")),
+                // A task card's title is its task's key (WEB-12): the task itself lives on its kanban.
+                Title = type == "task" ? Str(map.Get(read, "key")) : Str(map.Get(read, "title")),
+                Description = Str(map.Get(read, "description")),
                 Image = Str(map.Get(read, "image")), Alt = Str(map.Get(read, "alt")),
             };
         }
@@ -813,6 +817,9 @@ internal sealed partial class BoardEditor(InklayerDbContext db, DocText docText,
                     break;
                 case "note" when !string.IsNullOrWhiteSpace(card.Text):
                     text.Add(card.Text.Trim());
+                    break;
+                case "task" when !string.IsNullOrWhiteSpace(card.Title):
+                    links.Add($"- [[task:{card.Title}]]");
                     break;
                 case "column" when !string.IsNullOrWhiteSpace(card.Title):
                     text.Add($"## {card.Title.Trim()}");

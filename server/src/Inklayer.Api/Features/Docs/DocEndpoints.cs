@@ -15,10 +15,10 @@ public sealed record DocActor(Guid Id, string DisplayName, string? FullName = nu
 
 /// <param name="Icon">A Lucide icon name chosen for the doc, or null for the default.</param>
 /// <param name="Color">The icon's colour, <c>#rrggbb</c>, or null for the theme's.</param>
-/// <param name="Kind">A markdown doc or a board of cards.</param>
+/// <param name="Kind">A markdown doc, a board of cards, or a kanban of tasks.</param>
 public sealed record DocSummaryResponse(
     Guid Id, string Folder, string Title, DateTime UpdatedAt, IReadOnlyList<string> Tags, string? Icon = null, string? Color = null,
-    [property: AllowedValues("doc", "board")] string Kind = DocKinds.Doc);
+    [property: AllowedValues("doc", "board", "kanban")] string Kind = DocKinds.Doc);
 
 /// <param name="Folders">Every folder, including ones that only exist because a doc is in them, sorted.</param>
 /// <param name="Tags">Every #tag in use, with how many docs have it and its icon and colour.</param>
@@ -44,7 +44,7 @@ public sealed record DocResponse(
     bool CanEdit, IReadOnlyList<string> Tags, IReadOnlyList<DocSummaryResponse> Backlinks, IReadOnlyList<DocCommentLinkResponse> CommentBacklinks,
     IReadOnlyList<DocLinkResponse> Links, IReadOnlyList<Guid> CommentLinks, IReadOnlyList<Notifications.PersonResponse>? People = null,
     string? Icon = null, string? Color = null, bool CanManage = false, DocOrganizationResponse? SharedFrom = null, IReadOnlyList<DocOrgShareResponse>? SharedWith = null,
-    [property: AllowedValues("doc", "board")] string Kind = DocKinds.Doc);
+    [property: AllowedValues("doc", "board", "kanban")] string Kind = DocKinds.Doc);
 
 /// <param name="Id">The organisation.</param>
 public sealed record DocOrganizationResponse(Guid Id, string Name);
@@ -57,13 +57,14 @@ public sealed record DocOrgShareResponse(Guid OrganizationId, string Name, bool 
 /// <param name="CanEdit">Whether the caller can edit its text.</param>
 public sealed record SharedDocResponse(
     Guid Id, string Title, DateTime UpdatedAt, DocOrganizationResponse From, bool CanEdit, string? Icon = null, string? Color = null,
-    [property: AllowedValues("doc", "board")] string Kind = DocKinds.Doc);
+    [property: AllowedValues("doc", "board", "kanban")] string Kind = DocKinds.Doc);
 
 /// <param name="RelinkDocs">After a rename or move: docs whose text links the old name. The client that renamed rewrites those links.</param>
 public sealed record DocChangedResponse(DocResponse Doc, IReadOnlyList<Guid> RelinkDocs);
 
-/// <param name="Kind">"doc" (the default) or "board".</param>
-public sealed record CreateDocRequest(string? Folder, string Title, string? Kind = null);
+/// <param name="Kind">"doc" (the default), "board" or "kanban".</param>
+/// <param name="KeyPrefix">For a kanban: the prefix of its task keys (<c>WEB</c> for <c>WEB-12</c>); made from the title if left out.</param>
+public sealed record CreateDocRequest(string? Folder, string Title, string? Kind = null, string? KeyPrefix = null);
 
 public sealed record UpdateDocRequest(int Version, string? Title, string? Folder);
 
@@ -95,9 +96,10 @@ public sealed record DocSearchResultResponse(Guid Id, string Folder, string Titl
 public sealed record DocTagCountResponse(string Tag, int Count, string? Icon = null, string? Color = null);
 
 /// <param name="Board">For a doc node: whether it's a board.</param>
+/// <param name="Kanban">For a doc node: whether it's a kanban.</param>
 public sealed record DocGraphNode(
     string Id, [property: AllowedValues("doc", "comment")] string Kind, string Label, Guid? DocId, Guid? AnnotationId, string? Folder, string? Icon = null,
-    string? Color = null, bool Board = false);
+    string? Color = null, bool Board = false, bool Kanban = false);
 
 public sealed record DocGraphEdge(string Source, string Target);
 
@@ -180,12 +182,31 @@ internal static class DocEndpoints
         var kind = string.IsNullOrEmpty(request.Kind) ? DocKinds.Doc : request.Kind;
         if (!DocKinds.IsValid(kind))
         {
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["kind"] = ["A doc's kind is \"doc\" or \"board\"."] });
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["kind"] = ["A doc's kind is \"doc\", \"board\" or \"kanban\"."] });
         }
 
         if (kind == DocKinds.Board && !await features.IsEnabledAsync(Feature.Boards, ct))
         {
             return FeatureSwitchExtensions.TurnedOff(Feature.Boards);
+        }
+
+        if (kind == DocKinds.Kanban && !await features.IsEnabledAsync(Feature.Kanban, ct))
+        {
+            return FeatureSwitchExtensions.TurnedOff(Feature.Kanban);
+        }
+
+        var prefix = request.KeyPrefix?.Trim().ToUpperInvariant();
+        if (kind == DocKinds.Kanban && prefix is { Length: > 0 } && !KanbanBoard.IsValidPrefix(prefix))
+        {
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["keyPrefix"] = ["A key prefix is 2 to 10 capital letters or digits, starting with a letter."],
+            });
+        }
+
+        if (kind == DocKinds.Kanban && prefix is { Length: > 0 } && await db.KanbanBoards.AnyAsync(k => k.OrganizationId == orgId && k.KeyPrefix == prefix, ct))
+        {
+            return TypedResults.Conflict(new { title = $"Another kanban in this organisation already uses {prefix}." });
         }
 
         if (await db.Docs.AnyAsync(d => d.OrganizationId == orgId && d.DeletedAt == null && d.PathKey == DocPaths.Key(folder, title), ct))
@@ -197,10 +218,24 @@ internal static class DocEndpoints
         var now = clock.GetUtcNow().UtcDateTime;
         var doc = new Doc { OrganizationId = orgId, Kind = kind, CreatedByUserId = userId, CreatedAt = now, UpdatedByUserId = userId, UpdatedAt = now };
         doc.Place(folder, title);
+        if (kind == DocKinds.Kanban)
+        {
+            doc.State = Kanban.KanbanDoc.InitialState();
+            doc.Content = "## To do\n\n## In progress\n\n## Done\n";
+        }
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         db.Docs.Add(doc);
         db.DocRevisions.Add(Revision(doc, DocActions.Created, userId, now));
+        if (kind == DocKinds.Kanban)
+        {
+            db.KanbanBoards.Add(new KanbanBoard
+            {
+                DocId = doc.Id, OrganizationId = orgId,
+                KeyPrefix = prefix is { Length: > 0 } ? prefix : await Kanban.KanbanEndpoints.FreePrefixAsync(db, orgId, KanbanBoard.PrefixFrom(title), ct),
+            });
+        }
+
         await db.SaveChangesAsync(ct);
         await indexer.IndexDocAsync(doc, ct);
         await indexer.RelinkAsync(orgId, [doc.PathKey, doc.TitleKey], ct);
@@ -729,7 +764,7 @@ internal static class DocEndpoints
             .Select(a => new { a.Id, a.Body, a.ProjectId }).ToListAsync(ct);
         comments = [.. comments.Where(c => visibleProjects.Contains(c.ProjectId))];
 
-        var nodes = docs.Select(d => new DocGraphNode($"d:{d.Id}", "doc", d.Title, d.Id, null, d.Folder, d.Icon, d.Color, d.Kind == DocKinds.Board))
+        var nodes = docs.Select(d => new DocGraphNode($"d:{d.Id}", "doc", d.Title, d.Id, null, d.Folder, d.Icon, d.Color, d.Kind == DocKinds.Board, d.Kind == DocKinds.Kanban))
             .Concat(comments.Select(c => new DocGraphNode($"c:{c.Id}", "comment", Preview(c.Body, 60), null, c.Id, null)))
             .ToList();
         var ids = nodes.Select(n => n.Id).ToHashSet(StringComparer.Ordinal);
@@ -853,7 +888,7 @@ internal static class DocEndpoints
     {
         DocId = doc.Id, OrganizationId = doc.OrganizationId, Version = doc.Version, Action = action, ActorUserId = actorUserId,
         OccurredAt = now, Folder = doc.Folder, Title = doc.Title, Content = doc.Content,
-        State = doc.Kind == DocKinds.Board ? doc.State : null,
+        State = DocKinds.HasCards(doc.Kind) ? doc.State : null,
     };
 
     internal static async Task<Dictionary<Guid, DocActor>> ActorsAsync(InklayerDbContext db, IEnumerable<Guid> ids, CancellationToken ct)

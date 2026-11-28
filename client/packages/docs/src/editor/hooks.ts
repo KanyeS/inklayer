@@ -22,6 +22,11 @@ export interface EditorHooks {
   openComment(id: string): void;
   /** A short label for a linked comment, once known. */
   commentLabel(id: string): string | undefined;
+  /** A short label for a linked task ([[task:WEB-12]]), once known. */
+  taskLabel?(key: string): string | undefined;
+  openTask?(key: string, newTab: boolean): void;
+  /** Tasks that [[task: suggests, by key or title. */
+  tasks?(query: string): Promise<{ key: string; title: string; detail?: string }[]>;
   /** Where this person's pointer is in the text, for others to see; null when it leaves. */
   onPointer(pointer: { pos: number; dx: number; dy: number } | null): void;
 }

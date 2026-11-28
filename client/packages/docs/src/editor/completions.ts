@@ -11,6 +11,7 @@ const LOOKUP_REUSE_MS = 30_000;
 const LINK_TYPED = /\[\[[^[\]\n|#]*$/;
 const LINK_VALID = /^[^[\]\n|#]*$/;
 const MENTION_TYPED = /(?:^|\s)@[^\s@<>[\]]{0,30}$/;
+const TASK_TYPED = /\[\[task:[^[\]\n|]*$/i;
 
 export interface LinkOption {
   /** What gets inserted: the title, or folder/title when two docs share the title. */
@@ -49,6 +50,7 @@ export function linkCompletion(hooks: EditorHooks) {
     const before = context.matchBefore(LINK_TYPED);
     if (!before) return null;
     const typed = before.text.slice(2);
+    if (/^task:/i.test(typed)) return null; // taskCompletion's
     const docs = hooks.titles();
     const options: Completion[] = linkOptions(docs).map(({ target, folder }) => ({
       label: target,
@@ -63,6 +65,31 @@ export function linkCompletion(hooks: EditorHooks) {
     }));
     if (offerNewDoc(typed, docs)) options.push({ label: typed.trim(), detail: "new doc", boost: -99 });
     return { from: before.from + 2, options, validFor: LINK_VALID };
+  };
+}
+
+/** [[task: suggests tasks by key or title; picking one writes its key and closes the link. */
+export function taskCompletion(hooks: EditorHooks) {
+  return async (context: CompletionContext): Promise<CompletionResult | null> => {
+    const before = context.matchBefore(TASK_TYPED);
+    if (!before || !hooks.tasks) return null;
+    const from = before.from + "[[task:".length;
+    const tasks = await hooks.tasks(before.text.slice("[[task:".length).trim()).catch(() => []);
+    return {
+      from,
+      filter: false,
+      options: tasks.map((t) => ({
+        label: `${t.key} ${t.title}`,
+        detail: t.detail,
+        apply: (view, _completion, start, to) => {
+          const closed = view.state.sliceDoc(to, to + 2) === "]]";
+          view.dispatch({
+            changes: { from: start, to, insert: closed ? t.key : `${t.key}]]` },
+            selection: { anchor: start + t.key.length + 2 },
+          });
+        },
+      })),
+    };
   };
 }
 

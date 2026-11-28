@@ -2,3 +2,4 @@
 @import "@inklayer/docs/reading.css";
 @import "./docs/layout.css";
 @import "./boards/board.css";
+@import "./kanban/kanban.css";

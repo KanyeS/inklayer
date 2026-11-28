@@ -8,6 +8,7 @@ import { type DocTree, docPath } from "../docsApi";
 import { resolveLink } from "../links";
 import { commentCard, loadComment } from "./comments";
 import { setTaskChecked } from "./docViewText";
+import { fillTaskLink, loadTask, openTask } from "./taskLinks";
 
 /** How long typing (by anyone) must pause before the reading view is redrawn. */
 const RERENDER_DELAY_MS = 250;
@@ -55,7 +56,7 @@ function useRenderedHtml({ orgId, session, tree, canEdit, person }: DocReadingPr
 
 /** The reading view: rendered Markdown with links, tags, ticked tasks, comment cards, maths and diagrams. */
 export function DocReading(props: DocReadingProps) {
-  const { session, canEdit, onTag, openLink } = props;
+  const { orgId, session, canEdit, onTag, openLink } = props;
   const html = useRenderedHtml(props);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -67,6 +68,11 @@ export function DocReading(props: DocReadingProps) {
     for (const el of root.querySelectorAll<HTMLElement>("[data-comment-id]")) {
       const id = el.dataset.commentId ?? "";
       void loadComment(id).then((c) => el.replaceChildren(commentCard(c, id)));
+    }
+    // Task links: the task's title and status.
+    for (const el of root.querySelectorAll<HTMLAnchorElement>("a[data-task-key]")) {
+      const key = el.dataset.taskKey ?? "";
+      void loadTask(orgId, key).then((t) => fillTaskLink(el, t, key));
     }
     // Maths, diagrams and code colours.
     void enhance(root);
@@ -93,6 +99,10 @@ export function DocReading(props: DocReadingProps) {
     if (a.dataset.tag) {
       e.preventDefault();
       onTag(a.dataset.tag);
+    } else if (a.dataset.taskKey) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault();
+      void openTask(orgId, a.dataset.taskKey, false);
     } else if (a.dataset.create !== undefined) {
       e.preventDefault();
       void openLink(a.dataset.create, null, false);

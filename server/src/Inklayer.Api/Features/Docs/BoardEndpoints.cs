@@ -17,7 +17,7 @@ public sealed record BoardCardsRequest(IReadOnlyList<Guid> DocIds);
 /// <summary>A doc on a board's card: enough to draw the card without opening the doc.</summary>
 /// <param name="Excerpt">The start of its markdown, as of its last save.</param>
 public sealed record BoardDocCardResponse(
-    Guid Id, Guid OrganizationId, string Folder, string Title, [property: AllowedValues("doc", "board")] string Kind, string? Icon, string? Color,
+    Guid Id, Guid OrganizationId, string Folder, string Title, [property: AllowedValues("doc", "board", "kanban")] string Kind, string? Icon, string? Color,
     DateTime UpdatedAt, string Excerpt);
 
 /// <param name="Id">The picture's id on the board, for its card: <c>/api/boards/{boardId}/media/{id}</c>.</param>
@@ -177,7 +177,7 @@ internal static partial class BoardEndpoints
             .Where(d => visible.Contains(d.Id) && d.DeletedAt == null)
             .Select(d => new BoardDocCardResponse(
                 d.Id, d.OrganizationId, d.Folder, d.Title, d.Kind, d.Icon, d.Color, d.UpdatedAt,
-                d.Kind == DocKinds.Board ? "" : d.Content.Substring(0, ExcerptLength)))
+                DocKinds.HasCards(d.Kind) ? "" : d.Content.Substring(0, ExcerptLength)))
             .ToListAsync(ct);
         return TypedResults.Ok(docs);
     }

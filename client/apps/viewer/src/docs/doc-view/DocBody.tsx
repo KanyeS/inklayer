@@ -11,6 +11,7 @@ import { loadComment } from "./comments";
 import type { Mode } from "./DocHeader";
 import { DocReading } from "./DocReading";
 import { commentChipLabel } from "./docViewText";
+import { taskHooks } from "./taskLinks";
 import { usePresence } from "./usePresence";
 
 type PersonName = { displayName: string; fullName: string };
@@ -85,6 +86,7 @@ export function DocBody(props: DocBodyProps) {
       },
       person: (id) => names.current.get(id),
       onPointer: (pointer) => session.awareness.setLocalStateField("pointer", pointer),
+      ...taskHooks(orgId, () => editorRef.current?.refreshChips()),
     });
     editorRef.current = editor;
     return () => {

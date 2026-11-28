@@ -1,5 +1,5 @@
 import "@xyflow/react/dist/style.css";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   Background,
   type Connection,
@@ -23,6 +23,7 @@ import * as Y from "yjs";
 import type { AwarenessUser, DocSession } from "@/docs/collab";
 import { type DocTree, docPath } from "@/docs/docsApi";
 import { DRAG_DOC } from "@/docs/sidebar/folders";
+import { kanbanQueries, type TaskSummary } from "@/kanban/kanbanApi";
 import { queries } from "@/lib/queries";
 import { navigate } from "@/lib/router";
 import { BoardToolbar } from "./BoardToolbar";
@@ -152,6 +153,39 @@ export function toNode(card: Card, cardIds: Set<string>, previous: BoardNode | u
 
 const POINTER_EVERY_MS = 80;
 
+/** Arrows for tasks pinned from kanbans: from their kanban's card, to the doc they link, and from their parent task's card. */
+function taskLinks(
+  cards: Card[],
+  tasks: Map<string, TaskSummary>,
+  marker: { type: MarkerType; width: number; height: number },
+): BoardEdge[] {
+  const cardOfDoc = new Map(cards.flatMap((c) => (c.type === "doc" ? [[c.docId, c.id] as const] : [])));
+  const cardOfTask = new Map(
+    cards.flatMap((c) => (c.type === "task" ? [[`${c.kanbanId}/${c.taskId}`, c.id] as const] : [])),
+  );
+  const edges: BoardEdge[] = [];
+  const link = (from: string | undefined, to: string | undefined, kind: string) => {
+    if (!from || !to || from === to) return;
+    edges.push({
+      id: `${kind}:${from}:${to}`,
+      source: from,
+      target: to,
+      type: "link",
+      markerEnd: { ...marker, color: "var(--board-link)" },
+      deletable: false,
+      selectable: false,
+    });
+  };
+  for (const c of cards) {
+    if (c.type !== "task") continue;
+    const task = tasks.get(`${c.kanbanId}/${c.taskId}`);
+    link(cardOfDoc.get(c.kanbanId), c.id, "kanban");
+    if (task?.linkedDocId) link(c.id, cardOfDoc.get(task.linkedDocId), "task-doc");
+    if (task?.parentTaskId) link(cardOfTask.get(`${c.kanbanId}/${task.parentTaskId}`), c.id, "subtask");
+  }
+  return edges;
+}
+
 function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef }: BoardCanvasProps) {
   const doc = session.doc;
   const flow = useReactFlow<BoardNode, BoardEdge>();
@@ -172,6 +206,15 @@ function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef
   const docs = useQuery(boardQueries.cards(boardId, docIds));
   const docsById = useMemo(() => new Map((docs.data ?? []).map((d) => [d.id, d])), [docs.data]);
   const graph = useQuery({ ...queries.docGraph(orgId), refetchInterval: 15_000, enabled: showLinks || showComments });
+  // Tasks pinned from kanbans: what they link to, for arrows to their kanban, their doc and their parent task.
+  const kanbanIds = useMemo(() => [...new Set(cards.flatMap((c) => (c.type === "task" ? [c.kanbanId] : [])))], [cards]);
+  const pinned = useQueries({
+    queries: kanbanIds.map((id) => ({ ...kanbanQueries.boardTasks(id), enabled: showLinks })),
+  });
+  const pinnedTasks = useMemo(
+    () => new Map(pinned.flatMap((q) => q.data ?? []).map((t) => [`${t.kanbanId}/${t.taskId}`, t])),
+    [pinned],
+  );
 
   /* ------------------------------------------------------------------ nodes and edges */
 
@@ -264,8 +307,9 @@ function Canvas({ orgId, boardId, session, tree, canEdit, liveCursors, followRef
         });
       }
     }
+    if (showLinks) linked.push(...taskLinks(cards, pinnedTasks, marker));
     return [...linked, ...drawn, ...comments.edges];
-  }, [arrows, cards, cardIds, canEdit, showLinks, graph.data, comments.edges]);
+  }, [arrows, cards, cardIds, canEdit, showLinks, graph.data, comments.edges, pinnedTasks]);
 
   /* ------------------------------------------------------------------ changes from xyflow */
 

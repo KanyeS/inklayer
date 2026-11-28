@@ -1,28 +1,39 @@
 import { createEditor } from "@inklayer/docs/editor";
 import { renderMarkdown } from "@inklayer/docs/reading";
 import { cn } from "@inklayer/ui/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Handle, type Node, type NodeProps, NodeResizer, Position } from "@xyflow/react";
-import { ExternalLink, Maximize2, MessageSquare, Minimize2, Palette } from "lucide-react";
+import { ExternalLink, Maximize2, MessageSquare, Minimize2, Palette, SquareKanban } from "lucide-react";
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as Y from "yjs";
 import { DocSession } from "@/docs/collab";
+import { taskHooks, taskHref } from "@/docs/doc-view/taskLinks";
 import { DocIcon } from "@/docs/docIcons";
 import { docPath } from "@/docs/docsApi";
 import { resolveLink } from "@/docs/links";
+import { KanbanOnBoard } from "@/kanban/KanbanOnBoard";
+import { kanbanQueries } from "@/kanban/kanbanApi";
+import type { Task } from "@/kanban/kanbanModel";
+import { Avatars } from "@/kanban/pickers";
+import { DueChip, PriorityIcon, TypeIcon } from "@/kanban/TaskCard";
 import { lookupPeople } from "@/lib/api";
 import { navigate } from "@/lib/router";
+import type { BoardDoc } from "./boardApi";
 import { useBoard } from "./boardContext";
 import {
+  addCard,
   CARD_SIZES,
   type Card,
   type ColumnCard,
   type DocCard,
   EXPANDED_DOC_SIZE,
   type ImageCard,
+  KANBAN_CARD_SIZE,
   type LinkCard,
   LOCAL,
   NOTE_COLORS,
   type NoteCard,
+  type TaskCard,
   updateCard,
 } from "./boardModel";
 import { setText, shiftPosition } from "./noteText";
@@ -109,15 +120,25 @@ export function DocCardNode({ id, data, selected }: NodeProps<CardNode>) {
   const card = data.card as DocCard;
   const { doc, docs, docsLoaded, canEdit, openDoc, tree, orgId } = useBoard();
   const info = docs.get(card.docId);
-  const expanded = !!card.expanded && !!info && info.kind === "doc";
+  const isKanban = info?.kind === "kanban";
+  const expanded = !!card.expanded && !!info && (info.kind === "doc" || isKanban);
+  const big = isKanban ? KANBAN_CARD_SIZE : EXPANDED_DOC_SIZE;
 
   const toggle = () =>
     updateCard(doc, id, {
       expanded: expanded ? undefined : true,
       ...(expanded
         ? { w: CARD_SIZES.doc.w, h: CARD_SIZES.doc.h }
-        : { w: Math.max(card.w, EXPANDED_DOC_SIZE.w), h: Math.max(card.h, EXPANDED_DOC_SIZE.h) }),
+        : { w: Math.max(card.w, big.w), h: Math.max(card.h, big.h) }),
     });
+
+  // A task opened from the kanban, pinned beside it.
+  const pinTask = (task: Task) =>
+    addCard(
+      doc,
+      { x: card.x + card.w + 24, y: card.y },
+      { type: "task", kanbanId: card.docId, taskId: task.id, key: task.key },
+    );
 
   const preview = useMemo(
     () =>
@@ -166,9 +187,11 @@ export function DocCardNode({ id, data, selected }: NodeProps<CardNode>) {
         >
           {info.title}
         </button>
-        {info.kind === "doc" && (
+        {(info.kind === "doc" || isKanban) && (
           <CardButton
-            title={expanded ? "Show a preview" : "Edit here"}
+            title={
+              isKanban ? (expanded ? "Show less" : "Show its columns here") : expanded ? "Show a preview" : "Edit here"
+            }
             onClick={toggle}
             disabled={!canEdit && !expanded}
           >
@@ -179,23 +202,64 @@ export function DocCardNode({ id, data, selected }: NodeProps<CardNode>) {
           <ExternalLink />
         </CardButton>
       </div>
-      {expanded ? (
+      <DocCardBody
+        info={info}
+        expanded={expanded}
+        preview={preview}
+        canEdit={canEdit}
+        onToggle={toggle}
+        onPin={canEdit ? pinTask : undefined}
+      />
+    </Frame>
+  );
+}
+
+/** Under a doc card's header: its live editor or kanban, or a preview. */
+function DocCardBody({
+  info,
+  expanded,
+  preview,
+  canEdit,
+  onToggle,
+  onPin,
+}: {
+  info: BoardDoc;
+  expanded: boolean;
+  preview: string;
+  canEdit: boolean;
+  onToggle: () => void;
+  onPin?: (task: Task) => void;
+}) {
+  const { orgId, tree } = useBoard();
+  return (
+    <>
+      {expanded && info.kind === "kanban" ? (
+        <KanbanOnBoard orgId={orgId} kanbanId={info.id} tree={tree} pinTask={onPin} />
+      ) : expanded ? (
         <CardEditor docId={info.id} />
+      ) : info.kind === "kanban" ? (
+        <button
+          type="button"
+          className="nodrag px-3 pb-3 text-left text-sm text-muted-foreground hover:text-foreground"
+          onClick={onToggle}
+        >
+          A kanban. Show its columns here, to move its tasks along.
+        </button>
       ) : info.kind === "board" ? (
         <p className="px-3 pb-3 text-sm text-muted-foreground">A board. Open it to see its cards.</p>
       ) : preview ? (
         <div
           className="doc-reading board-doc-preview"
-          onDoubleClick={() => canEdit && toggle()}
+          onDoubleClick={() => canEdit && onToggle()}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: rendered by the docs package, which escapes HTML
           dangerouslySetInnerHTML={{ __html: preview }}
         />
       ) : (
-        <p className="px-3 pb-3 text-sm text-muted-foreground" onDoubleClick={() => canEdit && toggle()}>
+        <p className="px-3 pb-3 text-sm text-muted-foreground" onDoubleClick={() => canEdit && onToggle()}>
           Empty.{canEdit && " Double-click to write."}
         </p>
       )}
-    </Frame>
+    </>
   );
 }
 
@@ -229,6 +293,7 @@ function CardEditor({ docId }: { docId: string }) {
         people: (q) => lookupPeople(orgId, q).catch(() => []),
         person: () => undefined,
         onPointer: () => undefined,
+        ...taskHooks(orgId, () => editor?.refreshChips()),
       });
       measuredRef.current();
     };
@@ -462,6 +527,58 @@ export function ColumnCardNode({ id, data, selected }: NodeProps<CardNode>) {
   );
 }
 
+/* ------------------------------------------------------------------ tasks pinned from a kanban */
+
+export function TaskCardNode({ id, data, selected }: NodeProps<CardNode>) {
+  const card = data.card as TaskCard;
+  const tasks = useQuery(kanbanQueries.boardTasks(card.kanbanId));
+  const task = tasks.data?.find((t) => t.taskId === card.taskId);
+  const people = useMemo(() => new Map((task?.assignees ?? []).map((p) => [p.id, p])), [task]);
+  if (!task) {
+    return (
+      <Frame id={id} selected={selected} className="board-task-card">
+        <p className="p-3 text-sm text-muted-foreground">
+          {tasks.isFetched || tasks.error
+            ? `${card.key || "This task"} was deleted, or you can't open its kanban.`
+            : "Loading…"}
+        </p>
+      </Frame>
+    );
+  }
+  const done = task.category === "done";
+  return (
+    <Frame id={id} selected={selected} minWidth={180} minHeight={70} className="board-task-card">
+      <div
+        className="flex h-full flex-col"
+        onDoubleClick={() => navigate(taskHref(task))}
+        title="Double-click to open it on its kanban"
+      >
+        <div className={cn("kanban-card", done && "kanban-card-done")}>
+          <div className="kanban-card-title">{task.title}</div>
+          <div className="kanban-card-foot">
+            <TypeIcon type={task.type as Task["type"]} />
+            <button
+              type="button"
+              className={cn("nodrag kanban-key hover:underline", done && "line-through")}
+              onClick={() => navigate(taskHref(task))}
+            >
+              {task.key}
+            </button>
+            <span className="kanban-due">{task.column}</span>
+            <span className="flex-1" />
+            {task.due && <DueChip due={task.due} done={done} />}
+            <PriorityIcon priority={task.priority as Task["priority"]} />
+            <Avatars ids={task.assignees.map((a) => a.id)} people={people} size={20} />
+          </div>
+        </div>
+        <div className="board-task-card-kanban">
+          <SquareKanban className="size-3" /> {task.kanbanTitle}
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
 /* ------------------------------------------------------------------ comments linked from docs */
 
 export function CommentNodeView({ data }: NodeProps<CommentNode>) {
@@ -486,5 +603,6 @@ export const nodeTypes = {
   image: ImageCardNode,
   link: LinkCardNode,
   column: ColumnCardNode,
+  task: TaskCardNode,
   comment: CommentNodeView,
 };

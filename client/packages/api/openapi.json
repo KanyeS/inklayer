@@ -4367,6 +4367,518 @@
           }
         }
       }
+    },
+    "/api/kanbans/{kanbanId}/keys": {
+      "post": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "Reserve keys for new tasks (Commenter and above), so two people adding tasks at once never get the same key",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReserveKeysRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservedKeysResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/settings": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "The kanban\u0027s key prefix and tracker sync",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KanbanSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "Change the prefix of new tasks\u0027 keys (Commenter and above in the kanban\u0027s organisation)",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateKanbanSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KanbanSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/people": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "Everyone a task on the kanban can be assigned to: members of its organisation and of those it\u0027s shared with",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/tasks": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "The kanban\u0027s tasks, as of its last save",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskSummaryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/mentions": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "The docs (that the caller can open) that link one of the kanban\u0027s tasks with [[task:KEY]]: ?key=WEB-12",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskMentionResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/tasks": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "Tasks across the organisation\u0027s kanbans (and those shared with it): ?assignee=me, ?status=open|done|all, ?tag=, ?due=overdue|week, ?q=",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "assignee",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "due",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskSummaryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/orgs/{orgId}/tasks/{key}": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "A task by its key, e.g. WEB-12, for links to it from docs",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskSummaryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/tracker/choices": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "The Jira connections of the organisation\u0027s products (that the caller can use) the kanban can sync with",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/KanbanTrackerChoiceResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/tracker/statuses": {
+      "get": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "A connection\u0027s statuses, and the columns they\u0027d go in: ?connectionId=",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "connectionId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KanbanTrackerStatusesResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/tracker": {
+      "put": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "Connect the kanban to a tracker and sync it straight away",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectKanbanTrackerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KanbanSyncResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "Stop syncing. Tasks keep their links to their issues.",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KanbanSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kanbans/{kanbanId}/tracker/sync": {
+      "post": {
+        "tags": [
+          "Kanban"
+        ],
+        "summary": "Sync with the tracker now",
+        "parameters": [
+          {
+            "name": "kanbanId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KanbanSyncResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5629,7 +6141,8 @@
           "kind": {
             "enum": [
               "doc",
-              "board"
+              "board",
+              "kanban"
             ],
             "type": "string"
           },
@@ -5662,6 +6175,43 @@
         "properties": {
           "id": {
             "type": "string"
+          }
+        }
+      },
+      "ConnectKanbanTrackerRequest": {
+        "required": [
+          "connectionId"
+        ],
+        "type": "object",
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "direction": {
+            "enum": [
+              "both",
+              "from-tracker"
+            ],
+            "type": "string",
+            "default": "both"
+          },
+          "statusMap": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "addColumns": {
+            "type": "boolean",
+            "default": false
+          },
+          "pushExisting": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -5750,6 +6300,12 @@
             "type": "string"
           },
           "kind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "keyPrefix": {
             "type": [
               "null",
               "string"
@@ -6295,6 +6851,10 @@
           "board": {
             "type": "boolean",
             "default": false
+          },
+          "kanban": {
+            "type": "boolean",
+            "default": false
           }
         }
       },
@@ -6533,7 +7093,8 @@
           "kind": {
             "enum": [
               "doc",
-              "board"
+              "board",
+              "kanban"
             ],
             "type": "string",
             "default": "doc"
@@ -6696,7 +7257,8 @@
           "kind": {
             "enum": [
               "doc",
-              "board"
+              "board",
+              "kanban"
             ],
             "type": "string",
             "default": "doc"
@@ -6860,6 +7422,10 @@
             "type": "boolean"
           },
           "boards": {
+            "type": "boolean",
+            "default": false
+          },
+          "kanban": {
             "type": "boolean",
             "default": false
           }
@@ -7236,6 +7802,211 @@
         }
       },
       "JsonElement": {},
+      "KanbanSettingsResponse": {
+        "required": [
+          "id",
+          "keyPrefix",
+          "canManage",
+          "tracker"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "keyPrefix": {
+            "type": "string"
+          },
+          "canManage": {
+            "type": "boolean"
+          },
+          "tracker": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/KanbanTrackerResponse"
+              }
+            ]
+          }
+        }
+      },
+      "KanbanSyncResponse": {
+        "required": [
+          "settings",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/KanbanSettingsResponse"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/KanbanSyncResult"
+              }
+            ]
+          }
+        }
+      },
+      "KanbanSyncResult": {
+        "required": [
+          "pulled",
+          "pushed",
+          "created",
+          "error"
+        ],
+        "type": "object",
+        "properties": {
+          "pulled": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pushed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "error": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "KanbanTrackerChoiceResponse": {
+        "required": [
+          "connectionId",
+          "projectId",
+          "projectName",
+          "kind",
+          "name",
+          "site",
+          "projectKey"
+        ],
+        "type": "object",
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "site": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "projectKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "KanbanTrackerResponse": {
+        "required": [
+          "connectionId",
+          "projectId",
+          "projectName",
+          "kind",
+          "name",
+          "statusMap",
+          "direction",
+          "syncedAt",
+          "syncError"
+        ],
+        "type": "object",
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "statusMap": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "direction": {
+            "enum": [
+              "both",
+              "from-tracker"
+            ],
+            "type": "string"
+          },
+          "syncedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "syncError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "KanbanTrackerStatusesResponse": {
+        "required": [
+          "statuses",
+          "suggestedMap"
+        ],
+        "type": "object",
+        "properties": {
+          "statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackerStatusResponse"
+            }
+          },
+          "suggestedMap": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "LinkIssueRequest": {
         "required": [
           "connectionId"
@@ -7714,7 +8485,10 @@
               "issue_comment",
               "access_requested",
               "access_granted",
-              "access_declined"
+              "access_declined",
+              "task_assigned",
+              "task_due",
+              "task_overdue"
             ],
             "type": "string"
           },
@@ -7765,6 +8539,12 @@
               "string"
             ],
             "format": "uuid"
+          },
+          "taskKey": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -8172,6 +8952,37 @@
           }
         }
       },
+      "ReserveKeysRequest": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "default": 1
+          }
+        }
+      },
+      "ReservedKeysResponse": {
+        "required": [
+          "prefix",
+          "first",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "first": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "Role": {
         "enum": [
           "Viewer",
@@ -8467,7 +9278,8 @@
           "kind": {
             "enum": [
               "doc",
-              "board"
+              "board",
+              "kanban"
             ],
             "type": "string",
             "default": "doc"
@@ -8588,6 +9400,141 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "TaskMentionResponse": {
+        "required": [
+          "docId",
+          "organizationId",
+          "folder",
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "docId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "TaskSummaryResponse": {
+        "required": [
+          "kanbanId",
+          "kanbanTitle",
+          "organizationId",
+          "taskId",
+          "key",
+          "title",
+          "column",
+          "category",
+          "type",
+          "priority",
+          "due",
+          "assignees",
+          "tags",
+          "parentTaskId",
+          "linkedDocId",
+          "externalKey",
+          "externalUrl",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "kanbanId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kanbanTitle": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "column": {
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "todo",
+              "doing",
+              "done"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "due": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "assignees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonResponse"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parentTaskId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "linkedDocId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "externalKey": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "externalUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -8978,6 +9925,30 @@
           }
         }
       },
+      "TrackerStatusResponse": {
+        "required": [
+          "id",
+          "name",
+          "category"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "todo",
+              "doing",
+              "done"
+            ],
+            "type": "string"
+          }
+        }
+      },
       "UpdateAnnotationRequest": {
         "required": [
           "version"
@@ -9115,6 +10086,12 @@
               "null",
               "boolean"
             ]
+          },
+          "kanban": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           }
         }
       },
@@ -9158,6 +10135,17 @@
           "clearProject": {
             "type": "boolean",
             "default": false
+          }
+        }
+      },
+      "UpdateKanbanSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "keyPrefix": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -9377,6 +10365,9 @@
     },
     {
       "name": "Boards"
+    },
+    {
+      "name": "Kanban"
     }
   ]
 }

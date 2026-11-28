@@ -31,7 +31,8 @@ public sealed partial class DocIndexer(InklayerDbContext db)
         var (links, tags) = DocMarkdown.Extract(doc.Content);
         var wanted = await LinksAsync(doc.OrganizationId, links, l => new DocLink
         {
-            OrganizationId = doc.OrganizationId, SourceDocId = doc.Id, TargetAnnotationId = l.CommentId, TargetKey = l.Key ?? "", Text = l.Target ?? "",
+            OrganizationId = doc.OrganizationId, SourceDocId = doc.Id, TargetAnnotationId = l.CommentId,
+            TargetKey = l.TaskKey is { } task ? TaskLinkKey(task) : l.Key ?? "", Text = l.TaskKey is { } shown ? DocMarkdown.TaskPrefix + shown : l.Target ?? "",
         }, ct);
         var stored = await db.DocLinks.AsNoTracking().Where(l => l.SourceDocId == doc.Id).ToListAsync(ct);
         if (!SameLinks(stored, wanted))
@@ -79,7 +80,7 @@ public sealed partial class DocIndexer(InklayerDbContext db)
     /// <summary>Resolves links again after docs with these keys were created, renamed, moved or deleted.</summary>
     public async Task RelinkAsync(Guid organizationId, IEnumerable<string> keys, CancellationToken ct)
     {
-        var distinct = keys.Distinct(StringComparer.Ordinal).ToList();
+        var distinct = keys.Where(k => !k.StartsWith(DocMarkdown.TaskPrefix, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal).ToList();
         var links = await db.DocLinks.Where(l => l.OrganizationId == organizationId && l.TargetAnnotationId == null && distinct.Contains(l.TargetKey)).ToListAsync(ct);
         if (links.Count == 0)
         {
@@ -133,16 +134,25 @@ public sealed partial class DocIndexer(InklayerDbContext db)
     {
         var keys = links.Where(l => l.Key is not null).Select(l => l.Key!).Distinct(StringComparer.Ordinal).ToList();
         var targets = keys.Count > 0 ? await ResolveAsync(organizationId, keys, ct) : [];
+        // A task link points at its kanban (found by the key's prefix), so the kanban lists the doc among its backlinks.
+        var prefixes = links.Select(l => l.TaskPrefix).OfType<string>().Distinct(StringComparer.Ordinal).ToList();
+        var kanbans = prefixes.Count == 0 ? [] : await db.KanbanBoards.AsNoTracking()
+            .Where(k => k.OrganizationId == organizationId && prefixes.Contains(k.KeyPrefix) && db.Docs.Any(d => d.Id == k.DocId && d.DeletedAt == null))
+            .ToDictionaryAsync(k => k.KeyPrefix, k => k.DocId, StringComparer.Ordinal, ct);
         var rows = new List<DocLink>();
-        foreach (var link in links.DistinctBy(l => (l.Key, l.CommentId)).Take(500))
+        foreach (var link in links.DistinctBy(l => (l.Key, l.CommentId, l.TaskKey)).Take(500))
         {
             var row = create(link);
-            row.TargetDocId = link.Key is null ? null : targets.GetValueOrDefault(link.Key);
+            row.TargetDocId = link.Key is not null ? targets.GetValueOrDefault(link.Key)
+                : link.TaskPrefix is { } prefix && kanbans.TryGetValue(prefix, out var kanban) ? kanban : null;
             rows.Add(row);
         }
 
         return rows;
     }
+
+    /// <summary>How a link to a task is stored: <c>task:web-12</c>, pointing at its kanban. <see cref="RelinkAsync"/> leaves these alone.</summary>
+    public static string TaskLinkKey(string taskKey) => DocMarkdown.TaskPrefix + taskKey.ToLowerInvariant();
 
     private sealed record SearchRow(string DocId, string Snippet);
 

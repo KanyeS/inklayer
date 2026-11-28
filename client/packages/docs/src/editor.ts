@@ -7,8 +7,8 @@ import { drawSelection, dropCursor, EditorView, keymap, placeholder } from "@cod
 import { yCollab, yUndoManagerKeymap } from "y-codemirror.next";
 import * as Y from "yjs";
 import { commentUrlPattern, parseLink } from "./docMarkdown";
-import { linkCompletion, mentionCompletion } from "./editor/completions";
-import { commentChips, linkMarks, mentionChips, openModifier, tagMarks } from "./editor/decorations";
+import { linkCompletion, mentionCompletion, taskCompletion } from "./editor/completions";
+import { commentChips, linkMarks, mentionChips, openModifier, tagMarks, taskChips } from "./editor/decorations";
 import type { DocEditor, EditorHooks, EditorSession } from "./editor/hooks";
 import { obsidianStyle, theme } from "./editor/theme";
 import { applyFormat } from "./formatting";
@@ -54,13 +54,14 @@ export function createEditor(parent: HTMLElement, session: EditorSession, hooks:
         // typing, such as a collaborator's arriving, restarts that wait (and cancels a lookup in progress), so a short
         // wait still finishes between the batches of others' edits, which arrive about every 250 ms.
         autocompletion({
-          override: [linkCompletion(hooks), mentionCompletion(hooks)],
+          override: [taskCompletion(hooks), linkCompletion(hooks), mentionCompletion(hooks)],
           icons: false,
           activateOnTypingDelay: 40,
         }),
         linkMarks,
         tagMarks,
         commentChips(hooks),
+        taskChips(hooks),
         mentionChips(hooks),
         events.extension,
         theme,
@@ -98,6 +99,7 @@ function editorEvents(hooks: EditorHooks) {
       if (!link) return false;
       event.preventDefault();
       if (link.commentId) hooks.openComment(link.commentId);
+      else if (link.taskKey) hooks.openTask?.(link.taskKey, event.shiftKey);
       else hooks.openLink(link, event.shiftKey);
       return true;
     },

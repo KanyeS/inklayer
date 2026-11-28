@@ -36,6 +36,10 @@ internal static class InklayerTools
         - Docs live in folders per organisation and are co-edited live; your edits appear to anyone who has the doc open.
         - Boards (kind "board" in list_docs) live among the docs: canvases of cards (docs, notes, links, columns) with arrows.
           Read them with read_board and change them with edit_board, not read_doc/edit_doc.
+        - Kanbans (kind "kanban") live among the docs too: Jira-style columns of tasks with keys like WEB-12, assignees, due
+          dates, tags, sub-tasks and links between tasks. Read one with read_kanban; add and change tasks with create_task and
+          update_task; list_tasks finds tasks across kanbans (by default, the person's own open ones). Docs link a task with
+          [[task:WEB-12]].
         - You act as the signed-in person: you can do what their role allows (Viewers read; Commenters and above reply,
           resolve and edit docs). Start with whoami to see their organisations.
         """;
@@ -279,9 +283,15 @@ internal static class InklayerTools
         [Description("For replace_text: the exact text to replace")] string? find = null)
     {
         await RequireEditAsync(docId, access, db, ct);
-        if (await db.Docs.AnyAsync(d => d.Id == docId && d.Kind == DocKinds.Board, ct))
+        var kind = await db.Docs.Where(d => d.Id == docId).Select(d => d.Kind).FirstOrDefaultAsync(ct);
+        if (kind == DocKinds.Board)
         {
             throw new McpException("That's a board, not a doc: change it with edit_board (and read it with read_board).");
+        }
+
+        if (kind == DocKinds.Kanban)
+        {
+            throw new McpException("That's a kanban, not a doc: change its tasks with create_task and update_task (and list them with list_tasks).");
         }
 
         var result = await docText.EditAsync(docId, currentUser.Id!.Value, before => mode switch
@@ -311,7 +321,7 @@ internal static class InklayerTools
 
     [McpServerTool(Name = "read_board", ReadOnly = true), Description(
         "A board's cards and arrows as they are now (including changes people are making right now). Cards have an id, a type " +
-        "(doc, note, link, column, image), a position and size, and the column they're in (positions inside a column are relative " +
+        "(doc, note, link, column, image, task), a position and size, and the column they're in (positions inside a column are relative " +
         "to it). Doc cards name their doc; notes have their text. docLinks are arrows the board draws because one doc links another.")]
     public static async Task<string> ReadBoard([Description("Board id")] Guid boardId, AccessService access, BoardEditor boards, CancellationToken ct)
     {

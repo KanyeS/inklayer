@@ -829,6 +829,194 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.ToTable("DocUpdates");
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanBoard", b =>
+                {
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ConnectedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ConnectedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("NextNumber")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("PushExisting")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StatusMap")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SyncDirection")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SyncError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SyncVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("SyncedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TrackerConnectionId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("DocId");
+
+                    b.HasIndex("TrackerConnectionId");
+
+                    b.HasIndex("OrganizationId", "KeyPrefix")
+                        .IsUnique();
+
+                    b.ToTable("KanbanBoards");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanTask", b =>
+                {
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColumnId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColumnName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("Due")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("DueRemindedFor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("LinkedDocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("OverdueRemindedFor")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParentTaskId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SyncedFields")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("DocId", "TaskId");
+
+                    b.HasIndex("LinkedDocId");
+
+                    b.HasIndex("OrganizationId", "Due");
+
+                    b.HasIndex("OrganizationId", "Key");
+
+                    b.ToTable("KanbanTasks");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanTaskAssignee", b =>
+                {
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("DocId", "TaskId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("KanbanTaskAssignees");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanTaskTag", b =>
+                {
+                    b.Property<Guid>("DocId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tag")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("DocId", "TaskId", "Tag");
+
+                    b.HasIndex("Tag");
+
+                    b.ToTable("KanbanTaskTags");
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Issues.AnnotationIssue", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1204,6 +1392,10 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskKey")
+                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("UserId")
@@ -2001,6 +2193,47 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanBoard", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithOne()
+                        .HasForeignKey("Inklayer.Domain.Docs.KanbanBoard", "DocId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Inklayer.Domain.Issues.IssueTrackerConnection", null)
+                        .WithMany()
+                        .HasForeignKey("TrackerConnectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanTask", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.Doc", null)
+                        .WithMany()
+                        .HasForeignKey("DocId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanTaskAssignee", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.KanbanTask", null)
+                        .WithMany("Assignees")
+                        .HasForeignKey("DocId", "TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanTaskTag", b =>
+                {
+                    b.HasOne("Inklayer.Domain.Docs.KanbanTask", null)
+                        .WithMany("Tags")
+                        .HasForeignKey("DocId", "TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Inklayer.Domain.Issues.AnnotationIssue", b =>
                 {
                     b.HasOne("Inklayer.Domain.Annotations.Annotation", null)
@@ -2204,6 +2437,13 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Navigation("Application");
 
                     b.Navigation("Authorization");
+                });
+
+            modelBuilder.Entity("Inklayer.Domain.Docs.KanbanTask", b =>
+                {
+                    b.Navigation("Assignees");
+
+                    b.Navigation("Tags");
                 });
 
             modelBuilder.Entity("Inklayer.Domain.Organizations.Organization", b =>

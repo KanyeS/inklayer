@@ -2,21 +2,25 @@ using System.Text.RegularExpressions;
 
 namespace Inklayer.Domain.Docs;
 
-/// <summary>A <c>[[link]]</c> found in markdown or a comment. Exactly one of <see cref="Target"/> and <see cref="CommentId"/> is set.</summary>
+/// <summary>A <c>[[link]]</c> found in markdown or a comment. Exactly one of <see cref="Target"/>, <see cref="CommentId"/> and <see cref="TaskKey"/> is set.</summary>
 /// <param name="Target">The doc as written: <c>Title</c> or <c>Folder/Title</c>.</param>
 /// <param name="Heading">After <c>#</c>, if any.</param>
 /// <param name="Alias">After <c>|</c>, if any: the text to show.</param>
-public sealed record WikiLink(string? Target, string? Heading, string? Alias, Guid? CommentId, bool Embed)
+/// <param name="TaskKey">For <c>[[task:WEB-12]]</c>: the task's key, in capitals.</param>
+public sealed record WikiLink(string? Target, string? Heading, string? Alias, Guid? CommentId, bool Embed, string? TaskKey = null)
 {
     /// <summary>The lowercase key used to find the doc: <c>title</c> or <c>folder/title</c>.</summary>
     public string? Key => Target?.ToLowerInvariant();
+
+    /// <summary>For a task link, its key's prefix (<c>WEB</c>): the kanban it's on.</summary>
+    public string? TaskPrefix => TaskKey?[..TaskKey.LastIndexOf('-')];
 }
 
 /// <summary>
 /// Finds links and tags in markdown, following Obsidian's syntax:
 /// <list type="bullet">
 /// <item><c>[[Title]]</c>, <c>[[Folder/Title]]</c>, <c>[[Title#Heading]]</c>, <c>[[Title|shown text]]</c>, and <c>![[...]]</c> to embed.</item>
-/// <item><c>[[comment:&lt;id&gt;]]</c> links a page comment.</item>
+/// <item><c>[[comment:&lt;id&gt;]]</c> links a page comment; <c>[[task:WEB-12]]</c> a task on a kanban.</item>
 /// <item><c>#tag</c> and <c>#nested/tag</c>, at the start of a line or after a space; not headings, not all digits.</item>
 /// </list>
 /// Nothing inside fenced code blocks or inline code counts. The client has the same rules (<c>docMarkdown.ts</c>).
@@ -24,6 +28,8 @@ public sealed record WikiLink(string? Target, string? Heading, string? Alias, Gu
 public static partial class DocMarkdown
 {
     public const string CommentPrefix = "comment:";
+
+    public const string TaskPrefix = "task:";
 
     public static (IReadOnlyList<WikiLink> Links, IReadOnlyList<string> Tags) Extract(string? markdown)
     {
@@ -88,6 +94,12 @@ public static partial class DocMarkdown
             return Guid.TryParse(inner[CommentPrefix.Length..].Trim(), out var id) ? new WikiLink(null, null, alias, id, embed) : null;
         }
 
+        if (inner.StartsWith(TaskPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var key = inner[TaskPrefix.Length..].Trim().ToUpperInvariant();
+            return TaskKey().IsMatch(key) ? new WikiLink(null, null, string.IsNullOrEmpty(alias) ? null : alias, null, embed, key) : null;
+        }
+
         string? heading = null;
         var hash = inner.IndexOf('#', StringComparison.Ordinal);
         if (hash >= 0)
@@ -148,4 +160,8 @@ public static partial class DocMarkdown
 
     [GeneratedRegex(@"(`+)[^`]*?\1")]
     private static partial Regex InlineCode();
+
+    /// <summary>A task's key: its kanban's prefix (2–10 capitals or digits, starting with a letter), a dash and a number.</summary>
+    [GeneratedRegex("^[A-Z][A-Z0-9]{1,9}-[0-9]{1,9}$")]
+    private static partial Regex TaskKey();
 }
