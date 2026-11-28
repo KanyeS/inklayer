@@ -34,6 +34,8 @@ internal static class InklayerTools
         - Comments have threads of replies and can be resolved. Comments and docs link each other: [[Doc title]] in a
           comment or doc links a doc; [[comment:<id>]] in a doc links a comment. #tags tag docs.
         - Docs live in folders per organisation and are co-edited live; your edits appear to anyone who has the doc open.
+        - Boards (kind "board" in list_docs) live among the docs: canvases of cards (docs, notes, links, columns) with arrows.
+          Read them with read_board and change them with edit_board, not read_doc/edit_doc.
         - You act as the signed-in person: you can do what their role allows (Viewers read; Commenters and above reply,
           resolve and edit docs). Start with whoami to see their organisations.
         """;
@@ -279,7 +281,7 @@ internal static class InklayerTools
         await RequireEditAsync(docId, access, db, ct);
         if (await db.Docs.AnyAsync(d => d.Id == docId && d.Kind == DocKinds.Board, ct))
         {
-            throw new McpException("That's a board: its cards are arranged in the browser, not edited as text. Edit the docs on it instead.");
+            throw new McpException("That's a board, not a doc: change it with edit_board (and read it with read_board).");
         }
 
         var result = await docText.EditAsync(docId, currentUser.Id!.Value, before => mode switch
@@ -290,6 +292,61 @@ internal static class InklayerTools
             _ => throw new McpException("mode must be replace_text, append or replace_all."),
         }, ct) ?? throw new McpException("Not found, or you don't have access to it.");
         return $"Saved. The doc is now {result.Length} characters.";
+    }
+
+    /* ------------------------------------------------------------------ boards */
+
+    [McpServerTool(Name = "create_board", OpenWorld = false), Description(
+        "Create an empty board in an organisation: a canvas of cards (docs, notes, links, columns) with arrows between them. " +
+        "Then add to it with edit_board. Titles are unique per folder, like docs'.")]
+    public static async Task<string> CreateBoard(
+        [Description("Organisation id")] Guid orgId, [Description("Title")] string title,
+        AccessService access, CurrentUser currentUser, InklayerDbContext db, DocIndexer indexer, TimeProvider clock, FeatureSwitches features,
+        CancellationToken ct, [Description("Folder path, e.g. Research/Interviews; empty for the top level")] string? folder = null)
+    {
+        var created = ToolResults.Value<DocSummaryResponse>(
+            await DocEndpoints.CreateAsync(orgId, new CreateDocRequest(folder, title, DocKinds.Board), access, currentUser, db, indexer, clock, features, ct));
+        return ToolResults.ToJson(new { created.Id, created.Folder, created.Title, created.Kind });
+    }
+
+    [McpServerTool(Name = "read_board", ReadOnly = true), Description(
+        "A board's cards and arrows as they are now (including changes people are making right now). Cards have an id, a type " +
+        "(doc, note, link, column, image), a position and size, and the column they're in (positions inside a column are relative " +
+        "to it). Doc cards name their doc; notes have their text. docLinks are arrows the board draws because one doc links another.")]
+    public static async Task<string> ReadBoard([Description("Board id")] Guid boardId, AccessService access, BoardEditor boards, CancellationToken ct)
+    {
+        var check = await access.CheckDocAsync(boardId, Permission.View, ct);
+        if (!check.IsAllowed)
+        {
+            ToolResults.Ok(check.Denied!);
+        }
+
+        var board = await boards.ReadAsync(boardId, check.Access!.Role.Grants(Permission.Comment), ct)
+            ?? throw new McpException("That isn't a board, or you don't have access to it. Docs are read with read_doc.");
+        return ToolResults.ToJson(board);
+    }
+
+    [McpServerTool(Name = "edit_board", OpenWorld = false), Description(
+        "Change a board with a list of operations, applied in order as one change (people with it open see it at once; one undo " +
+        "reverts it). add_doc puts a doc on it (by id, title or Folder/Title); add_note adds a sticky note; add_link a web page; " +
+        "add_column a column, and add_* with column puts the card into one (cards stack top to bottom in it). move, update and " +
+        "remove change cards (or an arrow's label, or remove an arrow); connect draws an arrow from one card to another, with an " +
+        "optional label. Give new cards a ref to use them in later operations of the same call. Leave out x and y and new cards " +
+        "are laid out tidily beside what's there. Read the board first when changing what's on it.")]
+    public static async Task<string> EditBoard(
+        [Description("Board id")] Guid boardId, [Description("The changes, in order")] IReadOnlyList<BoardOperation> operations,
+        AccessService access, InklayerDbContext db, BoardEditor boards, CancellationToken ct)
+    {
+        await RequireEditAsync(boardId, access, db, ct);
+        try
+        {
+            var result = await boards.EditAsync(boardId, operations, ct) ?? throw new McpException("Not found, or you don't have access to it.");
+            return ToolResults.ToJson(result);
+        }
+        catch (InvalidOperationException e)
+        {
+            throw new McpException(e.Message);
+        }
     }
 
     [McpServerTool(Name = "rename_or_move_doc", OpenWorld = false), Description("Rename a doc and/or move it to another folder. [[Links]] to it in other docs and in comments are updated.")]
@@ -339,7 +396,11 @@ internal static class InklayerTools
     public static readonly HashSet<string> DocTools = new(StringComparer.Ordinal)
     {
         "list_docs", "search_docs", "read_doc", "doc_history", "list_tags", "create_doc", "edit_doc", "rename_or_move_doc", "delete_doc",
+        "create_board", "read_board", "edit_board",
     };
+
+    /// <summary>Tools that work on boards: hidden and refused while boards (or docs) are turned off.</summary>
+    public static readonly HashSet<string> BoardTools = new(StringComparer.Ordinal) { "create_board", "read_board", "edit_board" };
 
     private static object Summary(AnnotationResponse a)
     {

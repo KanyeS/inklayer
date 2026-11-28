@@ -171,3 +171,31 @@ describe("restoring a saved version", () => {
     expect(readCards(a).some((c) => c.type === "column")).toBe(true);
   });
 });
+
+describe("boards the server changed", () => {
+  /**
+   * Made with YDotNet (yrs) the way the AI tools write cards (server: Features/Docs/BoardEditor.cs): a column, a note in it
+   * with Yjs text, a doc card, and an arrow. The browser must read them like its own.
+   */
+  const FROM_SERVER =
+    "AR+hsp6LnPTTCgAnAQVjYXJkcwNjb2wBKAChsp6LnPTTCgAEdHlwZQF3BmNvbHVtbigAobKei5z00woAAXgBfQAoAKGynouc9NMKAAF5AX0AKAChsp6LnPTTCgABdwF9rAQoAKGynouc9NMKAAFoAX2QBigAobKei5z00woAAXoBfQEoAKGynouc9NMKAAV0aXRsZQF3BVBsYW5zJwEFY2FyZHMEbm90ZQEoAKGynouc9NMKCAR0eXBlAXcEbm90ZSgAobKei5z00woIAXgBfQwoAKGynouc9NMKCAF5AX0sKAChsp6LnPTTCggBdwF9lAQoAKGynouc9NMKCAFoAX24ASgAobKei5z00woIAXoBfQIoAKGynouc9NMKCAZwYXJlbnQBdwNjb2woAKGynouc9NMKCAVjb2xvcgF3ByNmZWYzYzcnAKGynouc9NMKCAR0ZXh0AgQAobKei5z00woRDlNoaXAg8J+RiyBiZXRhJwEFY2FyZHMDZG9jASgAobKei5z00woeBHR5cGUBdwNkb2MoAKGynouc9NMKHgF4AX2QBigAobKei5z00woeAXkBfQAoAKGynouc9NMKHgF3AX2YBCgAobKei5z00woeAWgBfbQCKAChsp6LnPTTCh4BegF9AygAobKei5z00woeBWRvY0lkAXcCZDEnAQZhcnJvd3MCYTEBKAChsp6LnPTTCiYEZnJvbQF3BG5vdGUoAKGynouc9NMKJgJ0bwF3A2RvYygAobKei5z00womBWxhYmVsAXcFZmVlZHMA";
+
+  it("reads cards and arrows written on the server", () => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(
+      doc,
+      Uint8Array.from(atob(FROM_SERVER), (c) => c.charCodeAt(0)),
+    );
+    const cards = new Map(readCards(doc).map((c) => [c.id, c]));
+    expect(cards.get("col")).toMatchObject({ type: "column", title: "Plans", w: 300, h: 400 });
+    const note = cards.get("note");
+    expect(note).toMatchObject({ type: "note", parent: "col", x: 12, y: 44, color: "#fef3c7" });
+    expect(note?.type === "note" && note.text.toString()).toBe("Ship 👋 beta");
+    expect(cards.get("doc")).toMatchObject({ type: "doc", docId: "d1", x: 400 });
+    expect(readArrows(doc)).toEqual([{ id: "a1", from: "note", to: "doc", label: "feeds", color: undefined }]);
+
+    // And typing in the server's note works like any other.
+    if (note?.type === "note") setText(note.text, "Ship 👋 the beta");
+    expect(note?.type === "note" && note.text.toString()).toBe("Ship 👋 the beta");
+  });
+});

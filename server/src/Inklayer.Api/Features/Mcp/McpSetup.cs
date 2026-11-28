@@ -15,6 +15,7 @@ internal static class McpSetup
     public static IServiceCollection AddInklayerMcp(this IServiceCollection services)
     {
         services.AddScoped<DocText>();
+        services.AddScoped<BoardEditor>();
         services.AddMcpServer(o =>
             {
                 o.ServerInfo = new() { Name = "Inklayer", Version = typeof(McpSetup).Assembly.GetName().Version?.ToString() ?? "1.0.0" };
@@ -45,7 +46,7 @@ internal static class McpSetup
     {
         var states = await services.GetRequiredService<FeatureSwitches>().StatesAsync(ct);
         var off = new Dictionary<string, Feature>(StringComparer.Ordinal);
-        foreach (var (feature, tools) in new[] { (Feature.Docs, InklayerTools.DocTools), (Feature.IssueTrackers, InklayerTools.IssueTools) })
+        foreach (var (feature, tools) in new[] { (Feature.Docs, InklayerTools.DocTools), (Feature.Boards, InklayerTools.BoardTools), (Feature.IssueTrackers, InklayerTools.IssueTools) })
         {
             if (!states[feature].Enabled)
             {

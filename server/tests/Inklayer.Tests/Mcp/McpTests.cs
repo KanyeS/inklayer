@@ -216,6 +216,90 @@ public sealed partial class McpTests(InklayerApiFactory factory)
     }
 
     [Fact]
+    public async Task Board_tools_build_a_board_that_people_see_live_and_that_links_its_docs()
+    {
+        var (admin, orgId, commenter) = await MemberAsync("Commenter");
+        await using var mcp = await ConnectAsync((await SignInAppAsync(commenter)).AccessToken);
+        static string? P(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        Guid Id(CallToolResult r) => JsonDocument.Parse(Text(r)).RootElement.GetProperty("id").GetGuid();
+        var roadmap = Id(await mcp.CallToolAsync("create_doc", new Dictionary<string, object?> { ["orgId"] = orgId, ["title"] = "Roadmap", ["folder"] = "Plans" }));
+        Id(await mcp.CallToolAsync("create_doc", new Dictionary<string, object?> { ["orgId"] = orgId, ["title"] = "Spec", ["content"] = "See [[Plans/Roadmap]]" }));
+        var board = Id(await mcp.CallToolAsync("create_board", new Dictionary<string, object?> { ["orgId"] = orgId, ["title"] = "Launch" }));
+
+        await using var browser = await DocsProbe.ConnectAsync(factory, commenter);
+        await browser.OpenAsync(board);
+
+        var edit = await mcp.CallToolAsync("edit_board", new Dictionary<string, object?>
+        {
+            ["boardId"] = board,
+            ["operations"] = new object[]
+            {
+                new { op = "add_column", @ref = "plans", title = "Plans" },
+                new { op = "add_doc", @ref = "roadmap", doc = "Plans/Roadmap", column = "plans" },
+                new { op = "add_doc", @ref = "spec", doc = "Spec" },
+                new { op = "add_note", @ref = "note", text = "Ship the beta #launch" },
+                new { op = "connect", from = "note", to = "spec", label = "feeds" },
+                new { op = "add_link", url = "https://example.com/", title = "Example" },
+            },
+        });
+        Assert.True(edit.IsError != true, Text(edit));
+        Assert.Equal("update", (await browser.NextAsync("update")).Kind);
+
+        using (var read = JsonDocument.Parse(Text(await mcp.CallToolAsync("read_board", new Dictionary<string, object?> { ["boardId"] = board }))))
+        {
+            var cards = read.RootElement.GetProperty("cards").EnumerateArray().ToList();
+            Assert.Equal(5, cards.Count);
+            var column = cards.Single(c => c.GetProperty("type").GetString() == "column");
+            var inColumn = cards.Single(c => P(c, "docTitle") == "Roadmap");
+            Assert.Equal(column.GetProperty("id").GetString(), P(inColumn, "column"));
+            Assert.Equal(44, inColumn.GetProperty("y").GetDouble()); // stacked under the column's title
+            var spec = cards.Single(c => P(c, "docTitle") == "Spec");
+            var link = Assert.Single(read.RootElement.GetProperty("docLinks").EnumerateArray());
+            Assert.Equal((spec.GetProperty("id").GetString(), inColumn.GetProperty("id").GetString()), (link.GetProperty("from").GetString(), link.GetProperty("to").GetString()));
+            Assert.Equal("feeds", Assert.Single(read.RootElement.GetProperty("arrows").EnumerateArray()).GetProperty("label").GetString());
+
+            // Out of the column, and the column removed.
+            var moved = await mcp.CallToolAsync("edit_board", new Dictionary<string, object?>
+            {
+                ["boardId"] = board,
+                ["operations"] = new object[]
+                {
+                    new { op = "move", id = inColumn.GetProperty("id").GetString(), column = "", x = 900, y = 0 },
+                    new { op = "remove", id = column.GetProperty("id").GetString() },
+                },
+            });
+            Assert.True(moved.IsError != true, Text(moved));
+        }
+
+        using (var after = JsonDocument.Parse(Text(await mcp.CallToolAsync("read_board", new Dictionary<string, object?> { ["boardId"] = board }))))
+        {
+            var roadmapCard = after.RootElement.GetProperty("cards").EnumerateArray().Single(c => P(c, "docTitle") == "Roadmap");
+            Assert.Equal((null, 900d), (P(roadmapCard, "column"), roadmapCard.GetProperty("x").GetDouble()));
+            Assert.Equal(4, after.RootElement.GetProperty("cards").GetArrayLength());
+        }
+
+        // The board's summary links the docs on it, so they list it in their backlinks; search finds its notes.
+        using (var details = await commenter.GetAsync(new Uri($"/api/docs/{roadmap}", UriKind.Relative)))
+        {
+            Assert.Contains((await details.ReadAsync<DocDto>()).Backlinks, b => b.Id == board);
+        }
+
+        using (var search = await commenter.GetAsync(new Uri($"/api/orgs/{orgId}/docs/search?q=beta", UriKind.Relative)))
+        {
+            Assert.Contains(board, (await search.ReadAsync<List<DocSearchDto>>()).Select(r => r.Id));
+        }
+
+        Assert.True((await mcp.CallToolAsync("edit_board", new Dictionary<string, object?>
+        {
+            ["boardId"] = board, ["operations"] = new object[] { new { op = "add_doc", doc = "Nowhere" } },
+        })).IsError);
+        Assert.True((await mcp.CallToolAsync("edit_doc", new Dictionary<string, object?> { ["docId"] = board, ["mode"] = "append", ["text"] = "x" })).IsError);
+        Assert.True((await mcp.CallToolAsync("read_board", new Dictionary<string, object?> { ["boardId"] = roadmap })).IsError);
+        admin.Dispose();
+        commenter.Dispose();
+    }
+
+    [Fact]
     public async Task Comment_tools_reply_and_resolve()
     {
         var (admin, orgId, commenter) = await MemberAsync("Commenter");

@@ -46,15 +46,62 @@ internal sealed class DocText(
     /// Applies the edits <paramref name="plan"/> returns for the current text, as <paramref name="userId"/>. The result is saved
     /// as a snapshot straight away (so search, links and history see it) and sent to open editors. Returns the new text, or
     /// null if the doc doesn't exist. <paramref name="plan"/> may throw to refuse (e.g. text to replace wasn't found).
-    /// A board has no text to edit: it's left alone and its summary returned (its editors rewrite the summary from its cards).
+    /// A board has no text to edit: it's left alone and its summary returned (see <see cref="BoardEditor"/> for boards).
     /// </summary>
-    public async Task<string?> EditAsync(Guid docId, Guid userId, Func<string, IReadOnlyList<TextEdit>> plan, CancellationToken ct)
+    public Task<string?> EditAsync(Guid docId, Guid userId, Func<string, IReadOnlyList<TextEdit>> plan, CancellationToken ct) =>
+        ChangeAsync(docId, userId, DocKinds.Doc, (ydoc, _) =>
+        {
+            var text = ydoc.Text("content");
+            string before;
+            using (var read = ydoc.ReadTransaction())
+            {
+                before = text.String(read);
+            }
+
+            var changes = plan(before);
+            if (changes.Count == 0)
+            {
+                return Task.FromResult<(string, string?)>((before, null));
+            }
+
+            // Apply from the end, so earlier offsets stay valid.
+            using (var write = ydoc.WriteTransaction())
+            {
+                foreach (var edit in changes.OrderByDescending(e => e.Index))
+                {
+                    if (edit.Delete > 0)
+                    {
+                        text.RemoveRange(write, (uint)edit.Index, (uint)edit.Delete);
+                    }
+
+                    if (edit.Insert.Length > 0)
+                    {
+                        text.Insert(write, (uint)edit.Index, edit.Insert);
+                    }
+                }
+
+                write.Commit();
+            }
+
+            using var after = ydoc.ReadTransaction();
+            return Task.FromResult<(string, string?)>((before, text.String(after)));
+        }, ct);
+
+    /// <summary>
+    /// Changes a doc's Yjs document on the server, as <paramref name="userId"/>: <paramref name="change"/> makes the change and
+    /// returns the markdown before and after it (after null: nothing changed). The change is numbered and sent to open editors
+    /// like a browser's, and saved as a snapshot straight away. Returns the markdown after, or null if the doc doesn't exist.
+    /// A doc of the other kind isn't changed: for a board asked to change as text, its summary is returned as it is.
+    /// </summary>
+    internal async Task<string?> ChangeAsync(
+        Guid docId, Guid userId, string kind, Func<YDotNet.Document.Doc, string, Task<(string Before, string? After)>> change, CancellationToken ct)
     {
         // Everything numbered so far is in the database after this, up to the doc's LastSeq there. Browser edits that arrive
         // while this works are numbered after it, and Yjs merges them with this edit like any two people typing at once.
         await edits.FlushAsync(ct);
         long includedSeq;
         byte[]? storedState;
+        string storedContent;
         List<byte[]> updates;
         await using (var tx = await db.Database.BeginTransactionAsync(ct))
         {
@@ -65,63 +112,41 @@ internal sealed class DocText(
                 return null;
             }
 
-            if (stored.Kind == DocKinds.Board)
+            if (stored.Kind != kind)
             {
-                return stored.Content;
+                return stored.Kind == DocKinds.Board ? stored.Content : throw new InvalidOperationException("That's a doc, not a board.");
             }
 
-            (includedSeq, storedState) = (stored.LastSeq, stored.State);
+            (includedSeq, storedState, storedContent) = (stored.LastSeq, stored.State, stored.Content);
             updates = await db.DocUpdates.AsNoTracking().Where(u => u.DocId == docId && u.Seq > stored.SnapshotSeq).OrderBy(u => u.Seq).Select(u => u.Bytes).ToListAsync(ct);
             await tx.CommitAsync(ct);
         }
 
         using var ydoc = Load(storedState, updates);
-        var text = ydoc.Text("content");
-        string before;
         byte[] stateVector;
         using (var read = ydoc.ReadTransaction())
         {
-            before = text.String(read);
             stateVector = read.StateVectorV1();
         }
 
-        var changes = plan(before);
-        if (changes.Count == 0)
+        var (before, changed) = await change(ydoc, storedContent);
+        if (changed is not { } after)
         {
             return before;
         }
 
-        // Apply from the end, so earlier offsets stay valid.
-        using (var write = ydoc.WriteTransaction())
-        {
-            foreach (var edit in changes.OrderByDescending(e => e.Index))
-            {
-                if (edit.Delete > 0)
-                {
-                    text.RemoveRange(write, (uint)edit.Index, (uint)edit.Delete);
-                }
-
-                if (edit.Insert.Length > 0)
-                {
-                    text.Insert(write, (uint)edit.Index, edit.Insert);
-                }
-            }
-
-            write.Commit();
-        }
-
         byte[] update, state;
-        string after;
         using (var read = ydoc.ReadTransaction())
         {
             update = read.StateDiffV1(stateVector);
             state = read.StateDiffV1(null!);
-            after = text.String(read);
         }
 
         if (after.Length > Inklayer.Domain.Docs.Doc.MaxContentLength || state.Length > DocsHub.MaxStateBytes)
         {
-            throw new InvalidOperationException("That would make the doc too large. Split it into smaller docs.");
+            throw new InvalidOperationException(kind == DocKinds.Board
+                ? "That would make the board too large. Split it into smaller boards."
+                : "That would make the doc too large. Split it into smaller docs.");
         }
 
         // Numbered and sent like a browser's edit, so open editors merge it.
