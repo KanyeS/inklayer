@@ -144,6 +144,10 @@ public sealed class DocRevision
     public required string Title { get; init; }
 
     public required string Content { get; init; }
+
+    /// <summary>For a board: its whole Yjs document at this point (cards, arrows, notes), so it can be shown and restored.
+    /// Null for docs, whose <see cref="Content"/> is all there is.</summary>
+    public byte[]? State { get; init; }
 }
 
 /// <summary>

@@ -6579,6 +6579,13 @@
           },
           "content": {
             "type": "string"
+          },
+          "state": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "byte"
           }
         }
       },

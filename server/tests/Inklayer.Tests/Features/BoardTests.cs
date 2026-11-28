@@ -9,6 +9,10 @@ public sealed record BoardDocCardDto(Guid Id, string Title, string Kind, string 
 
 public sealed record BoardMediaDto(string Id);
 
+public sealed record BoardRevisionDto(Guid Id, string Action);
+
+public sealed record BoardRevisionContentDto(Guid Id, string Action, string Content, byte[]? State);
+
 /// <summary>
 /// Boards are docs of kind "board": the same folders, access and live hub, with cards in their Yjs document instead of text,
 /// and a markdown summary (the docs on them as [[links]], and their notes) for links, backlinks and search.
@@ -92,6 +96,27 @@ public sealed class BoardTests(InklayerApiFactory factory)
         var (outsider, _) = await Scenario.AddMemberAsync(factory, admin, elsewhere.Id, "Commenter");
         await outsider.GetAsync(new Uri($"/api/boards/{boardId}/media/{media.Id}", UriKind.Relative)).ExpectAsync(HttpStatusCode.NotFound);
         outsider.Dispose();
+        admin.Dispose();
+        ana.Dispose();
+        viewer.Dispose();
+    }
+
+    [Fact]
+    public async Task A_boards_history_keeps_its_cards_even_when_only_their_layout_changed()
+    {
+        var (admin, _, ana, viewer, boardId) = await BoardAsync();
+        await using (var live = await DocsProbe.ConnectAsync(factory, ana))
+        {
+            await live.OpenAsync(boardId);
+            // Cards moved: the summary is the same (empty), but the board changed.
+            var seq = await live.UpdateAsync(boardId, 1, 2, 3);
+            Assert.True(await live.SnapshotAsync(boardId, [0xAA, 0xBB], "", seq));
+        }
+
+        using var history = await viewer.GetAsync(new Uri($"/api/docs/{boardId}/history", UriKind.Relative));
+        var edited = (await history.ReadAsync<List<BoardRevisionDto>>()).First(r => r.Action == "edited");
+        using var revision = await viewer.GetAsync(new Uri($"/api/docs/{boardId}/history/{edited.Id}", UriKind.Relative));
+        Assert.Equal([0xAA, 0xBB], (await revision.ReadAsync<BoardRevisionContentDto>()).State);
         admin.Dispose();
         ana.Dispose();
         viewer.Dispose();

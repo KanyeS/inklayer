@@ -4948,6 +4948,8 @@ export interface components {
             folder: string;
             title: string;
             content: string;
+            /** Format: byte */
+            state?: null | string;
         };
         DocRevisionResponse: {
             /** Format: uuid */

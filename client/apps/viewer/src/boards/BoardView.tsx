@@ -1,6 +1,7 @@
 import { Badge } from "@inklayer/ui/components/badge";
+import { Button } from "@inklayer/ui/components/button";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Trash2 } from "lucide-react";
+import { Building2, History, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useMe } from "@/App";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -13,6 +14,7 @@ import { type DocTree, docsApi } from "@/docs/docsApi";
 import { queries } from "@/lib/queries";
 import { navigate } from "@/lib/router";
 import { BoardCanvas } from "./BoardCanvas";
+import { BoardHistory } from "./BoardHistory";
 import { summaryMarkdown } from "./boardModel";
 
 /** Links and backlinks are worked out by the server from saved summaries: refresh the details this often. */
@@ -47,6 +49,7 @@ export function BoardView({ orgId, docId, tree }: { orgId: string; docId: string
   const canEdit = state?.canEdit ?? false;
   const [error, setError] = useState<Error | null>(null);
   const follow = useRef<((peerId: string) => void) | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   if (info.error)
     return (
@@ -90,6 +93,10 @@ export function BoardView({ orgId, docId, tree }: { orgId: string; docId: string
           peers={state?.peers ?? []}
           onFollow={liveCursors ? (peerId) => follow.current?.(peerId) : undefined}
         />
+        <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}>
+          <History data-icon="inline-start" />
+          History
+        </Button>
         <OrgShareButton info={info.data} />
         {info.data.canManage && (
           <ConfirmButton
@@ -122,6 +129,15 @@ export function BoardView({ orgId, docId, tree }: { orgId: string; docId: string
           <Loading />
         </div>
       )}
+      <BoardHistory
+        orgId={orgId}
+        boardId={docId}
+        tree={tree}
+        doc={session.doc}
+        canEdit={canEdit}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+      />
     </main>
   );
 }

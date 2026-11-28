@@ -274,7 +274,10 @@ internal sealed partial class DocsHub(
         await db.Entry(doc).ReloadAsync(ct); // may be tracked from earlier in the request, from before the update above
         var oldContent = doc.Content;
         var lastEditor = editors.Count > 0 ? editors[^1] : savedBy;
-        if (!string.Equals(doc.Content, markdown, StringComparison.Ordinal))
+        var textChanged = !string.Equals(doc.Content, markdown, StringComparison.Ordinal);
+        // A board's summary stays the same when cards only move, resize or get arrows: any edit it includes counts.
+        var boardEdited = doc.Kind == DocKinds.Board && editors.Count > 0;
+        if (textChanged || boardEdited)
         {
             doc.Content = markdown;
             doc.UpdatedAt = now;
@@ -283,7 +286,10 @@ internal sealed partial class DocsHub(
             await AddEditRevisionsAsync(db, doc, editors.Count > 0 ? [.. editors.Distinct()] : [savedBy], now, ct);
 
             await db.SaveChangesAsync(ct);
-            await indexer.IndexDocAsync(doc, ct);
+            if (textChanged)
+            {
+                await indexer.IndexDocAsync(doc, ct);
+            }
         }
 
         await db.SaveChangesAsync(ct);

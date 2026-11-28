@@ -328,6 +328,30 @@ export function removeArrows(doc: Y.Doc, ids: Iterable<string>): void {
   }, LOCAL);
 }
 
+/* ------------------------------------------------------------------ history */
+
+/**
+ * Makes the board's cards and arrows exactly those of `source` (another copy of it, such as a saved version), in one
+ * step: an ordinary edit, so everyone with the board open sees it and it can be undone.
+ */
+export function replaceBoard(doc: Y.Doc, source: Y.Doc): void {
+  const copy = (map: Y.Map<unknown>): Y.Map<unknown> => {
+    const out = new Y.Map<unknown>();
+    for (const [key, value] of map) {
+      out.set(
+        key,
+        value instanceof Y.Text ? new Y.Text(value.toString()) : value instanceof Y.Map ? copy(value) : value,
+      );
+    }
+    return out;
+  };
+  doc.transact(() => {
+    for (const target of [cardsOf(doc), arrowsOf(doc)]) for (const id of [...target.keys()]) target.delete(id);
+    for (const [id, map] of cardsOf(source)) cardsOf(doc).set(id, copy(map));
+    for (const [id, map] of arrowsOf(source)) arrowsOf(doc).set(id, copy(map));
+  }, LOCAL);
+}
+
 /* ------------------------------------------------------------------ columns */
 
 /** Where a card is on the board, column or not. */

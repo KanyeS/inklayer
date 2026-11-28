@@ -78,7 +78,7 @@ export function HistoryDialog({ docId, session, canEdit, open, onOpenChange }: H
   );
 }
 
-function RevisionButton({
+export function RevisionButton({
   revision: r,
   selected,
   onClick,

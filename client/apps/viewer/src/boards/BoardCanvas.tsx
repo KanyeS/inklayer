@@ -126,7 +126,7 @@ function usePeersOnBoard(session: DocSession) {
 /** Cards whose height follows their content. The rest are as tall as stored. */
 const FIXED_HEIGHT = new Set<Card["type"]>(["image", "column"]);
 
-function toNode(card: Card, cardIds: Set<string>, previous: BoardNode | undefined, canEdit: boolean): CardNode {
+export function toNode(card: Card, cardIds: Set<string>, previous: BoardNode | undefined, canEdit: boolean): CardNode {
   const fixed = FIXED_HEIGHT.has(card.type) || (card.type === "doc" && !!card.expanded);
   const parentId = card.parent && cardIds.has(card.parent) ? card.parent : undefined;
   const keep = previous?.dragging || previous?.resizing; // this person is moving it: their copy wins until they let go

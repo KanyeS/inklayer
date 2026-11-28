@@ -6,11 +6,13 @@ import {
   COLUMN_GAP,
   COLUMN_HEADER,
   cardsOf,
+  LOCAL,
   layoutColumn,
   moveCards,
   readArrows,
   readCards,
   removeCards,
+  replaceBoard,
   setColumn,
   summaryMarkdown,
   updateArrow,
@@ -137,5 +139,35 @@ describe("carets in a shared note", () => {
     expect(shiftPosition(5, [{ retain: 6 }, { insert: "abc" }])).toBe(5);
     expect(shiftPosition(5, [{ retain: 1 }, { delete: 2 }])).toBe(3);
     expect(shiftPosition(5, [{ retain: 3 }, { delete: 10 }])).toBe(3);
+  });
+});
+
+describe("restoring a saved version", () => {
+  it("puts the cards and arrows back as they were, for everyone, as one step", () => {
+    const { a, b } = pair();
+    const note = addCard(a, { x: 0, y: 0 }, { type: "note", text: "first draft" });
+    const doc = addCard(a, { x: 300, y: 0 }, { type: "doc", docId: "d1" });
+    addArrow(a, note, doc);
+    const saved = new Y.Doc();
+    Y.applyUpdate(saved, Y.encodeStateAsUpdate(a));
+
+    // Later: the note is rewritten and moved, the doc removed, a column added.
+    const later = readCards(a).find((c) => c.id === note);
+    if (later?.type === "note") setText(later.text, "second draft");
+    moveCards(a, [{ id: note, x: 500, y: 500 }]);
+    removeCards(a, [doc]);
+    addCard(a, { x: 0, y: 0 }, { type: "column" });
+
+    const undo = new Y.UndoManager([cardsOf(a)], { trackedOrigins: new Set([LOCAL]) });
+    replaceBoard(a, saved);
+    const restored = readCards(b);
+    expect(restored.map((c) => c.id).sort()).toEqual([note, doc].sort());
+    const back = restored.find((c) => c.id === note);
+    expect(back).toMatchObject({ x: 0, y: 0 });
+    expect(back?.type === "note" && back.text.toString()).toBe("first draft");
+    expect(readArrows(b)).toHaveLength(1);
+
+    undo.undo(); // one step back to how it was before restoring
+    expect(readCards(a).some((c) => c.type === "column")).toBe(true);
   });
 });

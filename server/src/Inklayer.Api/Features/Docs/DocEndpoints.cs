@@ -81,7 +81,9 @@ public sealed record MoveFolderRequest(string From, string To);
 
 public sealed record DocRevisionResponse(Guid Id, int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title);
 
-public sealed record DocRevisionContentResponse(Guid Id, int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title, string Content);
+/// <param name="State">For a board: its Yjs document at this point, to show and restore the cards as they were.</param>
+public sealed record DocRevisionContentResponse(
+    Guid Id, int Version, string Action, DocActor Actor, DateTime OccurredAt, string Folder, string Title, string Content, byte[]? State = null);
 
 /// <param name="DeletedBy">Who deleted it.</param>
 public sealed record DeletedDocResponse(Guid Id, string Folder, string Title, DateTime DeletedAt, DocActor DeletedBy, string? Icon = null, string? Color = null);
@@ -430,7 +432,9 @@ internal static class DocEndpoints
             return denied;
         }
 
-        var rows = await db.DocRevisions.AsNoTracking().Where(r => r.DocId == docId).OrderByDescending(r => r.OccurredAt).Take(200).ToListAsync(ct);
+        // Without the text and board state: only the list.
+        var rows = await db.DocRevisions.AsNoTracking().Where(r => r.DocId == docId).OrderByDescending(r => r.OccurredAt).Take(200)
+            .Select(r => new { r.Id, r.Version, r.Action, r.ActorUserId, r.OccurredAt, r.Folder, r.Title }).ToListAsync(ct);
         var actors = await ActorsAsync(db, rows.Select(r => r.ActorUserId), ct);
         return TypedResults.Ok(rows.Select(r => new DocRevisionResponse(r.Id, r.Version, r.Action, actors[r.ActorUserId], r.OccurredAt, r.Folder, r.Title)).ToList());
     }
@@ -449,7 +453,7 @@ internal static class DocEndpoints
         }
 
         var actors = await ActorsAsync(db, [r.ActorUserId], ct);
-        return TypedResults.Ok(new DocRevisionContentResponse(r.Id, r.Version, r.Action, actors[r.ActorUserId], r.OccurredAt, r.Folder, r.Title, r.Content));
+        return TypedResults.Ok(new DocRevisionContentResponse(r.Id, r.Version, r.Action, actors[r.ActorUserId], r.OccurredAt, r.Folder, r.Title, r.Content, r.State));
     }
 
     /* ------------------------------------------------------------------ folders */
@@ -849,6 +853,7 @@ internal static class DocEndpoints
     {
         DocId = doc.Id, OrganizationId = doc.OrganizationId, Version = doc.Version, Action = action, ActorUserId = actorUserId,
         OccurredAt = now, Folder = doc.Folder, Title = doc.Title, Content = doc.Content,
+        State = doc.Kind == DocKinds.Board ? doc.State : null,
     };
 
     internal static async Task<Dictionary<Guid, DocActor>> ActorsAsync(InklayerDbContext db, IEnumerable<Guid> ids, CancellationToken ct)

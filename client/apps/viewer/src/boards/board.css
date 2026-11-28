@@ -5,6 +5,11 @@
   /* The board fills the docs page beside the sidebar (both of its right-hand columns). BoardView.tsx */
   .board-page {
     @apply flex min-w-0 flex-col xl:col-span-2 md:h-[calc(100svh-3.5rem)];
+  }
+
+  /* The board page, and a saved version drawn in the history dialog. BoardHistory.tsx */
+  .board-page,
+  .board-preview {
     --board-arrow: var(--color-foreground);
     --board-link: color-mix(in oklab, var(--color-primary) 70%, transparent);
   }

@@ -745,6 +745,9 @@ namespace Inklayer.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("TEXT");
 
+                    b.Property<byte[]>("State")
+                        .HasColumnType("BLOB");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
